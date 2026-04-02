@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Send, Paperclip, Smile, Phone, MoreVertical, Check, CheckCheck } from "lucide-react";
+import { Search, Plus, Send, Paperclip, Smile, Phone, MoreVertical, Check, CheckCheck, MessageSquare } from "lucide-react";
 
 interface Message {
   id: number;
