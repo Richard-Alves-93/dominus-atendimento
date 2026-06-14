@@ -26,7 +26,7 @@ interface AuthContextValue {
   profile: ProfileInfo | null;
   memberships: CompanyMembership[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: (uid?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -54,13 +54,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setLoading(true);
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        setTimeout(() => void loadUserData(newSession.user.id), 0);
+        setTimeout(() => {
+          void loadUserData(newSession.user.id).finally(() => setLoading(false));
+        }, 0);
       } else {
         setProfile(null);
         setMemberships([]);
+        setLoading(false);
       }
     });
 
@@ -74,8 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const refresh = async () => {
-    if (user) await loadUserData(user.id);
+  const refresh = async (uid?: string) => {
+    const targetUid = uid ?? user?.id;
+    if (targetUid) await loadUserData(targetUid);
   };
 
   const signOut = async () => {
