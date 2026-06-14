@@ -14,16 +14,302 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      channel_sync_logs: {
+        Row: {
+          channel_id: string | null
+          company_id: string
+          created_at: string
+          event_type: string
+          id: string
+          message: string | null
+          metadata: Json
+          status: string | null
+        }
+        Insert: {
+          channel_id?: string | null
+          company_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          message?: string | null
+          metadata?: Json
+          status?: string | null
+        }
+        Update: {
+          channel_id?: string | null
+          company_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string | null
+          metadata?: Json
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_sync_logs_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_sync_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channels: {
+        Row: {
+          channel_provider: Database["public"]["Enums"]["channel_provider"]
+          channel_type: Database["public"]["Enums"]["channel_type"]
+          company_id: string
+          created_at: string
+          email_address: string | null
+          external_id: string | null
+          id: string
+          metadata: Json
+          name: string
+          phone_number: string | null
+          status: Database["public"]["Enums"]["channel_status"]
+          updated_at: string
+        }
+        Insert: {
+          channel_provider?: Database["public"]["Enums"]["channel_provider"]
+          channel_type: Database["public"]["Enums"]["channel_type"]
+          company_id: string
+          created_at?: string
+          email_address?: string | null
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          name: string
+          phone_number?: string | null
+          status?: Database["public"]["Enums"]["channel_status"]
+          updated_at?: string
+        }
+        Update: {
+          channel_provider?: Database["public"]["Enums"]["channel_provider"]
+          channel_type?: Database["public"]["Enums"]["channel_type"]
+          company_id?: string
+          created_at?: string
+          email_address?: string | null
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          name?: string
+          phone_number?: string | null
+          status?: Database["public"]["Enums"]["channel_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channels_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          created_at: string
+          document: string | null
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          plan_id: string | null
+          status: Database["public"]["Enums"]["company_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          plan_id?: string | null
+          status?: Database["public"]["Enums"]["company_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          plan_id?: string | null
+          status?: Database["public"]["Enums"]["company_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      company_users: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["company_user_role"]
+          status: Database["public"]["Enums"]["company_user_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["company_user_role"]
+          status?: Database["public"]["Enums"]["company_user_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["company_user_role"]
+          status?: Database["public"]["Enums"]["company_user_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          global_role: Database["public"]["Enums"]["global_role"]
+          id: string
+          is_master: boolean
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          global_role?: Database["public"]["Enums"]["global_role"]
+          id: string
+          is_master?: boolean
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          global_role?: Database["public"]["Enums"]["global_role"]
+          id?: string
+          is_master?: boolean
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_instances: {
+        Row: {
+          channel_id: string
+          company_id: string
+          connected_at: string | null
+          created_at: string
+          disconnected_at: string | null
+          id: string
+          instance_name: string
+          phone_number: string | null
+          qr_code: string | null
+          status: Database["public"]["Enums"]["channel_status"]
+          updated_at: string
+        }
+        Insert: {
+          channel_id: string
+          company_id: string
+          connected_at?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          id?: string
+          instance_name: string
+          phone_number?: string | null
+          qr_code?: string | null
+          status?: Database["public"]["Enums"]["channel_status"]
+          updated_at?: string
+        }
+        Update: {
+          channel_id?: string
+          company_id?: string
+          connected_at?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          id?: string
+          instance_name?: string
+          phone_number?: string | null
+          qr_code?: string | null
+          status?: Database["public"]["Enums"]["channel_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_instances_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_instances_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_master: { Args: { _user_id: string }; Returns: boolean }
+      user_belongs_to_company: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_company_role: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["company_user_role"]
+      }
     }
     Enums: {
-      [_ in never]: never
+      channel_provider: "evolution" | "evogo" | "meta" | "imap_smtp" | "manual"
+      channel_status:
+        | "disconnected"
+        | "pending"
+        | "connected"
+        | "error"
+        | "disabled"
+      channel_type: "whatsapp" | "instagram" | "facebook" | "email"
+      company_status: "trial" | "active" | "pending" | "suspended" | "canceled"
+      company_user_role: "owner" | "admin" | "manager" | "agent" | "financial"
+      company_user_status: "active" | "pending" | "disabled"
+      global_role: "master" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +436,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      channel_provider: ["evolution", "evogo", "meta", "imap_smtp", "manual"],
+      channel_status: [
+        "disconnected",
+        "pending",
+        "connected",
+        "error",
+        "disabled",
+      ],
+      channel_type: ["whatsapp", "instagram", "facebook", "email"],
+      company_status: ["trial", "active", "pending", "suspended", "canceled"],
+      company_user_role: ["owner", "admin", "manager", "agent", "financial"],
+      company_user_status: ["active", "pending", "disabled"],
+      global_role: ["master", "user"],
+    },
   },
 } as const

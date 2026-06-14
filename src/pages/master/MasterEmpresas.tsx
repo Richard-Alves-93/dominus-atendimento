@@ -1,0 +1,73 @@
+import { useEffect, useState } from "react";
+import { MasterLayout } from "@/components/MasterLayout";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Company {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  created_at: string;
+}
+
+const badge: Record<string, string> = {
+  trial: "bg-info/10 text-info border-info/20",
+  active: "bg-success/10 text-success border-success/20",
+  pending: "bg-warning/10 text-warning border-warning/20",
+  suspended: "bg-destructive/10 text-destructive border-destructive/20",
+  canceled: "bg-muted text-muted-foreground border-border",
+};
+
+export default function MasterEmpresas() {
+  const [companies, setCompanies] = useState<Company[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("companies")
+      .select("id, name, email, phone, status, created_at")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setCompanies((data as Company[] | null) ?? []));
+  }, []);
+
+  return (
+    <MasterLayout title="Empresas">
+      <div className="p-6">
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Criada em</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {companies.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Nenhuma empresa cadastrada ainda.
+                  </TableCell>
+                </TableRow>
+              )}
+              {companies.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.name}</TableCell>
+                  <TableCell>{c.email ?? "—"}</TableCell>
+                  <TableCell>{c.phone ?? "—"}</TableCell>
+                  <TableCell><Badge className={badge[c.status]}>{c.status}</Badge></TableCell>
+                  <TableCell>{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
+    </MasterLayout>
+  );
+}

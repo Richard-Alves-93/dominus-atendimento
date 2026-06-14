@@ -11,7 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -24,37 +24,44 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/AuthContext";
 
 const mainItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Tickets", url: "/tickets", icon: MessageSquare },
-  { title: "Contatos", url: "/contacts", icon: Users },
-  { title: "Campanhas", url: "/campaigns", icon: Send },
-  { title: "Agendamentos", url: "/schedules", icon: CalendarDays },
+  { title: "Dashboard", url: "/app/dashboard", icon: LayoutDashboard },
+  { title: "Tickets", url: "/app/tickets", icon: MessageSquare },
+  { title: "Contatos", url: "/app/contatos", icon: Users },
+  { title: "Campanhas", url: "/app/campanhas", icon: Send },
+  { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays },
 ];
 
 const configItems = [
-  { title: "Conexões", url: "/connections", icon: Phone },
-  { title: "Tags", url: "/tags", icon: Tag },
-  { title: "Configurações", url: "/settings", icon: Settings },
+  { title: "Conexões", url: "/app/conexoes", icon: Phone },
+  { title: "Tags", url: "/app/tags", icon: Tag },
+  { title: "Configurações", url: "/app/configuracoes", icon: Settings },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/", { replace: true });
+  };
 
   return (
     <Sidebar collapsible="icon">
       <SidebarContent className="scrollbar-thin">
-        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 py-5">
           <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
             <Zap className="w-4 h-4 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <span className="text-lg font-bold text-sidebar-accent-foreground">ZapPro</span>
+            <span className="text-base font-bold text-sidebar-accent-foreground leading-tight">Dominus</span>
           )}
         </div>
 
@@ -66,17 +73,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.url)}
-                    tooltip={item.title}
-                  >
-                    <NavLink
-                      to={item.url}
-                      end
-                      className="hover:bg-sidebar-accent/50"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                    >
+                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                    <NavLink to={item.url} end className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
                       <item.icon className="mr-2 h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
@@ -95,17 +94,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {configItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.url)}
-                    tooltip={item.title}
-                  >
-                    <NavLink
-                      to={item.url}
-                      end
-                      className="hover:bg-sidebar-accent/50"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                    >
+                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                    <NavLink to={item.url} end className="hover:bg-sidebar-accent/50"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
                       <item.icon className="mr-2 h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
@@ -120,11 +111,9 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Sair">
-              <NavLink to="/" className="hover:bg-sidebar-accent/50 text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                {!collapsed && <span>Sair</span>}
-              </NavLink>
+            <SidebarMenuButton onClick={handleLogout} tooltip="Sair" className="text-destructive">
+              <LogOut className="mr-2 h-4 w-4" />
+              {!collapsed && <span>Sair</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

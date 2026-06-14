@@ -1,12 +1,24 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Login from "./pages/Login";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { CompanyProvider } from "@/contexts/CompanyContext";
+import { PublicRoute, ProtectedRoute, MasterRoute } from "@/components/guards/RouteGuards";
+
+import Landing from "./pages/Landing";
+import Auth from "./pages/Auth";
+import Cadastro from "./pages/Cadastro";
+import SelecionarEmpresa from "./pages/SelecionarEmpresa";
 import Dashboard from "./pages/Dashboard";
 import Tickets from "./pages/Tickets";
 import Contacts from "./pages/Contacts";
+import Conexoes from "./pages/Conexoes";
+import Placeholder from "./pages/Placeholder";
+import MasterDashboard from "./pages/master/MasterDashboard";
+import MasterEmpresas from "./pages/master/MasterEmpresas";
+import MasterPlaceholder from "./pages/master/MasterPlaceholder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -17,13 +29,35 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/tickets" element={<Tickets />} />
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <CompanyProvider>
+            <Routes>
+              <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+              <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+              <Route path="/cadastro" element={<PublicRoute><Cadastro /></PublicRoute>} />
+              <Route path="/selecionar-empresa" element={<SelecionarEmpresa />} />
+
+              <Route path="/app" element={<ProtectedRoute><Navigate to="/app/dashboard" replace /></ProtectedRoute>} />
+              <Route path="/app/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/app/tickets" element={<ProtectedRoute><Tickets /></ProtectedRoute>} />
+              <Route path="/app/contatos" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
+              <Route path="/app/campanhas" element={<ProtectedRoute><Placeholder title="Campanhas" description="Disparos em massa e prospecção." /></ProtectedRoute>} />
+              <Route path="/app/agendamentos" element={<ProtectedRoute><Placeholder title="Agendamentos" description="Mensagens agendadas." /></ProtectedRoute>} />
+              <Route path="/app/conexoes" element={<ProtectedRoute><Conexoes /></ProtectedRoute>} />
+              <Route path="/app/tags" element={<ProtectedRoute><Placeholder title="Tags" description="Classifique contatos e tickets." /></ProtectedRoute>} />
+              <Route path="/app/configuracoes" element={<ProtectedRoute><Placeholder title="Configurações" description="Preferências da empresa." /></ProtectedRoute>} />
+
+              <Route path="/master" element={<MasterRoute><MasterDashboard /></MasterRoute>} />
+              <Route path="/master/empresas" element={<MasterRoute><MasterEmpresas /></MasterRoute>} />
+              <Route path="/master/planos" element={<MasterRoute><MasterPlaceholder title="Planos" /></MasterRoute>} />
+              <Route path="/master/canais" element={<MasterRoute><MasterPlaceholder title="Canais" /></MasterRoute>} />
+              <Route path="/master/logs" element={<MasterRoute><MasterPlaceholder title="Logs" /></MasterRoute>} />
+              <Route path="/master/configuracoes" element={<MasterRoute><MasterPlaceholder title="Configurações" /></MasterRoute>} />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </CompanyProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
