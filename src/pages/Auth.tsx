@@ -48,7 +48,7 @@ export default function Auth() {
       const isMaster = profile?.is_master === true || profile?.global_role === "master";
       console.log("[LOGIN_DEBUG] isMaster:", isMaster);
 
-      await refresh();
+      await refresh(data.user.id);
 
       if (isMaster) {
         navigate("/master", { replace: true });
