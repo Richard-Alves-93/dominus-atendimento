@@ -14,9 +14,10 @@ function FullPageLoader() {
 
 export function PublicRoute({ children }: { children: ReactNode }) {
   const { user, profile, memberships, loading } = useAuth();
+  const isMaster = profile?.is_master === true || profile?.global_role === "master";
   if (loading) return <FullPageLoader />;
   if (user) {
-    if (profile?.is_master) return <Navigate to="/master" replace />;
+    if (isMaster) return <Navigate to="/master" replace />;
     if (memberships.length === 1) return <Navigate to="/app" replace />;
     if (memberships.length > 1) return <Navigate to="/selecionar-empresa" replace />;
   }
@@ -36,8 +37,9 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
 export function MasterRoute({ children }: { children: ReactNode }) {
   const { user, profile, loading } = useAuth();
+  const isMaster = profile?.is_master === true || profile?.global_role === "master";
   if (loading) return <FullPageLoader />;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!profile?.is_master) return <Navigate to="/app" replace />;
+  if (!isMaster) return <Navigate to="/app" replace />;
   return <>{children}</>;
 }
