@@ -35,17 +35,31 @@ export default function Auth() {
         return;
       }
 
-      const [{ data: profile }, { data: memberships }] = await Promise.all([
-        supabase.from("profiles").select("is_master").eq("id", data.user.id).maybeSingle(),
-        supabase.from("company_users").select("company_id").eq("user_id", data.user.id).eq("status", "active"),
-      ]);
+      console.log("[LOGIN_DEBUG] auth user id:", data.user.id, "email:", data.user.email);
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, email, is_master, global_role")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      console.log("[LOGIN_DEBUG] profile:", profile, "error:", profileError);
+
+      const isMaster = profile?.is_master === true || profile?.global_role === "master";
+      console.log("[LOGIN_DEBUG] isMaster:", isMaster);
 
       await refresh();
 
-      if (profile?.is_master) {
+      if (isMaster) {
         navigate("/master", { replace: true });
         return;
       }
+
+      const { data: memberships } = await supabase
+        .from("company_users")
+        .select("company_id")
+        .eq("user_id", data.user.id)
+        .eq("status", "active");
       const list = memberships ?? [];
       if (list.length === 0) {
         toast.error("Sua conta não está vinculada a nenhuma empresa. Contate o administrador.");
