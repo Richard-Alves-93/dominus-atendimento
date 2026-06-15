@@ -59,7 +59,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   // Role-based page guard for /app/equipe and /app/setores
   if ((location.pathname === "/app/equipe" || location.pathname === "/app/setores") &&
       !["owner","admin","manager"].includes(active.role)) {
-    return <Navigate to="/app/dashboard" replace />;
+    return <RoleBlocked />;
   }
   return <>{children}</>;
 }
