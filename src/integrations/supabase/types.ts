@@ -445,14 +445,20 @@ export type Database = {
           company_id: string
           contact_id: string
           created_at: string
+          delivered_at: string | null
+          delivery_status: string
           direction: Database["public"]["Enums"]["message_direction"]
           external_id: string | null
+          failed_at: string | null
+          failure_reason: string | null
           from_me: boolean
           id: string
           media_url: string | null
           msg_type: Database["public"]["Enums"]["message_type"]
+          provider_message_id: string | null
           raw: Json
           raw_body: string | null
+          read_at: string | null
           sent_at: string
           sent_by_name: string | null
           sent_by_signature: string | null
@@ -466,14 +472,20 @@ export type Database = {
           company_id: string
           contact_id: string
           created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
           direction: Database["public"]["Enums"]["message_direction"]
           external_id?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
           from_me?: boolean
           id?: string
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
+          provider_message_id?: string | null
           raw?: Json
           raw_body?: string | null
+          read_at?: string | null
           sent_at?: string
           sent_by_name?: string | null
           sent_by_signature?: string | null
@@ -487,14 +499,20 @@ export type Database = {
           company_id?: string
           contact_id?: string
           created_at?: string
+          delivered_at?: string | null
+          delivery_status?: string
           direction?: Database["public"]["Enums"]["message_direction"]
           external_id?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
           from_me?: boolean
           id?: string
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
+          provider_message_id?: string | null
           raw?: Json
           raw_body?: string | null
+          read_at?: string | null
           sent_at?: string
           sent_by_name?: string | null
           sent_by_signature?: string | null
