@@ -29,6 +29,10 @@ const badge: Record<string, string> = {
 
 export default function MasterEmpresas() {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { startImpersonation } = useCompany();
+  const isMaster = profile?.is_master === true || profile?.global_role === "master";
 
   useEffect(() => {
     supabase
@@ -37,6 +41,12 @@ export default function MasterEmpresas() {
       .order("created_at", { ascending: false })
       .then(({ data }) => setCompanies((data as Company[] | null) ?? []));
   }, []);
+
+  const enterCompany = (c: Company) => {
+    if (!isMaster) return;
+    startImpersonation(c.id, c.name);
+    navigate("/app/dashboard");
+  };
 
   return (
     <MasterLayout title="Empresas">
@@ -50,12 +60,13 @@ export default function MasterEmpresas() {
                 <TableHead>Telefone</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Criada em</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {companies.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     Nenhuma empresa cadastrada ainda.
                   </TableCell>
                 </TableRow>
@@ -67,6 +78,11 @@ export default function MasterEmpresas() {
                   <TableCell>{c.phone ?? "—"}</TableCell>
                   <TableCell><Badge className={badge[c.status]}>{c.status}</Badge></TableCell>
                   <TableCell>{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="outline" onClick={() => enterCompany(c)} disabled={!isMaster}>
+                      <LogIn className="w-3.5 h-3.5 mr-1.5" /> Entrar como empresa
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
