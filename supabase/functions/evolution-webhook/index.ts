@@ -61,10 +61,23 @@ function mapDeliveryStatus(raw: any): { status: string | null; ts: string } {
   return { status: null, ts };
 }
 
+function auditStatus(event: string, instanceName: string | null, providerId: string | null, statusRaw: any, mapped: string | null, rows?: number) {
+  console.log(
+    `[WEBHOOK_STATUS_AUDIT] event=${event} instance=${instanceName ?? ""} messageId=${providerId ?? ""} rawStatus=${statusRaw ?? ""} mappedStatus=${mapped ?? ""} rowsUpdated=${rows ?? ""}`,
+  );
+}
+
 async function patchOutboundStatus(admin: any, inst: any, providerId: string | null, statusRaw: any, source: string) {
-  const { status, ts } = mapDeliveryStatus(statusRaw);
+  const mapped = mapDeliveryStatus(statusRaw);
+  const ts = mapped.ts;
+  const status = source === "send_message" && (mapped.status === "delivered" || mapped.status === "read")
+    ? "sent"
+    : mapped.status;
   console.log("[WEBHOOK] msg_update keyId=", providerId, "rawStatus=", statusRaw, "mapped=", status, "source=", source);
-  if (!providerId || !status) return 0;
+  if (!providerId || !status) {
+    auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, 0);
+    return 0;
+  }
 
   const patch: Record<string, unknown> = { delivery_status: status, status };
   if (status === "delivered") patch.delivered_at = ts;
@@ -87,9 +100,11 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
     .select("id");
   if (error) {
     console.error("[WEBHOOK] msg_update_err", error.message);
+    auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, 0);
     return 0;
   }
   console.log("[WEBHOOK] msg_update_rows=", updated?.length ?? 0);
+  auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, updated?.length ?? 0);
   return updated?.length ?? 0;
 }
 
