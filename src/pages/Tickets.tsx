@@ -98,8 +98,15 @@ interface PendingMessage {
   status: "sending" | "error";
 }
 
-interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean }
+interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean; allow_stalled_takeover?: boolean }
 interface UserOption { user_id: string; full_name: string | null; email: string | null }
+interface CompanySettingsRow {
+  company_id?: string;
+  allow_stalled_takeover: boolean;
+  stalled_minutes: number;
+  same_department_only: boolean;
+  updated_at?: string;
+}
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
   open: "Aberto",
@@ -157,7 +164,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("departments")
-        .select("id, name, status, allow_general_queue")
+        .select("id, name, status, allow_general_queue, allow_stalled_takeover")
         .eq("company_id", activeCompanyId!)
         .is("deleted_at", null)
         .order("name");
@@ -173,19 +180,27 @@ const Tickets = () => {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("company_settings")
-        .select("allow_stalled_takeover, stalled_minutes, same_department_only")
+        .select("*")
         .eq("company_id", activeCompanyId!)
         .maybeSingle();
-      return (data ?? {
+      const row = (data ?? {
+        company_id: activeCompanyId!,
         allow_stalled_takeover: true,
         stalled_minutes: 15,
         same_department_only: true,
-      }) as {
-        allow_stalled_takeover: boolean;
-        stalled_minutes: number;
-        same_department_only: boolean;
-      };
+      }) as CompanySettingsRow;
+      if (typeof window !== "undefined") {
+        console.debug("[STALLED_SETTINGS_AUDIT]", {
+          companyId: activeCompanyId,
+          allow_stalled_takeover: row.allow_stalled_takeover,
+          stalled_minutes: row.stalled_minutes,
+          same_department_only: row.same_department_only,
+          rawSettings: data ?? null,
+        });
+      }
+      return row;
     },
+    refetchOnMount: "always",
   });
   const settings = settingsQuery.data ?? {
     allow_stalled_takeover: true,
