@@ -681,7 +681,6 @@ const Tickets = () => {
     const ageMin = Math.floor(elapsedMs / 60000);
     const stalled = elapsedMs >= settings.stalled_minutes * 60000;
     if (typeof window !== "undefined") {
-      // eslint-disable-next-line no-console
       console.debug("[STALLED_AUDIT]", {
         ticketId: selected.id,
         assigned_user_id: selected.assigned_user_id,
