@@ -92,9 +92,13 @@ Deno.serve(async (req) => {
       .select("full_name, public_name, signature, signature_enabled")
       .eq("id", userId).maybeSingle();
     const senderName = senderProfile?.public_name ?? senderProfile?.full_name ?? null;
-    const signatureLine = senderProfile?.signature_enabled && senderProfile?.signature
-      ? senderProfile.signature.trim()
-      : null;
+    // Assinatura: usa signature se preenchida, senão cai para public_name ou full_name.
+    const sigRaw =
+      (senderProfile?.signature && senderProfile.signature.trim()) ||
+      (senderProfile?.public_name && senderProfile.public_name.trim()) ||
+      (senderProfile?.full_name && senderProfile.full_name.trim()) ||
+      "";
+    const signatureLine = senderProfile?.signature_enabled && sigRaw ? sigRaw : null;
     const finalText = signatureLine ? `*${signatureLine}:*\n${text}` : text;
 
     const evoRes = await fetch(endpoint, {
