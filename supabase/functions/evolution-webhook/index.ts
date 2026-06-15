@@ -287,7 +287,9 @@ Deno.serve(async (req) => {
     } else if (
       normalized === "MESSAGES_UPDATE" ||
       normalized === "MESSAGE_UPDATE" ||
-      normalized === "MESSAGE_STATUS"
+      normalized === "MESSAGE_STATUS" ||
+      normalized === "SEND_MESSAGE" ||
+      normalized === "MESSAGES_SET"
     ) {
       await handleMessageUpdate(admin, inst, payload);
     }
@@ -296,9 +298,10 @@ Deno.serve(async (req) => {
       company_id: inst.company_id,
       channel_id: inst.channel_id,
       event_type: event || "unknown",
-      payload,
+      metadata: payload,
       status: "ok",
     });
+
 
     return json({ ok: true });
   } catch (e) {
