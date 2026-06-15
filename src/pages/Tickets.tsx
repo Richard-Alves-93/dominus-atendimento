@@ -1424,10 +1424,37 @@ const Tickets = () => {
           </Select>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAssignDeptOpen(false)}>Cancelar</Button>
-            <Button onClick={saveDepartment} disabled={!pendingDeptId}>Salvar</Button>
+            <Button onClick={handleDeptSaveClick} disabled={!pendingDeptId}>
+              {selected?.department_id && selected.department_id !== pendingDeptId ? "Transferir" : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm: Transferir entre setores */}
+      <AlertDialog open={transferConfirmOpen} onOpenChange={setTransferConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Transferir atendimento para {activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Após a transferência, o atendimento ficará disponível para o novo setor e será removido da fila do setor atual. O responsável atual será removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void saveDepartment();
+              }}
+            >
+              Transferir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog: Atribuir atendente */}
       <Dialog open={assignUserOpen} onOpenChange={setAssignUserOpen}>
