@@ -910,6 +910,34 @@ const Tickets = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Confirm: Assumir atendimento */}
+      <AlertDialog open={takeOverOpen} onOpenChange={setTakeOverOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assumir atendimento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este atendimento está sendo realizado por{" "}
+              <span className="font-medium text-foreground">
+                {selected?.assignee?.full_name || selected?.assignee?.email || "outro atendente"}
+              </span>
+              . Deseja assumir o controle desta conversa?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={takeOverMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                takeOverMutation.mutate();
+              }}
+              disabled={takeOverMutation.isPending}
+            >
+              {takeOverMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Assumir atendimento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };
