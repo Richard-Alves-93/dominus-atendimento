@@ -57,17 +57,22 @@ export default function Auth() {
 
       const { data: memberships } = await supabase
         .from("company_users")
-        .select("company_id")
+        .select("company_id, company:companies(id, status)")
         .eq("user_id", data.user.id)
         .eq("status", "active");
-      const list = memberships ?? [];
+      const list = (memberships ?? []) as Array<{ company_id: string; company: { id: string; status: string } | null }>;
       if (list.length === 0) {
         toast.error("Sua conta não está vinculada a nenhuma empresa. Contate o administrador.");
         await supabase.auth.signOut();
         return;
       }
-      if (list.length === 1) {
-        localStorage.setItem("dominus.activeCompanyId", list[0].company_id);
+      const allowed = list.filter((m) => m.company?.status === "active" || m.company?.status === "trial");
+      if (allowed.length === 0) {
+        navigate("/empresa-bloqueada", { replace: true });
+        return;
+      }
+      if (allowed.length === 1) {
+        localStorage.setItem("dominus.activeCompanyId", allowed[0].company_id);
         navigate("/app", { replace: true });
       } else {
         navigate("/selecionar-empresa", { replace: true });
