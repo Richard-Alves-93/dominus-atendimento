@@ -710,26 +710,49 @@ const Tickets = () => {
   );
 
   const canTakeOverStalled = useMemo(() => {
-    if (!selected || !profile?.id) return false;
-    if (!isAssignedToOther) return false;
-    if (!stalledInfo.stalled) return false;
-    if (!settings.allow_stalled_takeover) return false;
-    if (selectedDept && (selectedDept as any).allow_stalled_takeover === false) return false;
-    // Agent precisa estar no mesmo setor quando exigido
-    if (settings.same_department_only) {
-      if (!selected.department_id) return false;
-      if (!myDeptIds.includes(selected.department_id)) return false;
+    const ticketDepartmentId = selected?.department_id ?? null;
+    const sameDepartment = !!ticketDepartmentId && myDeptIds.includes(ticketDepartmentId);
+    const managerOfDepartment = !!ticketDepartmentId && myManagedDeptIds.includes(ticketDepartmentId);
+    const departmentAllowsStalledTakeover = selectedDept?.allow_stalled_takeover !== false;
+    const companyAllowsStalledTakeover = settings.allow_stalled_takeover === true;
+    let canTakeOver = false;
+    let reasonBlocked = "allowed";
+
+    if (!selected || !profile?.id) reasonBlocked = "missing_selected_or_user";
+    else if (!isAssignedToOther) reasonBlocked = "not_assigned_to_other";
+    else if (!stalledInfo.stalled) reasonBlocked = "not_stalled";
+    else if (isAdmin || managerOfDepartment) canTakeOver = true;
+    else if (!companyAllowsStalledTakeover) reasonBlocked = "company_disallows_stalled_takeover";
+    else if (!departmentAllowsStalledTakeover) reasonBlocked = "department_disallows_stalled_takeover";
+    else if (settings.same_department_only && !sameDepartment) reasonBlocked = "different_department";
+    else canTakeOver = true;
+
+    if (typeof window !== "undefined") {
+      console.debug("[STALLED_PERMISSION_AUDIT]", {
+        isStalled: stalledInfo.stalled,
+        role,
+        ticketDepartmentId,
+        userDepartmentIds: myDeptIds,
+        sameDepartmentOnly: settings.same_department_only,
+        departmentAllowsStalledTakeover,
+        companyAllowsStalledTakeover,
+        canTakeOverStalled: canTakeOver,
+        reasonBlocked: canTakeOver ? null : reasonBlocked,
+      });
     }
-    return true;
+    return canTakeOver;
   }, [
     selected,
     profile?.id,
     isAssignedToOther,
     stalledInfo.stalled,
+    isAdmin,
+    role,
     settings.allow_stalled_takeover,
     settings.same_department_only,
     selectedDept,
     myDeptIds,
+    myManagedDeptIds,
   ]);
 
   const canTakeOverSelected = canTakeOverPrivileged || canTakeOverStalled;
