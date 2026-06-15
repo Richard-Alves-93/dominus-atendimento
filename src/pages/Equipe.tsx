@@ -21,7 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
-import { MoreVertical, Plus, UserX, RotateCcw, Loader2 } from "lucide-react";
+import { MoreVertical, Plus, UserX, RotateCcw, Loader2, KeyRound } from "lucide-react";
 import { formatPhoneDisplay, normalizePhone, isValidPhone, onlyDigits } from "@/lib/phone";
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
@@ -61,6 +61,7 @@ export default function Equipe() {
   const [disabling, setDisabling] = useState<Member | null>(null);
   const [disableReason, setDisableReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState<Member | null>(null);
 
   const empty = {
     full_name: "", email: "", phone: "",
@@ -235,6 +236,27 @@ export default function Equipe() {
     await load();
   };
 
+  const confirmReset = async () => {
+    if (!resetting || !activeCompanyId) return;
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("reset-company-user-password", {
+      body: { company_id: activeCompanyId, user_id: resetting.user_id },
+    });
+    setBusy(false);
+    const d = data as any;
+    if (error || d?.ok === false) {
+      const msg = d?.error ?? error?.message ?? "Falha";
+      return toast({ title: "Erro ao redefinir senha", description: msg, variant: "destructive" });
+    }
+    toast({
+      title: "Senha redefinida",
+      description: d?.wa_sent
+        ? "Nova senha provisória enviada por WhatsApp."
+        : `Senha redefinida. Envio WhatsApp pendente: ${d?.wa_error ?? "indisponível"}`,
+    });
+    setResetting(null);
+  };
+
   const deptMap = useMemo(() => Object.fromEntries(depts.map((d) => [d.id, d.name])), [depts]);
 
   return (
@@ -295,6 +317,14 @@ export default function Equipe() {
                       <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuLabel>Ações</DropdownMenuLabel>
                         <DropdownMenuItem onClick={() => openEdit(m)}>Editar</DropdownMenuItem>
+                        {m.status === "active" && (
+                          <DropdownMenuItem
+                            onClick={() => setResetting(m)}
+                            disabled={m.user_id === profile?.id}
+                          >
+                            <KeyRound className="w-3.5 h-3.5 mr-2" /> Redefinir senha
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         {m.status === "active" ? (
                           <DropdownMenuItem
@@ -437,6 +467,26 @@ export default function Equipe() {
             <Button variant="destructive" onClick={confirmDisable} disabled={busy}>
               {busy && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
               Desativar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset password confirmation */}
+      <Dialog open={!!resetting} onOpenChange={(o) => !o && setResetting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogDescription>
+              Deseja redefinir a senha de {resetting?.profile?.full_name ?? "este usuário"}? Uma nova senha provisória
+              será enviada por WhatsApp e o usuário será obrigado a trocar a senha no próximo acesso.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetting(null)}>Cancelar</Button>
+            <Button onClick={confirmReset} disabled={busy}>
+              {busy && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+              Redefinir senha
             </Button>
           </DialogFooter>
         </DialogContent>
