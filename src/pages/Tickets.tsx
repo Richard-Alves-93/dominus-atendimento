@@ -258,28 +258,28 @@ const Tickets = () => {
     queryKey: ["assignable-users", activeCompanyId, selected?.department_id],
     enabled: !!activeCompanyId && assignUserOpen,
     queryFn: async () => {
+      let userIds: string[] = [];
       if (selected?.department_id) {
         const { data } = await (supabase as any)
           .from("department_users")
-          .select("user_id, profile:profiles(id, full_name, email)")
+          .select("user_id")
           .eq("company_id", activeCompanyId!)
           .eq("department_id", selected.department_id)
           .eq("status", "active");
-        return ((data ?? []) as any[]).map((r) => ({
-          user_id: r.user_id,
-          full_name: r.profile?.full_name ?? null,
-          email: r.profile?.email ?? null,
-        })) as UserOption[];
+        userIds = ((data ?? []) as any[]).map((r) => r.user_id);
+      } else {
+        const { data } = await (supabase as any)
+          .from("company_users")
+          .select("user_id")
+          .eq("company_id", activeCompanyId!)
+          .eq("status", "active");
+        userIds = ((data ?? []) as any[]).map((r) => r.user_id);
       }
-      const { data } = await (supabase as any)
-        .from("company_users")
-        .select("user_id, profile:profiles(id, full_name, email)")
-        .eq("company_id", activeCompanyId!)
-        .eq("status", "active");
-      return ((data ?? []) as any[]).map((r) => ({
-        user_id: r.user_id,
-        full_name: r.profile?.full_name ?? null,
-        email: r.profile?.email ?? null,
+      if (userIds.length === 0) return [] as UserOption[];
+      const { data: profs } = await (supabase as any)
+        .from("profiles").select("id, full_name, email").in("id", userIds);
+      return ((profs ?? []) as any[]).map((p) => ({
+        user_id: p.id, full_name: p.full_name ?? null, email: p.email ?? null,
       })) as UserOption[];
     },
   });
