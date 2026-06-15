@@ -80,6 +80,7 @@ interface MessageRow {
   body: string | null;
   msg_type: string;
   status: string | null;
+  delivery_status?: string | null;
   sent_at: string;
   created_at: string;
   _optimistic?: boolean;
