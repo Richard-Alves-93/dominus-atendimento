@@ -609,6 +609,62 @@ const Tickets = () => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [visibleMessages.length, selectedId]);
 
+  // ─── Atendimento parado ────────────────────────────────────────────
+  // Considerado parado quando:
+  //  • status = open
+  //  • assigned_user_id != null
+  //  • unread_count > 0
+  //  • última mensagem é do cliente
+  //  • tempo desde a última mensagem do cliente >= stalled_minutes
+  const stalledInfo = useMemo(() => {
+    if (!selected) return { stalled: false, minutes: 0 };
+    if (selected.status !== "open") return { stalled: false, minutes: 0 };
+    if (!selected.assigned_user_id) return { stalled: false, minutes: 0 };
+    if ((selected.unread_count ?? 0) <= 0) return { stalled: false, minutes: 0 };
+    const list = (messagesQuery.data ?? []) as MessageRow[];
+    if (list.length === 0) return { stalled: false, minutes: 0 };
+    const last = list[list.length - 1];
+    if (!last || last.from_me) return { stalled: false, minutes: 0 };
+    const ts = new Date(last.sent_at || last.created_at).getTime();
+    const ageMin = Math.floor((Date.now() - ts) / 60000);
+    return { stalled: ageMin >= settings.stalled_minutes, minutes: ageMin };
+  }, [selected, messagesQuery.data, settings.stalled_minutes]);
+
+  // Setor do ticket: também precisa permitir takeover quando regra exige mesmo setor
+  const selectedDept = useMemo(
+    () => (deptsQuery.data ?? []).find((d) => d.id === selected?.department_id) ?? null,
+    [deptsQuery.data, selected?.department_id],
+  );
+
+  const canTakeOverStalled = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (!isAssignedToOther) return false;
+    if (!stalledInfo.stalled) return false;
+    if (!settings.allow_stalled_takeover) return false;
+    if (selectedDept && (selectedDept as any).allow_stalled_takeover === false) return false;
+    // Agent precisa estar no mesmo setor quando exigido
+    if (settings.same_department_only) {
+      if (!selected.department_id) return false;
+      if (!myDeptIds.includes(selected.department_id)) return false;
+    }
+    return true;
+  }, [
+    selected,
+    profile?.id,
+    isAssignedToOther,
+    stalledInfo.stalled,
+    settings.allow_stalled_takeover,
+    settings.same_department_only,
+    selectedDept,
+    myDeptIds,
+  ]);
+
+  const canTakeOverSelected = canTakeOverPrivileged || canTakeOverStalled;
+  const takeOverReason = canTakeOverPrivileged
+    ? "assumir_atendimento"
+    : "assumir_atendimento_parado";
+
+
   const sendMutation = useMutation({
     mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
