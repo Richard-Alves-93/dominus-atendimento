@@ -21,7 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
-import { MoreVertical, Plus, UserX, RotateCcw, Loader2 } from "lucide-react";
+import { MoreVertical, Plus, UserX, RotateCcw, Loader2, KeyRound } from "lucide-react";
 import { formatPhoneDisplay, normalizePhone, isValidPhone, onlyDigits } from "@/lib/phone";
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
