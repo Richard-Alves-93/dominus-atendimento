@@ -139,6 +139,10 @@ export default function Equipe() {
     if (!form.full_name.trim() || !form.email.trim()) {
       return toast({ title: "Nome e e-mail são obrigatórios", variant: "destructive" });
     }
+    const emailNorm = form.email.trim().toLowerCase();
+    if (members.some((m) => (m.profile?.email ?? "").trim().toLowerCase() === emailNorm)) {
+      return toast({ title: "E-mail duplicado", description: "Este e-mail já está cadastrado nesta empresa.", variant: "destructive" });
+    }
     if (!isValidPhone(form.phone)) {
       return toast({ title: "WhatsApp inválido", description: "Informe um WhatsApp válido com DDD.", variant: "destructive" });
     }
