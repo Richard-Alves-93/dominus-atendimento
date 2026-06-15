@@ -310,6 +310,41 @@ const Tickets = () => {
     },
   });
 
+  // Candidatos a "atendimento parado" na lista: status=open e com responsável.
+  const stalledCandidateIds = useMemo(() => {
+    return (ticketsQuery.data ?? [])
+      .filter((t) => t.status === "open" && !!t.assigned_user_id)
+      .map((t) => t.id);
+  }, [ticketsQuery.data]);
+
+  // Busca eficiente (1 query) das mensagens recentes dos candidatos para derivar
+  // last_inbound_at / last_outbound_at por ticket. Evita N+1.
+  const ticketTimelinesQuery = useQuery({
+    queryKey: ["ticket-timelines", activeCompanyId, stalledCandidateIds.join(",")],
+    enabled: !!activeCompanyId && stalledCandidateIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("messages")
+        .select("ticket_id, from_me, sent_at, created_at")
+        .in("ticket_id", stalledCandidateIds)
+        .order("created_at", { ascending: false })
+        .limit(Math.min(2000, stalledCandidateIds.length * 20));
+      if (error) throw error;
+      const map: Record<string, { lastInboundTs: number | null; lastOutboundTs: number | null }> = {};
+      for (const id of stalledCandidateIds) map[id] = { lastInboundTs: null, lastOutboundTs: null };
+      for (const r of (data ?? []) as Array<{ ticket_id: string; from_me: boolean; sent_at: string | null; created_at: string }>) {
+        const entry = map[r.ticket_id];
+        if (!entry) continue;
+        const ts = new Date(r.sent_at || r.created_at).getTime();
+        if (!Number.isFinite(ts)) continue;
+        if (!r.from_me && entry.lastInboundTs == null) entry.lastInboundTs = ts;
+        if (r.from_me && entry.lastOutboundTs == null) entry.lastOutboundTs = ts;
+      }
+      return map;
+    },
+    staleTime: 15_000,
+  });
+
   const tickets = useMemo(() => {
     const list = ticketsQuery.data ?? [];
     const pmap = assigneeProfilesQuery.data ?? {};
@@ -634,9 +669,34 @@ const Tickets = () => {
   // Tick a cada 30s para recalcular sem F5
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
   useEffect(() => {
-    const id = window.setInterval(() => setNowTs(Date.now()), 30000);
+    const id = window.setInterval(() => {
+      setNowTs(Date.now());
+      // Mantém timelines da lista frescas sem F5
+      void qc.invalidateQueries({ queryKey: ["ticket-timelines", activeCompanyId] });
+    }, 30000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [qc, activeCompanyId]);
+
+  // Mapa de "atendimento parado" para cada ticket da lista — mesma regra do painel,
+  // sem depender de unread_count. Recalcula quando nowTs/timelines/settings mudam.
+  const listStalledMap = useMemo(() => {
+    const out = new Map<string, { stalled: boolean; minutes: number }>();
+    const tl = ticketTimelinesQuery.data ?? {};
+    const stalledMs = (settings.stalled_minutes || 0) * 60000;
+    if (stalledMs <= 0) return out;
+    for (const id of Object.keys(tl)) {
+      const { lastInboundTs, lastOutboundTs } = tl[id] || { lastInboundTs: null, lastOutboundTs: null };
+      if (lastInboundTs == null) continue;
+      const hasCustomerWaiting = lastOutboundTs == null || lastInboundTs > lastOutboundTs;
+      if (!hasCustomerWaiting) continue;
+      const elapsedMs = nowTs - lastInboundTs;
+      if (elapsedMs >= stalledMs) {
+        out.set(id, { stalled: true, minutes: Math.floor(elapsedMs / 60000) });
+      }
+    }
+    return out;
+  }, [ticketTimelinesQuery.data, settings.stalled_minutes, nowTs]);
+
   // Refetch leve periódico para garantir frescor da timeline
   useEffect(() => {
     if (!selectedId) return;
@@ -965,6 +1025,7 @@ const Tickets = () => {
               tickets.map((t) => {
                 const name = t.contact?.name || t.contact?.phone_number || "Sem nome";
                 const isFila = !t.department_id && !t.assigned_user_id;
+                const stalledItem = listStalledMap.get(t.id);
                 return (
                   <div
                     key={t.id}
@@ -993,6 +1054,15 @@ const Tickets = () => {
                           <span className="text-[10px] text-muted-foreground truncate">{t.department.name}</span>
                         )}
                         <span className="text-[10px] text-muted-foreground">· {STATUS_LABEL[t.status]}</span>
+                        {stalledItem?.stalled && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 px-1.5 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10"
+                            title={`Sem resposta há ${stalledItem.minutes} min`}
+                          >
+                            Parado
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     {t.unread_count > 0 && (
