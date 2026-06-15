@@ -189,6 +189,136 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          avatar_url: string | null
+          company_id: string
+          created_at: string
+          email: string | null
+          external_id: string | null
+          id: string
+          metadata: Json
+          name: string | null
+          phone_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          company_id: string
+          created_at?: string
+          email?: string | null
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          name?: string | null
+          phone_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          company_id?: string
+          created_at?: string
+          email?: string | null
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          name?: string | null
+          phone_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          body: string | null
+          channel_id: string | null
+          company_id: string
+          contact_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          external_id: string | null
+          from_me: boolean
+          id: string
+          media_url: string | null
+          msg_type: Database["public"]["Enums"]["message_type"]
+          raw: Json
+          sent_at: string
+          status: string | null
+          ticket_id: string
+        }
+        Insert: {
+          body?: string | null
+          channel_id?: string | null
+          company_id: string
+          contact_id: string
+          created_at?: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          external_id?: string | null
+          from_me?: boolean
+          id?: string
+          media_url?: string | null
+          msg_type?: Database["public"]["Enums"]["message_type"]
+          raw?: Json
+          sent_at?: string
+          status?: string | null
+          ticket_id: string
+        }
+        Update: {
+          body?: string | null
+          channel_id?: string | null
+          company_id?: string
+          contact_id?: string
+          created_at?: string
+          direction?: Database["public"]["Enums"]["message_direction"]
+          external_id?: string | null
+          from_me?: boolean
+          id?: string
+          media_url?: string | null
+          msg_type?: Database["public"]["Enums"]["message_type"]
+          raw?: Json
+          sent_at?: string
+          status?: string | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -224,6 +354,73 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tickets: {
+        Row: {
+          assigned_user_id: string | null
+          channel_id: string | null
+          company_id: string
+          contact_id: string
+          created_at: string
+          id: string
+          last_message_at: string | null
+          metadata: Json
+          status: Database["public"]["Enums"]["ticket_status"]
+          subject: string | null
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          channel_id?: string | null
+          company_id: string
+          contact_id: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          metadata?: Json
+          status?: Database["public"]["Enums"]["ticket_status"]
+          subject?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string | null
+          channel_id?: string | null
+          company_id?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          metadata?: Json
+          status?: Database["public"]["Enums"]["ticket_status"]
+          subject?: string | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_instances: {
         Row: {
@@ -310,6 +507,18 @@ export type Database = {
       company_user_role: "owner" | "admin" | "manager" | "agent" | "financial"
       company_user_status: "active" | "pending" | "disabled"
       global_role: "master" | "user"
+      message_direction: "inbound" | "outbound"
+      message_type:
+        | "text"
+        | "image"
+        | "audio"
+        | "video"
+        | "document"
+        | "sticker"
+        | "location"
+        | "contact"
+        | "other"
+      ticket_status: "open" | "pending" | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -450,6 +659,19 @@ export const Constants = {
       company_user_role: ["owner", "admin", "manager", "agent", "financial"],
       company_user_status: ["active", "pending", "disabled"],
       global_role: ["master", "user"],
+      message_direction: ["inbound", "outbound"],
+      message_type: [
+        "text",
+        "image",
+        "audio",
+        "video",
+        "document",
+        "sticker",
+        "location",
+        "contact",
+        "other",
+      ],
+      ticket_status: ["open", "pending", "closed"],
     },
   },
 } as const

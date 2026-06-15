@@ -17,6 +17,130 @@ function ensureDataUrl(qr?: string | null): string | null {
   return `data:image/png;base64,${qr}`;
 }
 
+function jidToPhone(jid?: string | null): string | null {
+  if (!jid) return null;
+  return String(jid).split("@")[0].split(":")[0] || null;
+}
+
+function detectMsgType(m: any): string {
+  const msg = m?.message ?? {};
+  if (msg.conversation || msg.extendedTextMessage) return "text";
+  if (msg.imageMessage) return "image";
+  if (msg.audioMessage) return "audio";
+  if (msg.videoMessage) return "video";
+  if (msg.documentMessage) return "document";
+  if (msg.stickerMessage) return "sticker";
+  if (msg.locationMessage) return "location";
+  if (msg.contactMessage) return "contact";
+  return "other";
+}
+
+function extractBody(m: any): string | null {
+  const msg = m?.message ?? {};
+  return (
+    msg.conversation ??
+    msg.extendedTextMessage?.text ??
+    msg.imageMessage?.caption ??
+    msg.videoMessage?.caption ??
+    msg.documentMessage?.caption ??
+    null
+  );
+}
+
+async function handleMessageUpsert(admin: any, inst: any, payload: any) {
+  const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
+  for (const m of dataArr) {
+    const key = m?.key ?? {};
+    const remoteJid: string | undefined = key.remoteJid;
+    if (!remoteJid || remoteJid.endsWith("@g.us")) continue; // skip groups for now
+    const fromMe = Boolean(key.fromMe);
+    const phone = jidToPhone(remoteJid);
+    const externalId = key.id ?? null;
+    const pushName = m?.pushName ?? null;
+
+    // upsert contact
+    let contactId: string | null = null;
+    const { data: existingContact } = await admin
+      .from("contacts")
+      .select("id, name")
+      .eq("company_id", inst.company_id)
+      .eq("phone_number", phone)
+      .maybeSingle();
+    if (existingContact) {
+      contactId = existingContact.id;
+      if (!existingContact.name && pushName) {
+        await admin.from("contacts").update({ name: pushName }).eq("id", contactId);
+      }
+    } else {
+      const { data: created } = await admin
+        .from("contacts")
+        .insert({ company_id: inst.company_id, phone_number: phone, name: pushName })
+        .select("id")
+        .single();
+      contactId = created?.id ?? null;
+    }
+    if (!contactId) continue;
+
+    // find or create open ticket
+    let { data: ticket } = await admin
+      .from("tickets")
+      .select("id, unread_count")
+      .eq("company_id", inst.company_id)
+      .eq("contact_id", contactId)
+      .neq("status", "closed")
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!ticket) {
+      const { data: created } = await admin
+        .from("tickets")
+        .insert({
+          company_id: inst.company_id,
+          contact_id: contactId,
+          channel_id: inst.channel_id,
+          status: "open",
+          last_message_at: new Date().toISOString(),
+        })
+        .select("id, unread_count")
+        .single();
+      ticket = created;
+    }
+    if (!ticket) continue;
+
+    const msgType = detectMsgType(m);
+    const body = extractBody(m);
+    const sentAt = m?.messageTimestamp
+      ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
+      : new Date().toISOString();
+
+    await admin.from("messages").upsert(
+      {
+        company_id: inst.company_id,
+        ticket_id: ticket.id,
+        contact_id: contactId,
+        channel_id: inst.channel_id,
+        direction: fromMe ? "outbound" : "inbound",
+        msg_type: msgType,
+        body,
+        external_id: externalId,
+        from_me: fromMe,
+        raw: m,
+        sent_at: sentAt,
+      },
+      { onConflict: "channel_id,external_id" },
+    );
+
+    await admin
+      .from("tickets")
+      .update({
+        last_message_at: sentAt,
+        unread_count: fromMe ? ticket.unread_count : (ticket.unread_count ?? 0) + 1,
+        status: "open",
+      })
+      .eq("id", ticket.id);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -43,14 +167,16 @@ Deno.serve(async (req) => {
         event_type: event || "unknown",
         payload,
         status: "ignored",
-      }).select();
+      });
       return json({ ok: true, skipped: "unknown instance" });
     }
 
     const normalized = event.toUpperCase().replace(/\./g, "_");
 
     if (normalized === "QRCODE_UPDATED") {
-      const qr = ensureDataUrl(payload?.data?.qrcode?.base64 ?? payload?.data?.qrcode ?? payload?.qrcode?.base64);
+      const qr = ensureDataUrl(
+        payload?.data?.qrcode?.base64 ?? payload?.data?.qrcode ?? payload?.qrcode?.base64,
+      );
       await admin
         .from("whatsapp_instances")
         .update({ status: "pending", qr_code: qr })
@@ -63,17 +189,21 @@ Deno.serve(async (req) => {
       else if (state === "connecting") status = "pending";
 
       const update: Record<string, unknown> = { status };
+      const phone = jidToPhone(payload?.data?.wuid ?? payload?.data?.number ?? null);
       if (status === "connected") {
         update.qr_code = null;
         update.connected_at = new Date().toISOString();
-        const phone = payload?.data?.wuid ?? payload?.data?.number ?? null;
-        if (phone) update.phone_number = String(phone).split("@")[0];
+        if (phone) update.phone_number = phone;
       } else if (status === "disconnected") {
         update.disconnected_at = new Date().toISOString();
         update.qr_code = null;
       }
       await admin.from("whatsapp_instances").update(update).eq("id", inst.id);
-      await admin.from("channels").update({ status }).eq("id", inst.channel_id);
+      const channelUpdate: Record<string, unknown> = { status };
+      if (status === "connected" && phone) channelUpdate.phone_number = phone;
+      await admin.from("channels").update(channelUpdate).eq("id", inst.channel_id);
+    } else if (normalized === "MESSAGES_UPSERT") {
+      await handleMessageUpsert(admin, inst, payload);
     }
 
     await admin.from("channel_sync_logs").insert({
