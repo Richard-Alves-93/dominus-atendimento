@@ -67,30 +67,29 @@ Deno.serve(async (req) => {
       .select("id, company_id, contact_id, channel_id")
       .eq("id", ticket_id).eq("company_id", company_id).maybeSingle();
     if (tErr || !ticket) return fail("ticket", "Ticket not found", { detail: tErr?.message });
-    console.log("[SEND_WA] ticket:", ticket.id);
 
-    const { data: contact } = await admin
-      .from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle();
+    // Parallel fetches: contact, instance, sender profile
+    const [contactRes, instanceRes, senderRes] = await Promise.all([
+      admin.from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle(),
+      admin.from("whatsapp_instances")
+        .select("instance_name, channel_id, status")
+        .eq("company_id", company_id).eq("status", "connected").maybeSingle(),
+      admin.from("profiles")
+        .select("full_name, public_name, signature, signature_enabled")
+        .eq("id", userId).maybeSingle(),
+    ]);
+
+    const contact = contactRes.data;
     const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
-    console.log("[SEND_WA] contact phone len:", phone.length);
     if (!phone) return fail("contact", "Contact has no phone");
 
-    const { data: instance } = await admin
-      .from("whatsapp_instances")
-      .select("instance_name, channel_id, status")
-      .eq("company_id", company_id).eq("status", "connected").maybeSingle();
-    console.log("[SEND_WA] instance:", instance?.instance_name, instance?.status);
+    const instance = instanceRes.data;
     if (!instance?.instance_name) return fail("instance", "No connected WhatsApp instance");
 
     const channelId = ticket.channel_id ?? instance.channel_id;
     const endpoint = `${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`;
-    console.log("[SEND_WA] endpoint:", endpoint);
 
-    // Load sender profile for signature
-    const { data: senderProfile } = await admin
-      .from("profiles")
-      .select("full_name, public_name, signature, signature_enabled")
-      .eq("id", userId).maybeSingle();
+    const senderProfile = senderRes.data;
     const senderName = senderProfile?.public_name ?? senderProfile?.full_name ?? null;
     // Assinatura: usa signature se preenchida, senão cai para public_name ou full_name.
     const sigRaw =
@@ -109,7 +108,6 @@ Deno.serve(async (req) => {
     const evoText = await evoRes.text();
     let evoData: any = {};
     try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
-    console.log("[SEND_WA] evolution status:", evoRes.status);
 
     if (!evoRes.ok) {
       return fail("evolution_send", `Evolution ${evoRes.status}`, {
@@ -144,9 +142,11 @@ Deno.serve(async (req) => {
       .select("id").single();
     if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
 
-    await admin.from("tickets")
+    // Fire-and-forget ticket update so we can return as fast as possible.
+    admin.from("tickets")
       .update({ last_message_at: nowIso, status: "open" })
-      .eq("id", ticket_id);
+      .eq("id", ticket_id)
+      .then(() => {}, (e: any) => console.error("[SEND_WA] ticket update failed", e?.message));
 
     return json({ ok: true, message_id: inserted.id, external_id: externalId });
   } catch (e) {

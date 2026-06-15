@@ -191,7 +191,6 @@ const Tickets = () => {
   const ticketsQuery = useQuery({
     queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(","), generalQueueDeptIds.join(",")],
     enabled: !!activeCompanyId && (isAdmin || myDeptsQuery.isFetched || !profile?.id),
-    refetchInterval: 5000,
     queryFn: async () => {
       let q = (supabase as any)
         .from("tickets")
@@ -422,7 +421,6 @@ const Tickets = () => {
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
     enabled: !!selectedId,
-    refetchInterval: 4000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
@@ -434,6 +432,65 @@ const Tickets = () => {
       return (data ?? []) as MessageRow[];
     },
   });
+
+  // Realtime: messages for the currently selected ticket
+  useEffect(() => {
+    if (!selectedId) return;
+    const channel = supabase
+      .channel(`messages:${selectedId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `ticket_id=eq.${selectedId}` },
+        (payload) => {
+          const row = payload.new as MessageRow;
+          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => {
+            if (prev.some((m) => m.id === row.id)) return prev;
+            return [...prev, row];
+          });
+          // Drop any matching optimistic bubble for this ticket+body
+          if (row.from_me) {
+            setPendingMessages((prev) =>
+              prev.filter(
+                (p) =>
+                  !(p.ticketId === selectedId && (row.body ?? "").includes(p.body)),
+              ),
+            );
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `ticket_id=eq.${selectedId}` },
+        (payload) => {
+          const row = payload.new as MessageRow;
+          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) =>
+            prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)),
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedId, qc]);
+
+  // Realtime: tickets list for active company
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    const channel = supabase
+      .channel(`tickets:${activeCompanyId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tickets", filter: `company_id=eq.${activeCompanyId}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCompanyId, qc]);
 
   const pendingForSelected = useMemo(
     () => pendingMessages.filter((p) => p.ticketId === selectedId),
@@ -476,10 +533,11 @@ const Tickets = () => {
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
     onSuccess: (res) => {
-      // Remove optimistic; the refetch will bring the real persisted message.
-      setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
-      qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
-      qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+      // Realtime INSERT will deliver the persisted row and drop the optimistic bubble.
+      // As a safety net, remove the optimistic after a short delay if realtime hasn't.
+      setTimeout(() => {
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
+      }, 1500);
     },
     onError: (e: Error, vars) => {
       setPendingMessages((prev) =>
