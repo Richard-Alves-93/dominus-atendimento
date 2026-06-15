@@ -140,6 +140,49 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
         status: "open",
       })
       .eq("id", ticket.id);
+}
+
+// Maps Evolution/Baileys status values to our delivery_status.
+// Strings: PENDING, SERVER_ACK, DELIVERY_ACK, READ, PLAYED
+// Numbers: 0 ERROR, 1 PENDING, 2 SERVER_ACK(sent), 3 DELIVERY_ACK(delivered), 4 READ, 5 PLAYED
+function mapDeliveryStatus(raw: any): { status: string | null; ts: string } {
+  const ts = new Date().toISOString();
+  if (raw === null || raw === undefined) return { status: null, ts };
+  const v = typeof raw === "string" ? raw.toUpperCase() : raw;
+  if (v === 0 || v === "ERROR" || v === "FAILED") return { status: "failed", ts };
+  if (v === 2 || v === "SERVER_ACK" || v === "SENT") return { status: "sent", ts };
+  if (v === 3 || v === "DELIVERY_ACK" || v === "DELIVERED") return { status: "delivered", ts };
+  if (v === 4 || v === 5 || v === "READ" || v === "PLAYED") return { status: "read", ts };
+  return { status: null, ts };
+}
+
+async function handleMessageUpdate(admin: any, inst: any, payload: any) {
+  const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
+  for (const u of dataArr) {
+    const providerId: string | undefined =
+      u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id;
+    if (!providerId) continue;
+    const statusRaw = u?.status ?? u?.update?.status ?? u?.messageStatus;
+    const { status, ts } = mapDeliveryStatus(statusRaw);
+    if (!status) continue;
+
+    const patch: Record<string, unknown> = { delivery_status: status, status };
+    if (status === "delivered") patch.delivered_at = ts;
+    if (status === "read") {
+      patch.read_at = ts;
+      // ensure delivered_at is set too
+      patch.delivered_at = ts;
+    }
+    if (status === "failed") {
+      patch.failed_at = ts;
+      patch.failure_reason = u?.error ?? u?.reason ?? u?.message ?? "unknown";
+    }
+
+    await admin
+      .from("messages")
+      .update(patch)
+      .eq("company_id", inst.company_id)
+      .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`);
   }
 }
 
