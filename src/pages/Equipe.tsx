@@ -22,7 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { MoreVertical, Plus, UserX, RotateCcw, Loader2 } from "lucide-react";
-import { formatPhoneDisplay, normalizePhone, isValidPhone } from "@/lib/phone";
+import { formatPhoneDisplay, normalizePhone, isValidPhone, onlyDigits } from "@/lib/phone";
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
 const ROLE_LABEL: Record<Role, string> = {
@@ -343,7 +343,7 @@ export default function Equipe() {
                 <Label>WhatsApp</Label>
                 <Input
                   value={formatPhoneDisplay(form.phone)}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: onlyDigits(e.target.value) }))}
                   placeholder="+55 11 99999-9999"
                   inputMode="tel"
                 />

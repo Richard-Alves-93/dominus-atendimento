@@ -1,9 +1,17 @@
 import { Navigate, useLocation } from "react-router-dom";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Loader2 } from "lucide-react";
 import { isCompanyAllowed } from "@/lib/companyStatus";
+import { toast } from "sonner";
+
+function RoleBlocked() {
+  useEffect(() => {
+    toast.error("Você não tem permissão para acessar esta área.");
+  }, []);
+  return <Navigate to="/app/dashboard" replace />;
+}
 
 function FullPageLoader() {
   return (
@@ -51,7 +59,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   // Role-based page guard for /app/equipe and /app/setores
   if ((location.pathname === "/app/equipe" || location.pathname === "/app/setores") &&
       !["owner","admin","manager"].includes(active.role)) {
-    return <Navigate to="/app/dashboard" replace />;
+    return <RoleBlocked />;
   }
   return <>{children}</>;
 }
