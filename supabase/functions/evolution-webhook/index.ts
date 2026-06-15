@@ -168,7 +168,8 @@ async function persistMedia(
 ): Promise<{ storage_path: string | null; mime: string | null; size: number | null; fileName: string | null }> {
   if (!info) return { storage_path: null, mime: null, size: null, fileName: null };
   const messageId = externalId ?? m?.key?.id ?? null;
-  const base64 = await fetchMediaBase64(instanceName, m, info);
+  const fetchResult = await fetchMediaBase64(instanceName, m, info);
+  const base64 = fetchResult.base64;
   if (!base64) return { storage_path: null, mime: info.mime, size: info.size, fileName: info.fileName };
   let bytes: Uint8Array;
   try { bytes = b64ToBytes(base64); } catch (e) {
@@ -178,9 +179,9 @@ async function persistMedia(
       type: info.type,
       mime: info.mime,
       providerId: info.providerId,
-      hasWebhookBase64: lastMediaFetchAudit.hasWebhookBase64,
-      triedGetBase64Endpoint: lastMediaFetchAudit.triedGetBase64Endpoint,
-      getBase64Status: lastMediaFetchAudit.getBase64Status,
+      hasWebhookBase64: fetchResult.hasWebhookBase64,
+      triedGetBase64Endpoint: fetchResult.triedGetBase64Endpoint,
+      getBase64Status: fetchResult.getBase64Status,
       base64Length: base64.length,
       uploadSuccess: false,
       uploadError: (e as Error)?.message ?? "invalid_base64",
@@ -204,9 +205,9 @@ async function persistMedia(
       type: info.type,
       mime: info.mime,
       providerId: info.providerId,
-      hasWebhookBase64: lastMediaFetchAudit.hasWebhookBase64,
-      triedGetBase64Endpoint: lastMediaFetchAudit.triedGetBase64Endpoint,
-      getBase64Status: lastMediaFetchAudit.getBase64Status,
+      hasWebhookBase64: fetchResult.hasWebhookBase64,
+      triedGetBase64Endpoint: fetchResult.triedGetBase64Endpoint,
+      getBase64Status: fetchResult.getBase64Status,
       base64Length: base64.length,
       uploadSuccess: false,
       uploadError: error.message,
@@ -220,9 +221,9 @@ async function persistMedia(
     type: info.type,
     mime: info.mime,
     providerId: info.providerId,
-    hasWebhookBase64: lastMediaFetchAudit.hasWebhookBase64,
-    triedGetBase64Endpoint: lastMediaFetchAudit.triedGetBase64Endpoint,
-    getBase64Status: lastMediaFetchAudit.getBase64Status,
+    hasWebhookBase64: fetchResult.hasWebhookBase64,
+    triedGetBase64Endpoint: fetchResult.triedGetBase64Endpoint,
+    getBase64Status: fetchResult.getBase64Status,
     base64Length: base64.length,
     uploadSuccess: true,
     uploadError: null,
