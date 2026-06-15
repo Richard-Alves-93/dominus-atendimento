@@ -68,6 +68,7 @@ export default function Configuracoes() {
           allow_stalled_takeover: allowTakeover,
           stalled_minutes: minutes,
           same_department_only: sameDeptOnly,
+          notify_customer_on_department_transfer: notifyCustomerOnTransfer,
         },
         { onConflict: "company_id" },
       );
@@ -81,6 +82,7 @@ export default function Configuracoes() {
       allow_stalled_takeover: allowTakeover,
       stalled_minutes: minutes,
       same_department_only: sameDeptOnly,
+      notify_customer_on_department_transfer: notifyCustomerOnTransfer,
     });
     qc.invalidateQueries({ queryKey: ["company-settings", activeCompanyId] });
     toast({ title: "Regras de atendimento salvas" });
