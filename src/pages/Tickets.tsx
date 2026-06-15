@@ -142,6 +142,7 @@ const Tickets = () => {
   const [takeOverOpen, setTakeOverOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
   const [pendingUserId, setPendingUserId] = useState<string>("");
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Departments of company
