@@ -98,8 +98,15 @@ interface PendingMessage {
   status: "sending" | "error";
 }
 
-interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean }
+interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean; allow_stalled_takeover?: boolean }
 interface UserOption { user_id: string; full_name: string | null; email: string | null }
+interface CompanySettingsRow {
+  company_id?: string;
+  allow_stalled_takeover: boolean;
+  stalled_minutes: number;
+  same_department_only: boolean;
+  updated_at?: string;
+}
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
   open: "Aberto",
@@ -157,7 +164,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("departments")
-        .select("id, name, status, allow_general_queue")
+        .select("id, name, status, allow_general_queue, allow_stalled_takeover")
         .eq("company_id", activeCompanyId!)
         .is("deleted_at", null)
         .order("name");
@@ -173,19 +180,27 @@ const Tickets = () => {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("company_settings")
-        .select("allow_stalled_takeover, stalled_minutes, same_department_only")
+        .select("*")
         .eq("company_id", activeCompanyId!)
         .maybeSingle();
-      return (data ?? {
+      const row = (data ?? {
+        company_id: activeCompanyId!,
         allow_stalled_takeover: true,
         stalled_minutes: 15,
         same_department_only: true,
-      }) as {
-        allow_stalled_takeover: boolean;
-        stalled_minutes: number;
-        same_department_only: boolean;
-      };
+      }) as CompanySettingsRow;
+      if (typeof window !== "undefined") {
+        console.debug("[STALLED_SETTINGS_AUDIT]", {
+          companyId: activeCompanyId,
+          allow_stalled_takeover: row.allow_stalled_takeover,
+          stalled_minutes: row.stalled_minutes,
+          same_department_only: row.same_department_only,
+          rawSettings: data ?? null,
+        });
+      }
+      return row;
     },
+    refetchOnMount: "always",
   });
   const settings = settingsQuery.data ?? {
     allow_stalled_takeover: true,
@@ -613,9 +628,9 @@ const Tickets = () => {
   // Considerado parado quando:
   //  • status = open
   //  • assigned_user_id != null
-  //  • unread_count > 0
-  //  • última mensagem é do cliente
-  //  • tempo desde a última mensagem do cliente >= stalled_minutes
+  //  • existe última mensagem inbound do cliente
+  //  • não existe outbound posterior à última inbound
+  //  • tempo desde a última inbound >= stalled_minutes
   // Tick a cada 30s para recalcular sem F5
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -633,46 +648,59 @@ const Tickets = () => {
   }, [selectedId, activeCompanyId, qc]);
 
   const stalledInfo = useMemo(() => {
-    if (!selected) return { stalled: false, minutes: 0 };
-    if (selected.status !== "open") return { stalled: false, minutes: 0 };
-    if (!selected.assigned_user_id) return { stalled: false, minutes: 0 };
-    if ((selected.unread_count ?? 0) <= 0) return { stalled: false, minutes: 0 };
-    const list = (messagesQuery.data ?? []) as MessageRow[];
-    // Última mensagem inbound (do cliente)
+    const empty = { stalled: false, minutes: 0, lastInboundAt: null as string | null, lastOutboundAt: null as string | null, hasCustomerWaiting: false };
+    if (!selected) return empty;
+    const list = visibleMessages;
     let lastInboundTs: number | null = null;
+    let lastOutboundTs: number | null = null;
     for (let i = list.length - 1; i >= 0; i--) {
-      if (!list[i].from_me) {
-        lastInboundTs = new Date(list[i].sent_at || list[i].created_at).getTime();
-        break;
+      const ts = new Date(list[i].sent_at || list[i].created_at).getTime();
+      if (!Number.isFinite(ts)) continue;
+      if (!list[i].from_me && lastInboundTs == null) lastInboundTs = ts;
+      if (list[i].from_me && lastOutboundTs == null) lastOutboundTs = ts;
+      if (lastInboundTs != null && lastOutboundTs != null) break;
+    }
+    const hasCustomerWaiting = lastInboundTs != null && (lastOutboundTs == null || lastInboundTs > lastOutboundTs);
+    if (lastInboundTs == null || selected.status !== "open" || !selected.assigned_user_id || !hasCustomerWaiting) {
+      if (typeof window !== "undefined") {
+        console.debug("[STALLED_AUDIT]", {
+          ticketId: selected.id,
+          assigned_user_id: selected.assigned_user_id,
+          unread_count: selected.unread_count,
+          lastInboundAt: lastInboundTs ? new Date(lastInboundTs).toISOString() : null,
+          lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null,
+          hasCustomerWaiting,
+          stalledMinutes: settings.stalled_minutes,
+          elapsedMinutes: lastInboundTs ? Math.floor((nowTs - lastInboundTs) / 60000) : 0,
+          isStalled: false,
+        });
       }
-    }
-    // Fallback para tickets.last_message_at quando ainda não carregou mensagens
-    if (lastInboundTs == null && selected.last_message_at) {
-      lastInboundTs = new Date(selected.last_message_at).getTime();
-    }
-    if (lastInboundTs == null) return { stalled: false, minutes: 0 };
-    // Se a última mensagem da lista é outbound, responsável já respondeu
-    if (list.length > 0 && list[list.length - 1].from_me) {
-      return { stalled: false, minutes: 0 };
+      return { ...empty, lastInboundAt: lastInboundTs ? new Date(lastInboundTs).toISOString() : null, lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null, hasCustomerWaiting };
     }
     const elapsedMs = nowTs - lastInboundTs;
     const ageMin = Math.floor(elapsedMs / 60000);
     const stalled = elapsedMs >= settings.stalled_minutes * 60000;
     if (typeof window !== "undefined") {
-      // eslint-disable-next-line no-console
       console.debug("[STALLED_AUDIT]", {
         ticketId: selected.id,
         assigned_user_id: selected.assigned_user_id,
         unread_count: selected.unread_count,
-        lastMessageFromMe: list.length > 0 ? list[list.length - 1].from_me : null,
         lastInboundAt: new Date(lastInboundTs).toISOString(),
+        lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null,
+        hasCustomerWaiting,
         stalledMinutes: settings.stalled_minutes,
         elapsedMinutes: ageMin,
         isStalled: stalled,
       });
     }
-    return { stalled, minutes: ageMin };
-  }, [selected, messagesQuery.data, settings.stalled_minutes, nowTs]);
+    return {
+      stalled,
+      minutes: ageMin,
+      lastInboundAt: new Date(lastInboundTs).toISOString(),
+      lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null,
+      hasCustomerWaiting,
+    };
+  }, [selected, visibleMessages, settings.stalled_minutes, nowTs]);
 
   // Setor do ticket: também precisa permitir takeover quando regra exige mesmo setor
   const selectedDept = useMemo(
@@ -681,26 +709,49 @@ const Tickets = () => {
   );
 
   const canTakeOverStalled = useMemo(() => {
-    if (!selected || !profile?.id) return false;
-    if (!isAssignedToOther) return false;
-    if (!stalledInfo.stalled) return false;
-    if (!settings.allow_stalled_takeover) return false;
-    if (selectedDept && (selectedDept as any).allow_stalled_takeover === false) return false;
-    // Agent precisa estar no mesmo setor quando exigido
-    if (settings.same_department_only) {
-      if (!selected.department_id) return false;
-      if (!myDeptIds.includes(selected.department_id)) return false;
+    const ticketDepartmentId = selected?.department_id ?? null;
+    const sameDepartment = !!ticketDepartmentId && myDeptIds.includes(ticketDepartmentId);
+    const managerOfDepartment = !!ticketDepartmentId && myManagedDeptIds.includes(ticketDepartmentId);
+    const departmentAllowsStalledTakeover = selectedDept?.allow_stalled_takeover !== false;
+    const companyAllowsStalledTakeover = settings.allow_stalled_takeover === true;
+    let canTakeOver = false;
+    let reasonBlocked = "allowed";
+
+    if (!selected || !profile?.id) reasonBlocked = "missing_selected_or_user";
+    else if (!isAssignedToOther) reasonBlocked = "not_assigned_to_other";
+    else if (!stalledInfo.stalled) reasonBlocked = "not_stalled";
+    else if (isAdmin || managerOfDepartment) canTakeOver = true;
+    else if (!companyAllowsStalledTakeover) reasonBlocked = "company_disallows_stalled_takeover";
+    else if (!departmentAllowsStalledTakeover) reasonBlocked = "department_disallows_stalled_takeover";
+    else if (settings.same_department_only && !sameDepartment) reasonBlocked = "different_department";
+    else canTakeOver = true;
+
+    if (typeof window !== "undefined") {
+      console.debug("[STALLED_PERMISSION_AUDIT]", {
+        isStalled: stalledInfo.stalled,
+        role,
+        ticketDepartmentId,
+        userDepartmentIds: myDeptIds,
+        sameDepartmentOnly: settings.same_department_only,
+        departmentAllowsStalledTakeover,
+        companyAllowsStalledTakeover,
+        canTakeOverStalled: canTakeOver,
+        reasonBlocked: canTakeOver ? null : reasonBlocked,
+      });
     }
-    return true;
+    return canTakeOver;
   }, [
     selected,
     profile?.id,
     isAssignedToOther,
     stalledInfo.stalled,
+    isAdmin,
+    role,
     settings.allow_stalled_takeover,
     settings.same_department_only,
     selectedDept,
     myDeptIds,
+    myManagedDeptIds,
   ]);
 
   const canTakeOverSelected = canTakeOverPrivileged || canTakeOverStalled;

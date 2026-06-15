@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ interface CompanySettings {
 }
 
 export default function Configuracoes() {
+  const qc = useQueryClient();
   const { profile } = useAuth();
   const { activeCompanyId, activeMembership } = useCompany();
   const { toast } = useToast();
@@ -71,6 +73,13 @@ export default function Configuracoes() {
       toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
       return;
     }
+    qc.setQueryData(["company-settings", activeCompanyId], {
+      company_id: activeCompanyId,
+      allow_stalled_takeover: allowTakeover,
+      stalled_minutes: minutes,
+      same_department_only: sameDeptOnly,
+    });
+    qc.invalidateQueries({ queryKey: ["company-settings", activeCompanyId] });
     toast({ title: "Regras de atendimento salvas" });
   };
 
