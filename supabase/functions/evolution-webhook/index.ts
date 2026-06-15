@@ -249,6 +249,12 @@ Deno.serve(async (req) => {
       await admin.from("channels").update(channelUpdate).eq("id", inst.channel_id);
     } else if (normalized === "MESSAGES_UPSERT") {
       await handleMessageUpsert(admin, inst, payload);
+    } else if (
+      normalized === "MESSAGES_UPDATE" ||
+      normalized === "MESSAGE_UPDATE" ||
+      normalized === "MESSAGE_STATUS"
+    ) {
+      await handleMessageUpdate(admin, inst, payload);
     }
 
     await admin.from("channel_sync_logs").insert({
