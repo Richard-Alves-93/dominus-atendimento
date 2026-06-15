@@ -11,17 +11,15 @@ const EVO_WEBHOOK =
   Deno.env.get("EVOLUTION_WEBHOOK_URL") ??
   `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/evolution-webhook`;
 
-// Canonical event list for Evolution v2.x. Names that aren't recognized by a
-// particular Evolution build are simply ignored server-side, so it's safe to
-// send the superset.
+// Canonical event list accepted by the current Evolution v2.x webhook enum.
+// MESSAGE_STATUS / MESSAGE_UPDATE are not valid in this build; delivery/read
+// receipts arrive through MESSAGES_UPDATE (and initial sends through SEND_MESSAGE).
 export const WEBHOOK_EVENTS = [
   "QRCODE_UPDATED",
   "CONNECTION_UPDATE",
   "MESSAGES_UPSERT",
   "MESSAGES_UPDATE",
   "MESSAGES_SET",
-  "MESSAGE_UPDATE",
-  "MESSAGE_STATUS",
   "SEND_MESSAGE",
 ];
 
@@ -58,10 +56,7 @@ export async function applyEvolutionSettings(instanceName: string) {
     throw new Error("Evolution API não configurada (EVOLUTION_API_URL / EVOLUTION_API_KEY).");
   }
   const body = webhookPayload();
-  const endpoints = [
-    `${evoBase()}/webhook/set/${instanceName}`,
-    `${evoBase()}/webhook/${instanceName}`,
-  ];
+  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`];
   let lastErr = "";
   for (const endpoint of endpoints) {
     for (const payload of [body, { webhook: body }]) {
@@ -96,6 +91,31 @@ export async function applyEvolutionSettings(instanceName: string) {
   throw new Error(`Falha ao configurar webhook na Evolution: ${lastErr}`);
 }
 
+async function readEvolutionWebhook(instanceName: string) {
+  if (!EVO_URL || !EVO_KEY) {
+    throw new Error("Evolution API não configurada (EVOLUTION_API_URL / EVOLUTION_API_KEY).");
+  }
+  const endpoints = [
+    `${evoBase()}/webhook/find/${instanceName}`,
+    `${evoBase()}/webhook/${instanceName}`,
+  ];
+  for (const endpoint of endpoints) {
+    const res = await fetch(endpoint, { headers: evoHeaders() }).catch(() => null);
+    if (!res || !res.ok) continue;
+    const data = await res.json().catch(() => ({}));
+    const webhook = data?.webhook ?? data;
+    return {
+      enabled: webhook?.enabled ?? data?.enabled ?? null,
+      url: webhook?.url ?? data?.url ?? null,
+      byEvents: webhook?.byEvents ?? webhook?.webhook_by_events ?? data?.byEvents ?? null,
+      base64: webhook?.base64 ?? webhook?.webhook_base64 ?? data?.base64 ?? null,
+      events: webhook?.events ?? data?.events ?? [],
+      rawKeys: Object.keys(data ?? {}),
+    };
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -111,6 +131,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: "Unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
+    const action: "sync" | "inspect" = body?.action === "inspect" ? "inspect" : "sync";
     const channel_id: string | undefined = body?.channel_id;
     const instance_name_in: string | undefined = body?.instance_name;
     if (!channel_id && !instance_name_in) {
@@ -149,7 +170,12 @@ Deno.serve(async (req) => {
     }
 
     try {
+      if (action === "inspect") {
+        const current = await readEvolutionWebhook(inst.instance_name);
+        return json({ ok: true, instance_name: inst.instance_name, configured: current, expected_events: WEBHOOK_EVENTS });
+      }
       await applyEvolutionSettings(inst.instance_name);
+      const current = await readEvolutionWebhook(inst.instance_name);
       await admin
         .from("whatsapp_instances")
         .update({
@@ -159,7 +185,7 @@ Deno.serve(async (req) => {
           settings_sync_error: null,
         })
         .eq("id", inst.id);
-      return json({ ok: true, instance_name: inst.instance_name, events: WEBHOOK_EVENTS });
+      return json({ ok: true, instance_name: inst.instance_name, events: WEBHOOK_EVENTS, configured: current });
     } catch (e) {
       const msg = (e as Error).message;
       await admin
