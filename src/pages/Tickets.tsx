@@ -87,8 +87,15 @@ interface MessageRow {
   created_at: string;
   source?: string | null;
   sent_by_name?: string | null;
+  media_mime_type?: string | null;
+  media_file_name?: string | null;
+  media_size?: number | null;
+  media_duration?: number | null;
+  media_caption?: string | null;
+  media_storage_path?: string | null;
   _optimistic?: boolean;
 }
+
 
 interface PendingMessage {
   tempId: string;
