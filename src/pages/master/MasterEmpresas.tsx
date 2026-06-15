@@ -43,6 +43,7 @@ interface Company {
   phone: string | null;
   status: string;
   created_at: string;
+  is_internal: boolean;
 }
 
 const badge: Record<string, string> = {
