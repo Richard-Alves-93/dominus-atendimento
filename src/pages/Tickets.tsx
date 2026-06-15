@@ -152,6 +152,7 @@ const Tickets = () => {
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
   const [takeOverOpen, setTakeOverOpen] = useState(false);
+  const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
   const [pendingUserId, setPendingUserId] = useState<string>("");
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
@@ -925,13 +926,66 @@ const Tickets = () => {
     updateTicket({ status }, `Atendimento marcado como ${STATUS_LABEL[status].toLowerCase()}.`);
 
   const saveDepartment = async () => {
-    if (!pendingDeptId) return;
-    await updateTicket(
-      { department_id: pendingDeptId, assigned_at: new Date().toISOString(), assigned_by: profile?.id ?? null },
-      "Setor definido.",
-    );
+    if (!pendingDeptId || !selected) return;
+    const previousDeptId = selected.department_id ?? null;
+    const previousAssigned = selected.assigned_user_id ?? null;
+    const isTransfer = previousDeptId && previousDeptId !== pendingDeptId;
+    const ticketId = selected.id;
+    const patch: Record<string, any> = {
+      department_id: pendingDeptId,
+    };
+    if (isTransfer) {
+      // Transferência entre setores: limpar responsável para cair na fila do novo setor
+      patch.assigned_user_id = null;
+      patch.assigned_at = null;
+      patch.assigned_by = null;
+      patch.status = "open";
+    } else {
+      patch.assigned_at = new Date().toISOString();
+      patch.assigned_by = profile?.id ?? null;
+    }
+    const { error } = await (supabase as any).from("tickets").update(patch).eq("id", ticketId);
+    if (error) {
+      toast({ title: "Falha ao atualizar", description: error.message, variant: "destructive" });
+      return;
+    }
+    if (isTransfer) {
+      const newDeptName = activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor";
+      // Auditoria: troca de setor
+      try {
+        await (supabase as any).from("audit_logs").insert({
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          event_type: "ticket_department_changed",
+          previous_assigned_user_id: previousAssigned,
+          new_assigned_user_id: null,
+          changed_by: profile?.id ?? null,
+          reason: "transferencia_setor",
+          metadata: {
+            previous_department_id: previousDeptId,
+            new_department_id: pendingDeptId,
+          },
+        });
+      } catch (e) {
+        console.warn("audit_log dept change failed", e);
+      }
+      toast({ title: `Atendimento transferido para ${newDeptName}.` });
+    } else {
+      toast({ title: "Setor definido." });
+    }
+    qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
     setAssignDeptOpen(false);
+    setTransferConfirmOpen(false);
     setPendingDeptId("");
+  };
+
+  const handleDeptSaveClick = () => {
+    if (!pendingDeptId || !selected) return;
+    if (selected.department_id && selected.department_id !== pendingDeptId) {
+      setTransferConfirmOpen(true);
+      return;
+    }
+    void saveDepartment();
   };
 
   const saveAssignee = async () => {
@@ -1077,10 +1131,17 @@ const Tickets = () => {
                             Fila geral
                           </Badge>
                         )}
-                        {t.department?.name && (
-                          <span className="text-[10px] text-muted-foreground truncate">{t.department.name}</span>
-                        )}
-                        <span className="text-[10px] text-muted-foreground">· {STATUS_LABEL[t.status]}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          {t.department?.name ?? "Fila geral"}
+                          {" · "}
+                          {t.assigned_user_id
+                            ? (t.assigned_user_id === profile?.id
+                                ? "Você"
+                                : (t.assignee?.full_name || t.assignee?.email || "Responsável"))
+                            : "Sem responsável"}
+                          {" · "}
+                          {STATUS_LABEL[t.status]}
+                        </span>
                         {stalledItem?.stalled && (
                           <Badge
                             variant="outline"
@@ -1125,7 +1186,11 @@ const Tickets = () => {
                     <span>·</span>
                     <span>
                       Responsável:{" "}
-                      {selected.assignee?.full_name || selected.assignee?.email || "Sem responsável"}
+                      {selected.assigned_user_id
+                        ? (selected.assigned_user_id === profile?.id
+                            ? "Você"
+                            : (selected.assignee?.full_name || selected.assignee?.email || "Responsável"))
+                        : "Sem responsável"}
                     </span>
                     <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                       {STATUS_LABEL[selected.status]}
@@ -1370,10 +1435,37 @@ const Tickets = () => {
           </Select>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAssignDeptOpen(false)}>Cancelar</Button>
-            <Button onClick={saveDepartment} disabled={!pendingDeptId}>Salvar</Button>
+            <Button onClick={handleDeptSaveClick} disabled={!pendingDeptId}>
+              {selected?.department_id && selected.department_id !== pendingDeptId ? "Transferir" : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm: Transferir entre setores */}
+      <AlertDialog open={transferConfirmOpen} onOpenChange={setTransferConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Transferir atendimento para {activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Após a transferência, o atendimento ficará disponível para o novo setor e será removido da fila do setor atual. O responsável atual será removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void saveDepartment();
+              }}
+            >
+              Transferir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog: Atribuir atendente */}
       <Dialog open={assignUserOpen} onOpenChange={setAssignUserOpen}>
