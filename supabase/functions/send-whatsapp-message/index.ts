@@ -225,7 +225,8 @@ Deno.serve(async (req) => {
       (sp?.public_name && sp.public_name.trim()) ||
       (sp?.full_name && sp.full_name.trim()) || "";
     const signatureLine = sp?.signature_enabled && sigRaw ? sigRaw : null;
-    const finalText = signatureLine ? `*${signatureLine}:*\n${text}` : text;
+    const signatureLineEffective = skipSignature ? null : signatureLine;
+    const finalText = signatureLineEffective ? `*${signatureLineEffective}:*\n${text}` : text;
     const tCtx = Math.round(performance.now() - tCtx0);
 
     // ---- insert message as 'sending' ----
