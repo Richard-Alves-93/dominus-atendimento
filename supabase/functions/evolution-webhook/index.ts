@@ -131,6 +131,8 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         .from("messages")
         .select("id, provider_message_id, external_id")
         .eq("company_id", inst.company_id)
+        .eq("channel_id", inst.channel_id)
+        .eq("from_me", true)
         .or(`external_id.eq.${externalId},provider_message_id.eq.${externalId}`)
         .limit(1)
         .maybeSingle();
