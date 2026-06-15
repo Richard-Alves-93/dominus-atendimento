@@ -4,7 +4,7 @@ import { MessageSquare, Users, Clock, CheckCircle, TrendingUp, ArrowUpRight } fr
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 const stats = [
-  { label: "Tickets Abertos", value: "42", change: "+12%", icon: MessageSquare, color: "text-primary" },
+  { label: "Atendimentos Abertos", value: "42", change: "+12%", icon: MessageSquare, color: "text-primary" },
   { label: "Em Atendimento", value: "18", change: "+5%", icon: Clock, color: "text-warning" },
   { label: "Resolvidos Hoje", value: "67", change: "+23%", icon: CheckCircle, color: "text-success" },
   { label: "Total Contatos", value: "1.284", change: "+8%", icon: Users, color: "text-info" },
@@ -30,7 +30,7 @@ const attendantData = [
 
 const Dashboard = () => {
   return (
-    <AppLayout title="Dashboard">
+    <AppLayout title="Painel">
       <div className="p-6 space-y-6">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -62,7 +62,7 @@ const Dashboard = () => {
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary" />
-                Tickets por Dia
+                Atendimentos por Dia
               </CardTitle>
             </CardHeader>
             <CardContent>

@@ -154,7 +154,7 @@ const Tickets = () => {
   };
 
   return (
-    <AppLayout title="Tickets">
+    <AppLayout title="Atendimentos">
       <div className="flex h-[calc(100vh-3.5rem)]">
         {/* List */}
         <div className="w-80 border-r flex flex-col bg-card flex-shrink-0">

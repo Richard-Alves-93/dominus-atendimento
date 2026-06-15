@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import Tickets from "./pages/Tickets";
 import Contacts from "./pages/Contacts";
 import Conexoes from "./pages/Conexoes";
+import Setores from "./pages/Setores";
 import Placeholder from "./pages/Placeholder";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/app/campanhas" element={<ProtectedRoute><Placeholder title="Campanhas" description="Disparos em massa e prospecção." /></ProtectedRoute>} />
               <Route path="/app/agendamentos" element={<ProtectedRoute><Placeholder title="Agendamentos" description="Mensagens agendadas." /></ProtectedRoute>} />
               <Route path="/app/conexoes" element={<ProtectedRoute><Conexoes /></ProtectedRoute>} />
+              <Route path="/app/setores" element={<ProtectedRoute><Setores /></ProtectedRoute>} />
               <Route path="/app/tags" element={<ProtectedRoute><Placeholder title="Tags" description="Classifique contatos e tickets." /></ProtectedRoute>} />
               <Route path="/app/configuracoes" element={<ProtectedRoute><Placeholder title="Configurações" description="Preferências da empresa." /></ProtectedRoute>} />
 

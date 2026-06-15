@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { to: "/master", icon: LayoutDashboard, label: "Dashboard", end: true },
+  { to: "/master", icon: LayoutDashboard, label: "Painel", end: true },
   { to: "/master/empresas", icon: Building2, label: "Empresas" },
   { to: "/master/planos", icon: Package, label: "Planos" },
   { to: "/master/canais", icon: Plug, label: "Canais" },

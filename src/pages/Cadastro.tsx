@@ -93,7 +93,7 @@ export default function Cadastro() {
               <Select value={form.plan} onValueChange={(v) => setForm((p) => ({ ...p, plan: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="trial">Trial (14 dias grátis)</SelectItem>
+                  <SelectItem value="trial">Teste (14 dias grátis)</SelectItem>
                   <SelectItem value="starter">Starter</SelectItem>
                   <SelectItem value="pro">Pro</SelectItem>
                 </SelectContent>

@@ -32,7 +32,7 @@ export default function MasterDashboard() {
   ];
 
   return (
-    <MasterLayout title="Dashboard Master">
+    <MasterLayout title="Painel Master">
       <div className="p-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c) => (
           <Card key={c.label} className="p-5">
