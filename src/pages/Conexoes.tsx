@@ -176,9 +176,26 @@ export default function Conexoes() {
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <def.icon className="w-5 h-5 text-primary" />
                   </div>
-                  <Badge className={statusVariant[st] ?? statusVariant.disconnected}>
-                    {def.available ? statusLabel[st] ?? st : "Em breve"}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge className={statusVariant[st] ?? statusVariant.disconnected}>
+                      {def.available ? statusLabel[st] ?? st : "Em breve"}
+                    </Badge>
+                    {def.available && existing && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais ações">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => reapplySettings(existing.id)}>
+                            <Settings2 className="w-4 h-4 mr-2" />
+                            Reaplicar configurações
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </div>
                 <h3 className="font-semibold">{def.name}</h3>
                 <p className="text-sm text-muted-foreground flex-1 mt-1">{def.desc}</p>
