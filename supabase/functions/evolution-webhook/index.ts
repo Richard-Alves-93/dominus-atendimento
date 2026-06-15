@@ -439,6 +439,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
       : new Date().toISOString();
 
+    const mediaInfo = extractMediaInfo(m);
+    const media = mediaInfo
+      ? await persistMedia(admin, inst, ticket.id, externalId, mediaInfo, m, inst.instance_name)
+      : null;
+
     await admin.from("messages").upsert(
       {
         company_id: inst.company_id,
@@ -454,9 +459,17 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         delivery_status: "received",
         raw: m,
         sent_at: sentAt,
+        media_mime_type: media?.mime ?? mediaInfo?.mime ?? null,
+        media_file_name: media?.fileName ?? mediaInfo?.fileName ?? null,
+        media_size: media?.size ?? mediaInfo?.size ?? null,
+        media_duration: mediaInfo?.duration ?? null,
+        media_caption: mediaInfo?.caption ?? null,
+        media_storage_path: media?.storage_path ?? null,
+        media_provider_id: mediaInfo?.providerId ?? null,
       },
       { onConflict: "channel_id,external_id" },
     );
+
 
     await admin
       .from("tickets")
