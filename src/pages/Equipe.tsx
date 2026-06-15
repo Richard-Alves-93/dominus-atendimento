@@ -342,10 +342,14 @@ export default function Equipe() {
               <div className="space-y-1.5">
                 <Label>WhatsApp</Label>
                 <Input
-                  value={form.phone}
+                  value={formatPhoneDisplay(form.phone)}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  placeholder="5511999999999"
+                  placeholder="+55 11 99999-9999"
+                  inputMode="tel"
                 />
+                {form.phone && !isValidPhone(form.phone) && (
+                  <p className="text-xs text-destructive">Informe um WhatsApp válido com DDD.</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Cargo</Label>
