@@ -191,7 +191,6 @@ const Tickets = () => {
   const ticketsQuery = useQuery({
     queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(","), generalQueueDeptIds.join(",")],
     enabled: !!activeCompanyId && (isAdmin || myDeptsQuery.isFetched || !profile?.id),
-    refetchInterval: 5000,
     queryFn: async () => {
       let q = (supabase as any)
         .from("tickets")
