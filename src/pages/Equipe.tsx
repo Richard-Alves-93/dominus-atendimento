@@ -26,9 +26,11 @@ import { formatPhoneDisplay, normalizePhone, isValidPhone, onlyDigits } from "@/
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
 const ROLE_LABEL: Record<Role, string> = {
-  owner: "Dono", admin: "Administrador", manager: "Gerente",
+  owner: "Administrador", admin: "Administrador", manager: "Gerente",
   agent: "Atendente", financial: "Financeiro",
 };
+const SINGLE_DEPT_ROLES: Role[] = ["agent", "financial"];
+const isSingleDeptRole = (r: Role) => SINGLE_DEPT_ROLES.includes(r);
 
 interface Member {
   id: string;
@@ -127,11 +129,24 @@ export default function Equipe() {
   };
 
   const toggleDept = (id: string) => {
+    setForm((f) => {
+      if (isSingleDeptRole(f.role)) {
+        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id] };
+      }
+      return {
+        ...f,
+        department_ids: f.department_ids.includes(id)
+          ? f.department_ids.filter((x) => x !== id)
+          : [...f.department_ids, id],
+      };
+    });
+  };
+
+  const changeRole = (v: Role) => {
     setForm((f) => ({
       ...f,
-      department_ids: f.department_ids.includes(id)
-        ? f.department_ids.filter((x) => x !== id)
-        : [...f.department_ids, id],
+      role: v,
+      department_ids: isSingleDeptRole(v) ? f.department_ids.slice(0, 1) : f.department_ids,
     }));
   };
 
@@ -147,6 +162,10 @@ export default function Equipe() {
     if (!isValidPhone(form.phone)) {
       return toast({ title: "WhatsApp inválido", description: "Informe um WhatsApp válido com DDD.", variant: "destructive" });
     }
+    if (isSingleDeptRole(form.role) && form.department_ids.length > 1) {
+      return toast({ title: "Este cargo permite vínculo com apenas um setor.", variant: "destructive" });
+    }
+    const safeRole: Role = form.role === "owner" ? "admin" : form.role;
     setBusy(true);
     const { data, error } = await supabase.functions.invoke("create-company-user", {
       body: {
@@ -154,7 +173,7 @@ export default function Equipe() {
         full_name: form.full_name.trim(),
         email: form.email.trim().toLowerCase(),
         phone: normalizePhone(form.phone),
-        role: form.role,
+        role: safeRole,
         department_ids: form.department_ids,
         signature: form.signature.trim() || null,
         signature_enabled: form.signature_enabled,
@@ -178,6 +197,9 @@ export default function Equipe() {
 
   const submitEdit = async () => {
     if (!editing || !activeCompanyId) return;
+    if (isSingleDeptRole(form.role) && form.department_ids.length > 1) {
+      return toast({ title: "Este cargo permite vínculo com apenas um setor.", variant: "destructive" });
+    }
     setBusy(true);
     // Update profile basics
     await supabase.from("profiles").update({
@@ -387,10 +409,9 @@ export default function Equipe() {
               </div>
               <div className="space-y-1.5">
                 <Label>Cargo</Label>
-                <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}>
+                <Select value={form.role} onValueChange={(v) => changeRole(v as Role)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner">Dono</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                     <SelectItem value="manager">Gerente</SelectItem>
                     <SelectItem value="agent">Atendente</SelectItem>
@@ -400,6 +421,9 @@ export default function Equipe() {
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Setores</Label>
+                {isSingleDeptRole(form.role) && (
+                  <p className="text-xs text-muted-foreground">Este cargo permite vínculo com apenas um setor.</p>
+                )}
                 <div className="border rounded-md p-2 max-h-32 overflow-auto space-y-1.5">
                   {depts.length === 0 && (
                     <p className="text-sm text-muted-foreground p-2">Nenhum setor ativo. Crie em /app/setores.</p>
