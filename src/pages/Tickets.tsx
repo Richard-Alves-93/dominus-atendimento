@@ -1136,13 +1136,21 @@ const Tickets = () => {
                 </div>
               ) : isAssignedToOther ? (
                 <div className="flex flex-col items-center gap-2 py-2 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Este atendimento está sendo realizado por{" "}
-                    <span className="font-medium text-foreground">
-                      {selected.assignee?.full_name || selected.assignee?.email || "outro atendente"}
-                    </span>
-                    .
-                  </p>
+                  {stalledInfo.stalled ? (
+                    <p className="text-sm text-foreground">
+                      Este atendimento está parado há mais de{" "}
+                      <span className="font-medium">{stalledInfo.minutes} min</span>.
+                      {canTakeOverStalled ? " Você pode assumir para responder ao cliente." : ""}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Este atendimento está sendo realizado por{" "}
+                      <span className="font-medium text-foreground">
+                        {selected.assignee?.full_name || selected.assignee?.email || "outro atendente"}
+                      </span>
+                      .
+                    </p>
+                  )}
                   {canTakeOverSelected ? (
                     <Button
                       onClick={() => setTakeOverOpen(true)}
