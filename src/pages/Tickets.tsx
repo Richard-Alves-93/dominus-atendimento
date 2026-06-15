@@ -533,10 +533,11 @@ const Tickets = () => {
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
     onSuccess: (res) => {
-      // Remove optimistic; the refetch will bring the real persisted message.
-      setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
-      qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
-      qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+      // Realtime INSERT will deliver the persisted row and drop the optimistic bubble.
+      // As a safety net, remove the optimistic after a short delay if realtime hasn't.
+      setTimeout(() => {
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
+      }, 1500);
     },
     onError: (e: Error, vars) => {
       setPendingMessages((prev) =>
