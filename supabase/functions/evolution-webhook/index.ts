@@ -154,10 +154,27 @@ async function persistMedia(
   instanceName: string,
 ): Promise<{ storage_path: string | null; mime: string | null; size: number | null; fileName: string | null }> {
   if (!info) return { storage_path: null, mime: null, size: null, fileName: null };
-  const base64 = await fetchMediaBase64(instanceName, m);
+  const messageId = externalId ?? m?.key?.id ?? null;
+  const base64 = await fetchMediaBase64(instanceName, m, info);
   if (!base64) return { storage_path: null, mime: info.mime, size: info.size, fileName: info.fileName };
   let bytes: Uint8Array;
-  try { bytes = b64ToBytes(base64); } catch { return { storage_path: null, mime: info.mime, size: info.size, fileName: info.fileName }; }
+  try { bytes = b64ToBytes(base64); } catch (e) {
+    console.warn("[MEDIA_DOWNLOAD_AUDIT]", {
+      messageId,
+      instance: instanceName,
+      type: info.type,
+      mime: info.mime,
+      providerId: info.providerId,
+      hasWebhookBase64: true,
+      triedGetBase64Endpoint: false,
+      getBase64Status: null,
+      base64Length: base64.length,
+      uploadSuccess: false,
+      uploadError: (e as Error)?.message ?? "invalid_base64",
+      storagePath: null,
+    });
+    return { storage_path: null, mime: info.mime, size: info.size, fileName: info.fileName };
+  }
   const ext = extOfMime(info.mime, info.type === "sticker" ? "webp" : info.type === "audio" ? "ogg" : "bin");
   const safeName = (info.fileName && info.fileName.replace(/[^\w.\-]+/g, "_")) || `${info.type}.${ext}`;
   const fileName = safeName.includes(".") ? safeName : `${safeName}.${ext}`;
@@ -168,9 +185,36 @@ async function persistMedia(
     upsert: true,
   });
   if (error) {
-    console.warn("[WEBHOOK] media_upload_failed", error.message);
+    console.warn("[MEDIA_DOWNLOAD_AUDIT]", {
+      messageId,
+      instance: instanceName,
+      type: info.type,
+      mime: info.mime,
+      providerId: info.providerId,
+      hasWebhookBase64: true,
+      triedGetBase64Endpoint: false,
+      getBase64Status: null,
+      base64Length: base64.length,
+      uploadSuccess: false,
+      uploadError: error.message,
+      storagePath: path,
+    });
     return { storage_path: null, mime: info.mime, size: info.size, fileName };
   }
+  console.log("[MEDIA_DOWNLOAD_AUDIT]", {
+    messageId,
+    instance: instanceName,
+    type: info.type,
+    mime: info.mime,
+    providerId: info.providerId,
+    hasWebhookBase64: true,
+    triedGetBase64Endpoint: false,
+    getBase64Status: null,
+    base64Length: base64.length,
+    uploadSuccess: true,
+    uploadError: null,
+    storagePath: path,
+  });
   return { storage_path: path, mime: info.mime, size: bytes.byteLength, fileName };
 }
 
