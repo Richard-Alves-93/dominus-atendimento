@@ -1,0 +1,1 @@
+ALTER TABLE public.departments ADD COLUMN IF NOT EXISTS allow_general_queue boolean NOT NULL DEFAULT false;
