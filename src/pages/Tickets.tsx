@@ -38,6 +38,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -120,6 +130,7 @@ const Tickets = () => {
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
+  const [takeOverOpen, setTakeOverOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
   const [pendingUserId, setPendingUserId] = useState<string>("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -354,6 +365,49 @@ const Tickets = () => {
       toast({ title: "Falha ao aceitar", description: e.message, variant: "destructive" });
     },
   });
+
+  // Assumir atendimento: usuário superior pega ticket já atribuído a outro
+  const isAssignedToOther = !!selected?.assigned_user_id && selected.assigned_user_id !== profile?.id;
+  const canTakeOverSelected = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (!isAssignedToOther) return false;
+    if (selected.status === "closed") return false;
+    if (isAdmin) return true;
+    if (isManager) {
+      if (!selected.department_id) return false;
+      return myManagedDeptIds.includes(selected.department_id);
+    }
+    return false;
+  }, [selected, profile?.id, isAssignedToOther, isAdmin, isManager, myManagedDeptIds]);
+
+  const takeOverMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
+      const nowIso = new Date().toISOString();
+      const { error } = await (supabase as any)
+        .from("tickets")
+        .update({
+          assigned_user_id: profile.id,
+          assigned_at: nowIso,
+          assigned_by: profile.id,
+          unread_count: 0,
+          status: "open",
+        })
+        .eq("id", selected.id)
+        .eq("company_id", activeCompanyId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Atendimento assumido" });
+      setTakeOverOpen(false);
+      qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+      qc.invalidateQueries({ queryKey: ["assignee-profiles"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Falha ao assumir", description: e.message, variant: "destructive" });
+    },
+  });
+
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
@@ -732,6 +786,31 @@ const Tickets = () => {
                     Aceitar atendimento
                   </Button>
                 </div>
+              ) : isAssignedToOther ? (
+                <div className="flex flex-col items-center gap-2 py-2 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Este atendimento está sendo realizado por{" "}
+                    <span className="font-medium text-foreground">
+                      {selected.assignee?.full_name || selected.assignee?.email || "outro atendente"}
+                    </span>
+                    .
+                  </p>
+                  {canTakeOverSelected ? (
+                    <Button
+                      onClick={() => setTakeOverOpen(true)}
+                      disabled={takeOverMutation.isPending}
+                      variant="outline"
+                      className="rounded-full px-5"
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Assumir atendimento
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Você não tem permissão para enviar mensagens neste atendimento.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Input
@@ -831,6 +910,34 @@ const Tickets = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Confirm: Assumir atendimento */}
+      <AlertDialog open={takeOverOpen} onOpenChange={setTakeOverOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assumir atendimento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este atendimento está sendo realizado por{" "}
+              <span className="font-medium text-foreground">
+                {selected?.assignee?.full_name || selected?.assignee?.email || "outro atendente"}
+              </span>
+              . Deseja assumir o controle desta conversa?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={takeOverMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                takeOverMutation.mutate();
+              }}
+              disabled={takeOverMutation.isPending}
+            >
+              {takeOverMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Assumir atendimento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };
