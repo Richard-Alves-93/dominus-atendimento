@@ -20,11 +20,28 @@ const items = [
 export function MasterLayout({ children, title }: { children: ReactNode; title?: string }) {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const { setActiveCompanyId, stopImpersonation } = useCompany();
+  const [internal, setInternal] = useState<{ id: string; name: string } | null>(null);
   const initials = (profile?.full_name ?? profile?.email ?? "M").slice(0, 2).toUpperCase();
+
+  useEffect(() => {
+    (supabase.from("companies") as any)
+      .select("id, name")
+      .eq("is_internal", true)
+      .maybeSingle()
+      .then(({ data }: { data: { id: string; name: string } | null }) => setInternal(data));
+  }, []);
 
   const handleLogout = async () => {
     await signOut();
     navigate("/", { replace: true });
+  };
+
+  const goInternalCompany = () => {
+    if (!internal) return;
+    stopImpersonation();
+    setActiveCompanyId(internal.id);
+    navigate("/app/dashboard");
   };
 
   return (
