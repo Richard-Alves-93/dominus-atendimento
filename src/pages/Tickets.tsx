@@ -1215,7 +1215,7 @@ const Tickets = () => {
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                takeOverMutation.mutate();
+                takeOverMutation.mutate(takeOverReason);
               }}
               disabled={takeOverMutation.isPending}
             >
