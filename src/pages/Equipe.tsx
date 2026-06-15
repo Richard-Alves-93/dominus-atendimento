@@ -343,7 +343,7 @@ export default function Equipe() {
                 <Label>WhatsApp</Label>
                 <Input
                   value={formatPhoneDisplay(form.phone)}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: onlyDigits(e.target.value) }))}
                   placeholder="+55 11 99999-9999"
                   inputMode="tel"
                 />
