@@ -74,7 +74,7 @@ interface MessageRow {
   created_at: string;
 }
 
-interface DeptRow { id: string; name: string; status: string }
+interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean }
 interface UserOption { user_id: string; full_name: string | null; email: string | null }
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -131,7 +131,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("departments")
-        .select("id, name, status")
+        .select("id, name, status, allow_general_queue")
         .eq("company_id", activeCompanyId!)
         .is("deleted_at", null)
         .order("name");
