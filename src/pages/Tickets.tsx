@@ -523,35 +523,51 @@ const Tickets = () => {
   const sendMutation = useMutation({
     mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
+      // Ensure we have a current session before invoking
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        const err: any = new Error("Sua sessão expirou. Faça login novamente.");
+        err.code = 401;
+        throw err;
+      }
       const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
         body: { company_id: activeCompanyId, ticket_id: vars.ticketId, text: vars.body },
       });
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.context?.status ?? (error as any)?.status;
+        const err: any = new Error(error.message || "Falha ao enviar");
+        if (status === 401) err.code = 401;
+        throw err;
+      }
       const d = data as any;
       if (d?.ok === false || d?.error) {
         const detail = d?.detail ? ` — ${d.detail}` : "";
-        throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${detail}`);
+        const err: any = new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${detail}`);
+        if (d?.step === "auth") err.code = 401;
+        throw err;
       }
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
     onSuccess: (res) => {
-      // Realtime INSERT will deliver the persisted row and drop the optimistic bubble.
-      // As a safety net, remove the optimistic after a short delay if realtime hasn't.
       setTimeout(() => {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
       }, 1500);
     },
-    onError: (e: Error, vars) => {
+    onError: (e: any, vars) => {
       setPendingMessages((prev) =>
         prev.map((p) => (p.tempId === vars.tempId ? { ...p, status: "error" } : p)),
       );
+      const expired = e?.code === 401;
       toast({
-        title: "Não foi possível enviar a mensagem. Tente novamente.",
-        description: e.message,
+        title: expired
+          ? "Sua sessão expirou. Faça login novamente."
+          : "Não foi possível enviar a mensagem. Tente novamente.",
+        description: expired ? undefined : e.message,
         variant: "destructive",
       });
     },
   });
+
 
   const handleSend = () => {
     const v = text.trim();
