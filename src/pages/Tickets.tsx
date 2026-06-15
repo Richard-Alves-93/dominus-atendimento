@@ -640,6 +640,26 @@ const Tickets = () => {
                 <div className="text-center text-sm text-muted-foreground py-2">
                   Este atendimento está fechado. Reabra para enviar mensagens.
                 </div>
+              ) : isPendingAcceptance ? (
+                <div className="flex flex-col items-center gap-2 py-2 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Este atendimento ainda não foi iniciado.
+                    <br />
+                    Aceite o atendimento para responder ao cliente.
+                  </p>
+                  <Button
+                    onClick={() => acceptMutation.mutate()}
+                    disabled={!canAcceptSelected || acceptMutation.isPending}
+                    className="gradient-primary text-primary-foreground rounded-full px-5"
+                  >
+                    {acceptMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <UserPlus className="w-4 h-4 mr-2" />
+                    )}
+                    Aceitar atendimento
+                  </Button>
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Input
