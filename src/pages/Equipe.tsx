@@ -402,10 +402,9 @@ export default function Equipe() {
               </div>
               <div className="space-y-1.5">
                 <Label>Cargo</Label>
-                <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}>
+                <Select value={form.role} onValueChange={(v) => changeRole(v as Role)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner">Dono</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                     <SelectItem value="manager">Gerente</SelectItem>
                     <SelectItem value="agent">Atendente</SelectItem>
@@ -415,6 +414,9 @@ export default function Equipe() {
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Setores</Label>
+                {isSingleDeptRole(form.role) && (
+                  <p className="text-xs text-muted-foreground">Este cargo permite vínculo com apenas um setor.</p>
+                )}
                 <div className="border rounded-md p-2 max-h-32 overflow-auto space-y-1.5">
                   {depts.length === 0 && (
                     <p className="text-sm text-muted-foreground p-2">Nenhum setor ativo. Crie em /app/setores.</p>
