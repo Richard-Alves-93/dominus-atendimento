@@ -59,6 +59,9 @@ Deno.serve(async (req) => {
 
     if (!company_id || !full_name || !email) return fail("payload", "Campos obrigatórios faltando");
     if (!["owner", "admin", "manager", "agent", "financial"].includes(role)) return fail("payload", "Cargo inválido");
+    if ((role === "agent" || role === "financial") && department_ids.length > 1) {
+      return fail("payload", "Este cargo permite vínculo com apenas um setor.");
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
