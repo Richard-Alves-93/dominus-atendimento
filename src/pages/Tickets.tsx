@@ -1054,6 +1054,15 @@ const Tickets = () => {
                           <span className="text-[10px] text-muted-foreground truncate">{t.department.name}</span>
                         )}
                         <span className="text-[10px] text-muted-foreground">· {STATUS_LABEL[t.status]}</span>
+                        {stalledItem?.stalled && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 px-1.5 border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10"
+                            title={`Sem resposta há ${stalledItem.minutes} min`}
+                          >
+                            Parado
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     {t.unread_count > 0 && (
