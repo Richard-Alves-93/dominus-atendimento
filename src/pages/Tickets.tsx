@@ -642,9 +642,9 @@ const Tickets = () => {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-secondary/20">
-            <div className="text-center">
+            <div className="text-center px-6">
               <MessageSquare className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground">Selecione uma conversa</p>
+              <p className="text-muted-foreground">Selecione um atendimento para visualizar a conversa.</p>
             </div>
           </div>
         )}
