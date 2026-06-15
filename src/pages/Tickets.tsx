@@ -163,33 +163,50 @@ function formatDuration(s?: number | null) {
 function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | null) => string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const path = m.media_storage_path;
   const type = m.msg_type;
+
+  const fallbackText =
+    type === "image" ? "Imagem recebida" :
+    type === "audio" ? "Áudio recebido" :
+    type === "video" ? "Vídeo recebido" :
+    type === "document" ? "Documento recebido" :
+    type === "sticker" ? "Figurinha recebida" :
+    `[${type}]`;
 
   useEffect(() => {
     let cancelled = false;
     if (!path) return;
     setLoading(true);
-    supabase.storage.from("message-media").createSignedUrl(path, 3600).then(({ data }) => {
-      if (!cancelled) {
-        setUrl(data?.signedUrl ?? null);
+    setError(false);
+    supabase.storage.from("message-media").createSignedUrl(path, 3600).then(({ data, error: err }) => {
+      if (cancelled) return;
+      if (err || !data?.signedUrl) {
+        console.warn("[MEDIA_RENDER_AUDIT]", {
+          messageId: m.id, msg_type: type, media_storage_path: path,
+          signedUrlSuccess: false, signedUrlError: err?.message ?? "no_url",
+        });
+        setError(true);
         setLoading(false);
+        return;
       }
+      setUrl(data.signedUrl);
+      setLoading(false);
+    }).catch((e: unknown) => {
+      if (cancelled) return;
+      console.warn("[MEDIA_RENDER_AUDIT]", {
+        messageId: m.id, msg_type: type, media_storage_path: path,
+        signedUrlSuccess: false, signedUrlError: (e as Error)?.message,
+      });
+      setError(true);
+      setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [path]);
+  }, [path, m.id, type]);
 
-  if (!path) {
-    const fallback =
-      type === "image" ? "Imagem recebida" :
-      type === "audio" ? "Áudio recebido" :
-      type === "video" ? "Vídeo recebido" :
-      type === "document" ? "Documento recebido" :
-      type === "sticker" ? "Figurinha recebida" :
-      `[${type}]`;
-    return <p className="text-sm italic opacity-80">{fallback}</p>;
-  }
-
+  if (!path) return <p className="text-sm italic opacity-80">{fallbackText}</p>;
+  if (error) return <p className="text-sm italic opacity-80">{fallbackText}, mas não foi possível carregar.</p>;
   if (loading || !url) {
     return <div className="flex items-center gap-2 text-xs opacity-70"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando mídia...</div>;
   }
@@ -202,15 +219,16 @@ function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | n
           alt={m.media_file_name ?? "imagem"}
           className={type === "sticker" ? "max-h-32 object-contain" : "max-h-72 rounded-lg object-cover"}
           loading="lazy"
+          onError={() => setError(true)}
         />
       </a>
     );
   }
   if (type === "audio") {
-    return <audio src={url} controls preload="metadata" className="w-64 max-w-full" />;
+    return <audio src={url} controls preload="metadata" className="w-64 max-w-full" onError={() => setError(true)} />;
   }
   if (type === "video") {
-    return <video src={url} controls preload="metadata" className="max-h-72 rounded-lg" />;
+    return <video src={url} controls preload="metadata" className="max-h-72 rounded-lg" onError={() => setError(true)} />;
   }
   if (type === "document") {
     return (
