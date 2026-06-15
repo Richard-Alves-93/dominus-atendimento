@@ -96,6 +96,7 @@ interface MessageRow {
   media_duration?: number | null;
   media_caption?: string | null;
   media_storage_path?: string | null;
+  media_url?: string | null;
   _optimistic?: boolean;
 }
 
@@ -165,7 +166,21 @@ function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | n
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const path = m.media_storage_path;
+  const mediaUrl = m.media_url;
   const type = m.msg_type;
+
+  const safeExternalUrl = useMemo(() => {
+    if (!mediaUrl) return null;
+    try {
+      const u = new URL(mediaUrl);
+      const params = u.search.toLowerCase();
+      if (!["http:", "https:"].includes(u.protocol)) return null;
+      if (params.includes("token") || params.includes("apikey") || params.includes("api_key") || params.includes("authorization")) return null;
+      return u.toString();
+    } catch {
+      return null;
+    }
+  }, [mediaUrl]);
 
   const fallbackText =
     type === "image" ? "Imagem recebida" :
@@ -177,36 +192,46 @@ function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | n
 
   useEffect(() => {
     let cancelled = false;
-    if (!path) return;
-    setLoading(true);
+    setUrl(null);
     setError(false);
+    if (!path) {
+      if (safeExternalUrl) setUrl(safeExternalUrl);
+      return;
+    }
+    setLoading(true);
     supabase.storage.from("message-media").createSignedUrl(path, 3600).then(({ data, error: err }) => {
       if (cancelled) return;
       if (err || !data?.signedUrl) {
-        console.warn("[MEDIA_RENDER_AUDIT]", {
-          messageId: m.id, msg_type: type, media_storage_path: path,
+        console.warn("[MEDIA_SIGNED_URL_AUDIT]", {
+          messageId: m.id, msg_type: type, media_storage_path: path, media_url: mediaUrl ?? null,
           signedUrlSuccess: false, signedUrlError: err?.message ?? "no_url",
         });
+        if (safeExternalUrl) setUrl(safeExternalUrl);
         setError(true);
         setLoading(false);
         return;
       }
+      console.debug("[MEDIA_SIGNED_URL_AUDIT]", {
+        messageId: m.id, msg_type: type, media_storage_path: path, media_url: mediaUrl ?? null,
+        signedUrlSuccess: true, signedUrlError: null,
+      });
       setUrl(data.signedUrl);
       setLoading(false);
     }).catch((e: unknown) => {
       if (cancelled) return;
-      console.warn("[MEDIA_RENDER_AUDIT]", {
-        messageId: m.id, msg_type: type, media_storage_path: path,
+      console.warn("[MEDIA_SIGNED_URL_AUDIT]", {
+        messageId: m.id, msg_type: type, media_storage_path: path, media_url: mediaUrl ?? null,
         signedUrlSuccess: false, signedUrlError: (e as Error)?.message,
       });
+      if (safeExternalUrl) setUrl(safeExternalUrl);
       setError(true);
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [path, m.id, type]);
+  }, [path, m.id, type, mediaUrl, safeExternalUrl]);
 
-  if (!path) return <p className="text-sm italic opacity-80">{fallbackText}</p>;
-  if (error) return <p className="text-sm italic opacity-80">{fallbackText}, mas não foi possível carregar.</p>;
+  if (!path && !url) return <p className="text-sm italic opacity-80">{fallbackText}</p>;
+  if (error && !url) return <p className="text-sm italic opacity-80">{fallbackText}, mas não foi possível carregar.</p>;
   if (loading || !url) {
     return <div className="flex items-center gap-2 text-xs opacity-70"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando mídia...</div>;
   }
