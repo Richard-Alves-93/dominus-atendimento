@@ -378,6 +378,19 @@ export default function Setores() {
                 onCheckedChange={(v) => setForm((f) => ({ ...f, allow_general_queue: !!v }))}
               />
             </div>
+            <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="allow_st" className="text-sm">Pode assumir atendimento parado</Label>
+                <p className="text-xs text-muted-foreground">
+                  Permite que usuários deste setor assumam atendimentos parados conforme o tempo configurado.
+                </p>
+              </div>
+              <Switch
+                id="allow_st"
+                checked={form.allow_stalled_takeover}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, allow_stalled_takeover: !!v }))}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button
