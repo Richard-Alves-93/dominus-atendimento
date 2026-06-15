@@ -85,12 +85,12 @@ export default function Setores() {
   }, [activeCompanyId]);
 
   const openCreate = () => {
-    setForm({ name: "", description: "", status: "active", allow_general_queue: false });
+    setForm({ name: "", description: "", status: "active", allow_general_queue: false, allow_stalled_takeover: false });
     setCreating(true);
   };
 
   const openEdit = (d: Department) => {
-    setForm({ name: d.name, description: d.description ?? "", status: d.status, allow_general_queue: !!d.allow_general_queue });
+    setForm({ name: d.name, description: d.description ?? "", status: d.status, allow_general_queue: !!d.allow_general_queue, allow_stalled_takeover: !!d.allow_stalled_takeover });
     setEditing(d);
   };
 
