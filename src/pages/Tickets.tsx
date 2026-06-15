@@ -166,6 +166,33 @@ const Tickets = () => {
   });
   const activeDepts = (deptsQuery.data ?? []).filter((d) => d.status === "active");
 
+  // Company settings (regras de atendimento)
+  const settingsQuery = useQuery({
+    queryKey: ["company-settings", activeCompanyId],
+    enabled: !!activeCompanyId,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("company_settings")
+        .select("allow_stalled_takeover, stalled_minutes, same_department_only")
+        .eq("company_id", activeCompanyId!)
+        .maybeSingle();
+      return (data ?? {
+        allow_stalled_takeover: true,
+        stalled_minutes: 15,
+        same_department_only: true,
+      }) as {
+        allow_stalled_takeover: boolean;
+        stalled_minutes: number;
+        same_department_only: boolean;
+      };
+    },
+  });
+  const settings = settingsQuery.data ?? {
+    allow_stalled_takeover: true,
+    stalled_minutes: 15,
+    same_department_only: true,
+  };
+
   // My departments (non-admin)
   const myDeptsQuery = useQuery({
     queryKey: ["my-depts", activeCompanyId, profile?.id],
