@@ -1369,7 +1369,9 @@ const Tickets = () => {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
+
               )}
               <div ref={endRef} />
             </div>
