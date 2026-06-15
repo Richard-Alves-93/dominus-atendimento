@@ -282,13 +282,19 @@ const Tickets = () => {
     },
   });
 
-  // Zero unread on open
+  // Zero unread on open (DB + cache otimista)
   useEffect(() => {
     if (!selected || (selected.unread_count ?? 0) === 0) return;
+    const ticketId = selected.id;
+    // Atualiza cache de todas as queries de tickets desta empresa
+    qc.setQueriesData<TicketRow[] | undefined>(
+      { queryKey: ["tickets", activeCompanyId] },
+      (old) => (old ? old.map((t) => (t.id === ticketId ? { ...t, unread_count: 0 } : t)) : old),
+    );
     (supabase as any)
       .from("tickets")
       .update({ unread_count: 0 })
-      .eq("id", selected.id)
+      .eq("id", ticketId)
       .then(() => {
         qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
       });
