@@ -628,9 +628,9 @@ const Tickets = () => {
   // Considerado parado quando:
   //  • status = open
   //  • assigned_user_id != null
-  //  • unread_count > 0
-  //  • última mensagem é do cliente
-  //  • tempo desde a última mensagem do cliente >= stalled_minutes
+  //  • existe última mensagem inbound do cliente
+  //  • não existe outbound posterior à última inbound
+  //  • tempo desde a última inbound >= stalled_minutes
   // Tick a cada 30s para recalcular sem F5
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -648,27 +648,34 @@ const Tickets = () => {
   }, [selectedId, activeCompanyId, qc]);
 
   const stalledInfo = useMemo(() => {
-    if (!selected) return { stalled: false, minutes: 0 };
-    if (selected.status !== "open") return { stalled: false, minutes: 0 };
-    if (!selected.assigned_user_id) return { stalled: false, minutes: 0 };
-    if ((selected.unread_count ?? 0) <= 0) return { stalled: false, minutes: 0 };
-    const list = (messagesQuery.data ?? []) as MessageRow[];
-    // Última mensagem inbound (do cliente)
+    const empty = { stalled: false, minutes: 0, lastInboundAt: null as string | null, lastOutboundAt: null as string | null, hasCustomerWaiting: false };
+    if (!selected) return empty;
+    const list = visibleMessages;
     let lastInboundTs: number | null = null;
+    let lastOutboundTs: number | null = null;
     for (let i = list.length - 1; i >= 0; i--) {
-      if (!list[i].from_me) {
-        lastInboundTs = new Date(list[i].sent_at || list[i].created_at).getTime();
-        break;
+      const ts = new Date(list[i].sent_at || list[i].created_at).getTime();
+      if (!Number.isFinite(ts)) continue;
+      if (!list[i].from_me && lastInboundTs == null) lastInboundTs = ts;
+      if (list[i].from_me && lastOutboundTs == null) lastOutboundTs = ts;
+      if (lastInboundTs != null && lastOutboundTs != null) break;
+    }
+    const hasCustomerWaiting = lastInboundTs != null && (lastOutboundTs == null || lastInboundTs > lastOutboundTs);
+    if (lastInboundTs == null || selected.status !== "open" || !selected.assigned_user_id || !hasCustomerWaiting) {
+      if (typeof window !== "undefined") {
+        console.debug("[STALLED_AUDIT]", {
+          ticketId: selected.id,
+          assigned_user_id: selected.assigned_user_id,
+          unread_count: selected.unread_count,
+          lastInboundAt: lastInboundTs ? new Date(lastInboundTs).toISOString() : null,
+          lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null,
+          hasCustomerWaiting,
+          stalledMinutes: settings.stalled_minutes,
+          elapsedMinutes: lastInboundTs ? Math.floor((nowTs - lastInboundTs) / 60000) : 0,
+          isStalled: false,
+        });
       }
-    }
-    // Fallback para tickets.last_message_at quando ainda não carregou mensagens
-    if (lastInboundTs == null && selected.last_message_at) {
-      lastInboundTs = new Date(selected.last_message_at).getTime();
-    }
-    if (lastInboundTs == null) return { stalled: false, minutes: 0 };
-    // Se a última mensagem da lista é outbound, responsável já respondeu
-    if (list.length > 0 && list[list.length - 1].from_me) {
-      return { stalled: false, minutes: 0 };
+      return { ...empty, lastInboundAt: lastInboundTs ? new Date(lastInboundTs).toISOString() : null, lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null, hasCustomerWaiting };
     }
     const elapsedMs = nowTs - lastInboundTs;
     const ageMin = Math.floor(elapsedMs / 60000);
@@ -679,15 +686,22 @@ const Tickets = () => {
         ticketId: selected.id,
         assigned_user_id: selected.assigned_user_id,
         unread_count: selected.unread_count,
-        lastMessageFromMe: list.length > 0 ? list[list.length - 1].from_me : null,
         lastInboundAt: new Date(lastInboundTs).toISOString(),
+        lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null,
+        hasCustomerWaiting,
         stalledMinutes: settings.stalled_minutes,
         elapsedMinutes: ageMin,
         isStalled: stalled,
       });
     }
-    return { stalled, minutes: ageMin };
-  }, [selected, messagesQuery.data, settings.stalled_minutes, nowTs]);
+    return {
+      stalled,
+      minutes: ageMin,
+      lastInboundAt: new Date(lastInboundTs).toISOString(),
+      lastOutboundAt: lastOutboundTs ? new Date(lastOutboundTs).toISOString() : null,
+      hasCustomerWaiting,
+    };
+  }, [selected, visibleMessages, settings.stalled_minutes, nowTs]);
 
   // Setor do ticket: também precisa permitir takeover quando regra exige mesmo setor
   const selectedDept = useMemo(
