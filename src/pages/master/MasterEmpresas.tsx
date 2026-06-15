@@ -43,6 +43,7 @@ interface Company {
   phone: string | null;
   status: string;
   created_at: string;
+  is_internal: boolean;
 }
 
 const badge: Record<string, string> = {
@@ -68,11 +69,11 @@ export default function MasterEmpresas() {
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
 
   const load = () =>
-    supabase
+    (supabase
       .from("companies")
-      .select("id, name, email, phone, status, created_at")
+      .select("id, name, email, phone, status, created_at, is_internal") as any)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setCompanies((data as Company[] | null) ?? []));
+      .then(({ data }: { data: Company[] | null }) => setCompanies(data ?? []));
 
   useEffect(() => {
     void load();
@@ -86,6 +87,14 @@ export default function MasterEmpresas() {
 
   const changeStatus = async (c: Company, status: "suspended" | "active") => {
     if (!isMaster) return;
+    if (c.is_internal && status === "suspended") {
+      toast({
+        title: "Ação bloqueada",
+        description: "A empresa interna Dominus não pode ser suspensa.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusyId(c.id);
     const { error } = await supabase.from("companies").update({ status }).eq("id", c.id);
     setBusyId(null);
@@ -124,8 +133,9 @@ export default function MasterEmpresas() {
                 </TableRow>
               )}
               {companies.map((c) => {
-                const canSuspend = SUSPENDABLE.has(c.status);
-                const canReactivate = REACTIVATABLE.has(c.status);
+                const canSuspend = !c.is_internal && SUSPENDABLE.has(c.status);
+                const canReactivate = !c.is_internal && REACTIVATABLE.has(c.status);
+                const showSeparator = canSuspend || canReactivate;
                 return (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.name}</TableCell>
@@ -149,7 +159,7 @@ export default function MasterEmpresas() {
                           <DropdownMenuItem onClick={() => setDetailsCompany(c)}>
                             <Eye className="w-3.5 h-3.5 mr-2" /> Ver detalhes
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          {showSeparator && <DropdownMenuSeparator />}
                           {canSuspend && (
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
