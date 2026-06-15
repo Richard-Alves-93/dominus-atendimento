@@ -9,7 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -138,6 +144,17 @@ export default function Conexoes() {
     }
   };
 
+  const reapplySettings = async (channelId: string) => {
+    const { data, error } = await supabase.functions.invoke("sync-evolution-instance-settings", {
+      body: { channel_id: channelId },
+    });
+    if (error || (data as { error?: string } | null)?.error) {
+      toast.error("Não foi possível reaplicar as configurações da conexão.");
+      return;
+    }
+    toast.success("Configurações da conexão reaplicadas com sucesso.");
+  };
+
   const handleDialogChange = (v: boolean) => {
     setOpen(v);
     if (!v) stopPolling();
@@ -159,9 +176,26 @@ export default function Conexoes() {
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                     <def.icon className="w-5 h-5 text-primary" />
                   </div>
-                  <Badge className={statusVariant[st] ?? statusVariant.disconnected}>
-                    {def.available ? statusLabel[st] ?? st : "Em breve"}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge className={statusVariant[st] ?? statusVariant.disconnected}>
+                      {def.available ? statusLabel[st] ?? st : "Em breve"}
+                    </Badge>
+                    {def.available && existing && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais ações">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => reapplySettings(existing.id)}>
+                            <Settings2 className="w-4 h-4 mr-2" />
+                            Reaplicar configurações
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 </div>
                 <h3 className="font-semibold">{def.name}</h3>
                 <p className="text-sm text-muted-foreground flex-1 mt-1">{def.desc}</p>

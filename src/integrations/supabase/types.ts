@@ -695,12 +695,16 @@ export type Database = {
           connected_at: string | null
           created_at: string
           disconnected_at: string | null
+          events_configured: boolean
           id: string
           instance_name: string
+          last_settings_sync_at: string | null
           phone_number: string | null
           qr_code: string | null
+          settings_sync_error: string | null
           status: Database["public"]["Enums"]["channel_status"]
           updated_at: string
+          webhook_configured: boolean
         }
         Insert: {
           channel_id: string
@@ -708,12 +712,16 @@ export type Database = {
           connected_at?: string | null
           created_at?: string
           disconnected_at?: string | null
+          events_configured?: boolean
           id?: string
           instance_name: string
+          last_settings_sync_at?: string | null
           phone_number?: string | null
           qr_code?: string | null
+          settings_sync_error?: string | null
           status?: Database["public"]["Enums"]["channel_status"]
           updated_at?: string
+          webhook_configured?: boolean
         }
         Update: {
           channel_id?: string
@@ -721,12 +729,16 @@ export type Database = {
           connected_at?: string | null
           created_at?: string
           disconnected_at?: string | null
+          events_configured?: boolean
           id?: string
           instance_name?: string
+          last_settings_sync_at?: string | null
           phone_number?: string | null
           qr_code?: string | null
+          settings_sync_error?: string | null
           status?: Database["public"]["Enums"]["channel_status"]
           updated_at?: string
+          webhook_configured?: boolean
         }
         Relationships: [
           {
