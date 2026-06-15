@@ -172,8 +172,14 @@ const Tickets = () => {
         .limit(200);
 
       // status filter
-      if (filter === "open" || filter === "pending" || filter === "closed") {
-        q = q.eq("status", filter);
+      if (filter === "pending") {
+        // Pendentes = não aceitos, não fechados, com unread_count > 0
+        q = q.is("assigned_user_id", null).neq("status", "closed").gt("unread_count", 0);
+      } else if (filter === "open") {
+        // Abertos = aceitos/em atendimento
+        q = q.eq("status", "open").not("assigned_user_id", "is", null);
+      } else if (filter === "closed") {
+        q = q.eq("status", "closed");
       } else if (filter === "fila") {
         q = q.is("department_id", null).is("assigned_user_id", null).neq("status", "closed");
       } else if (filter === "meus" && profile?.id) {
