@@ -144,6 +144,17 @@ export default function Conexoes() {
     }
   };
 
+  const reapplySettings = async (channelId: string) => {
+    const { data, error } = await supabase.functions.invoke("sync-evolution-instance-settings", {
+      body: { channel_id: channelId },
+    });
+    if (error || (data as { error?: string } | null)?.error) {
+      toast.error("Não foi possível reaplicar as configurações da conexão.");
+      return;
+    }
+    toast.success("Configurações da conexão reaplicadas com sucesso.");
+  };
+
   const handleDialogChange = (v: boolean) => {
     setOpen(v);
     if (!v) stopPolling();
