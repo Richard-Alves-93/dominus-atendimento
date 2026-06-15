@@ -108,7 +108,6 @@ Deno.serve(async (req) => {
     const evoText = await evoRes.text();
     let evoData: any = {};
     try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
-    console.log("[SEND_WA] evolution status:", evoRes.status);
 
     if (!evoRes.ok) {
       return fail("evolution_send", `Evolution ${evoRes.status}`, {
@@ -143,9 +142,11 @@ Deno.serve(async (req) => {
       .select("id").single();
     if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
 
-    await admin.from("tickets")
+    // Fire-and-forget ticket update so we can return as fast as possible.
+    admin.from("tickets")
       .update({ last_message_at: nowIso, status: "open" })
-      .eq("id", ticket_id);
+      .eq("id", ticket_id)
+      .then(() => {}, (e: any) => console.error("[SEND_WA] ticket update failed", e?.message));
 
     return json({ ok: true, message_id: inserted.id, external_id: externalId });
   } catch (e) {
