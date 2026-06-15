@@ -1256,7 +1256,8 @@ const Tickets = () => {
                         setPendingDeptId(selected.department_id ?? "");
                         setAssignDeptOpen(true);
                       }}
-                      disabled={!canEditSelected}
+                      disabled={!canTransferDepartment}
+                      title={!canTransferDepartment ? "Você não tem permissão para transferir este atendimento." : undefined}
                     >
                       <Building2 className="w-4 h-4 mr-2" /> {selected.department_id ? "Transferir setor" : "Definir setor"}
                     </DropdownMenuItem>
