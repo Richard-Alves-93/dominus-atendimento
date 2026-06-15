@@ -279,10 +279,9 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 
     let { data: ticket } = await admin
       .from("tickets")
-      .select("id, unread_count")
+      .select("id, unread_count, status")
       .eq("company_id", inst.company_id)
       .eq("contact_id", contactId)
-      .neq("status", "closed")
       .order("last_message_at", { ascending: false })
       .limit(1)
       .maybeSingle();
