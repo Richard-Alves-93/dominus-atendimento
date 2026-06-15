@@ -310,6 +310,41 @@ const Tickets = () => {
     },
   });
 
+  // Candidatos a "atendimento parado" na lista: status=open e com responsável.
+  const stalledCandidateIds = useMemo(() => {
+    return (ticketsQuery.data ?? [])
+      .filter((t) => t.status === "open" && !!t.assigned_user_id)
+      .map((t) => t.id);
+  }, [ticketsQuery.data]);
+
+  // Busca eficiente (1 query) das mensagens recentes dos candidatos para derivar
+  // last_inbound_at / last_outbound_at por ticket. Evita N+1.
+  const ticketTimelinesQuery = useQuery({
+    queryKey: ["ticket-timelines", activeCompanyId, stalledCandidateIds.join(",")],
+    enabled: !!activeCompanyId && stalledCandidateIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("messages")
+        .select("ticket_id, from_me, sent_at, created_at")
+        .in("ticket_id", stalledCandidateIds)
+        .order("created_at", { ascending: false })
+        .limit(Math.min(2000, stalledCandidateIds.length * 20));
+      if (error) throw error;
+      const map: Record<string, { lastInboundTs: number | null; lastOutboundTs: number | null }> = {};
+      for (const id of stalledCandidateIds) map[id] = { lastInboundTs: null, lastOutboundTs: null };
+      for (const r of (data ?? []) as Array<{ ticket_id: string; from_me: boolean; sent_at: string | null; created_at: string }>) {
+        const entry = map[r.ticket_id];
+        if (!entry) continue;
+        const ts = new Date(r.sent_at || r.created_at).getTime();
+        if (!Number.isFinite(ts)) continue;
+        if (!r.from_me && entry.lastInboundTs == null) entry.lastInboundTs = ts;
+        if (r.from_me && entry.lastOutboundTs == null) entry.lastOutboundTs = ts;
+      }
+      return map;
+    },
+    staleTime: 15_000,
+  });
+
   const tickets = useMemo(() => {
     const list = ticketsQuery.data ?? [];
     const pmap = assigneeProfilesQuery.data ?? {};
