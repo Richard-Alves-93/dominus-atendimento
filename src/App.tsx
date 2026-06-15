@@ -19,6 +19,7 @@ import Setores from "./pages/Setores";
 import Equipe from "./pages/Equipe";
 import TrocarSenha from "./pages/TrocarSenha";
 import Placeholder from "./pages/Placeholder";
+import Configuracoes from "./pages/Configuracoes";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
