@@ -719,7 +719,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at, source, sent_by_name, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at, source, sent_by_name, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
