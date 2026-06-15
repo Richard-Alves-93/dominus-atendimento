@@ -70,7 +70,7 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<typeof extractMediaInfo>): Promise<string | null> {
+async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<typeof extractMediaInfo>): Promise<MediaFetchResult> {
   // 1) Payload may already contain base64 (webhook_base64=true).
   const inline =
     m?.message?.base64 ??
@@ -80,7 +80,6 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
     null;
   const messageId = m?.key?.id ?? null;
   const hasWebhookBase64 = typeof inline === "string" && inline.length > 0;
-  lastMediaFetchAudit = { hasWebhookBase64, triedGetBase64Endpoint: false, getBase64Status: null };
   console.log("[MEDIA_DOWNLOAD_AUDIT]", {
     messageId,
     instance: instanceName,
@@ -95,10 +94,14 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
     uploadError: null,
     storagePath: null,
   });
-  if (hasWebhookBase64) return inline;
+  if (hasWebhookBase64) {
+    return { base64: inline, hasWebhookBase64: true, triedGetBase64Endpoint: false, getBase64Status: null };
+  }
 
   // 2) Ask Evolution to provide the base64.
-  if (!EVO_URL || !EVO_KEY) return null;
+  if (!EVO_URL || !EVO_KEY) {
+    return { base64: null, hasWebhookBase64: false, triedGetBase64Endpoint: false, getBase64Status: null };
+  }
   const url = `${EVO_URL.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`;
   const bodies = [
     { message: { key: m?.key, message: m?.message }, convertToMp4: false },
@@ -116,7 +119,6 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
       let data: any = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
       const base64 = data?.base64 ?? data?.data?.base64 ?? data?.message?.base64 ?? null;
-      lastMediaFetchAudit = { hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: res.status };
       console.log("[MEDIA_DOWNLOAD_AUDIT]", {
         messageId,
         instance: instanceName,
@@ -131,9 +133,11 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
         uploadError: res.ok ? null : text.slice(0, 120),
         storagePath: null,
       });
-      if (res.ok && typeof base64 === "string" && base64.length > 0) return base64;
+      if (res.ok && typeof base64 === "string" && base64.length > 0) {
+        return { base64, hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: res.status };
+      }
     }
-    return null;
+    return { base64: null, hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: "empty_base64" };
   } catch (e) {
     console.warn("[MEDIA_DOWNLOAD_AUDIT]", {
       messageId,
@@ -149,8 +153,7 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
       uploadError: (e as Error)?.message,
       storagePath: null,
     });
-    lastMediaFetchAudit = { hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: "exception" };
-    return null;
+    return { base64: null, hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: "exception" };
   }
 }
 
