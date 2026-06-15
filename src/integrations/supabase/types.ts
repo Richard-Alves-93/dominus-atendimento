@@ -456,6 +456,13 @@ export type Database = {
           failure_reason: string | null
           from_me: boolean
           id: string
+          media_caption: string | null
+          media_duration: number | null
+          media_file_name: string | null
+          media_mime_type: string | null
+          media_provider_id: string | null
+          media_size: number | null
+          media_storage_path: string | null
           media_url: string | null
           msg_type: Database["public"]["Enums"]["message_type"]
           provider_message_id: string | null
@@ -484,6 +491,13 @@ export type Database = {
           failure_reason?: string | null
           from_me?: boolean
           id?: string
+          media_caption?: string | null
+          media_duration?: number | null
+          media_file_name?: string | null
+          media_mime_type?: string | null
+          media_provider_id?: string | null
+          media_size?: number | null
+          media_storage_path?: string | null
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
           provider_message_id?: string | null
@@ -512,6 +526,13 @@ export type Database = {
           failure_reason?: string | null
           from_me?: boolean
           id?: string
+          media_caption?: string | null
+          media_duration?: number | null
+          media_file_name?: string | null
+          media_mime_type?: string | null
+          media_provider_id?: string | null
+          media_size?: number | null
+          media_storage_path?: string | null
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
           provider_message_id?: string | null
