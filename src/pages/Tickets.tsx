@@ -59,7 +59,7 @@ interface TicketRow {
   assigned_user_id: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
   department: { id: string; name: string } | null;
-  assignee: { id: string; full_name: string | null; email: string | null } | null;
+  assignee?: { id: string; full_name: string | null; email: string | null } | null;
 }
 
 interface MessageRow {
