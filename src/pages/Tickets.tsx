@@ -407,6 +407,28 @@ const Tickets = () => {
     return myDeptIds.includes(selected.department_id);
   }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds, canSeeGeneralQueue]);
 
+  const writeAuditLog = async (
+    ticketId: string,
+    previous: string | null,
+    next: string | null,
+    reason: string,
+  ) => {
+    if (!activeCompanyId || !profile?.id) return;
+    try {
+      await (supabase as any).from("audit_logs").insert({
+        company_id: activeCompanyId,
+        ticket_id: ticketId,
+        event_type: "ticket_assigned_changed",
+        previous_assigned_user_id: previous,
+        new_assigned_user_id: next,
+        changed_by: profile.id,
+        reason,
+      });
+    } catch (e) {
+      console.warn("audit_log insert failed", e);
+    }
+  };
+
   const acceptMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
@@ -422,11 +444,14 @@ const Tickets = () => {
       if (!selected.department_id && !isAdmin && generalQueueDeptIds.length === 1) {
         patch.department_id = generalQueueDeptIds[0];
       }
+      const previous = selected.assigned_user_id ?? null;
+      const ticketId = selected.id;
       const { error } = await (supabase as any)
         .from("tickets")
         .update(patch)
-        .eq("id", selected.id);
+        .eq("id", ticketId);
       if (error) throw error;
+      await writeAuditLog(ticketId, previous, profile.id, "aceitar_atendimento");
     },
     onSuccess: () => {
       toast({ title: "Atendimento aceito" });
@@ -439,7 +464,7 @@ const Tickets = () => {
 
   // Assumir atendimento: usuário superior pega ticket já atribuído a outro
   const isAssignedToOther = !!selected?.assigned_user_id && selected.assigned_user_id !== profile?.id;
-  const canTakeOverSelected = useMemo(() => {
+  const canTakeOverPrivileged = useMemo(() => {
     if (!selected || !profile?.id) return false;
     if (!isAssignedToOther) return false;
     if (selected.status === "closed") return false;
@@ -452,9 +477,11 @@ const Tickets = () => {
   }, [selected, profile?.id, isAssignedToOther, isAdmin, isManager, myManagedDeptIds]);
 
   const takeOverMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (reason: string = "assumir_atendimento") => {
       if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
       const nowIso = new Date().toISOString();
+      const previous = selected.assigned_user_id ?? null;
+      const ticketId = selected.id;
       const { error } = await (supabase as any)
         .from("tickets")
         .update({
@@ -464,9 +491,10 @@ const Tickets = () => {
           unread_count: 0,
           status: "open",
         })
-        .eq("id", selected.id)
+        .eq("id", ticketId)
         .eq("company_id", activeCompanyId!);
       if (error) throw error;
+      await writeAuditLog(ticketId, previous, profile.id, reason);
     },
     onSuccess: () => {
       toast({ title: "Atendimento assumido" });
@@ -478,6 +506,7 @@ const Tickets = () => {
       toast({ title: "Falha ao assumir", description: e.message, variant: "destructive" });
     },
   });
+
 
 
   const messagesQuery = useQuery({
