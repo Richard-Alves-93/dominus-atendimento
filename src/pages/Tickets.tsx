@@ -1244,7 +1244,7 @@ const Tickets = () => {
                       }}
                       disabled={!canEditSelected}
                     >
-                      <Building2 className="w-4 h-4 mr-2" /> Definir setor
+                      <Building2 className="w-4 h-4 mr-2" /> {selected.department_id ? "Transferir setor" : "Definir setor"}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
@@ -1420,8 +1420,8 @@ const Tickets = () => {
       <Dialog open={assignDeptOpen} onOpenChange={setAssignDeptOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Definir setor</DialogTitle>
-            <DialogDescription>Escolha o setor responsável por este atendimento.</DialogDescription>
+            <DialogTitle>{selected?.department_id ? "Transferir atendimento para outro setor" : "Definir setor do atendimento"}</DialogTitle>
+            <DialogDescription>{selected?.department_id ? "Escolha o novo setor responsável. O atendimento será movido para a fila do novo setor." : "Escolha o setor responsável por este atendimento."}</DialogDescription>
           </DialogHeader>
           <Select value={pendingDeptId} onValueChange={setPendingDeptId}>
             <SelectTrigger>
