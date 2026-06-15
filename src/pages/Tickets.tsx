@@ -669,9 +669,34 @@ const Tickets = () => {
   // Tick a cada 30s para recalcular sem F5
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
   useEffect(() => {
-    const id = window.setInterval(() => setNowTs(Date.now()), 30000);
+    const id = window.setInterval(() => {
+      setNowTs(Date.now());
+      // Mantém timelines da lista frescas sem F5
+      void qc.invalidateQueries({ queryKey: ["ticket-timelines", activeCompanyId] });
+    }, 30000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [qc, activeCompanyId]);
+
+  // Mapa de "atendimento parado" para cada ticket da lista — mesma regra do painel,
+  // sem depender de unread_count. Recalcula quando nowTs/timelines/settings mudam.
+  const listStalledMap = useMemo(() => {
+    const out = new Map<string, { stalled: boolean; minutes: number }>();
+    const tl = ticketTimelinesQuery.data ?? {};
+    const stalledMs = (settings.stalled_minutes || 0) * 60000;
+    if (stalledMs <= 0) return out;
+    for (const id of Object.keys(tl)) {
+      const { lastInboundTs, lastOutboundTs } = tl[id] || { lastInboundTs: null, lastOutboundTs: null };
+      if (lastInboundTs == null) continue;
+      const hasCustomerWaiting = lastOutboundTs == null || lastInboundTs > lastOutboundTs;
+      if (!hasCustomerWaiting) continue;
+      const elapsedMs = nowTs - lastInboundTs;
+      if (elapsedMs >= stalledMs) {
+        out.set(id, { stalled: true, minutes: Math.floor(elapsedMs / 60000) });
+      }
+    }
+    return out;
+  }, [ticketTimelinesQuery.data, settings.stalled_minutes, nowTs]);
+
   // Refetch leve periódico para garantir frescor da timeline
   useEffect(() => {
     if (!selectedId) return;
