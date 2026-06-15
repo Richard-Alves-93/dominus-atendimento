@@ -50,6 +50,7 @@ export default function Configuracoes() {
         setAllowTakeover(s.allow_stalled_takeover);
         setStalledMinutes(s.stalled_minutes);
         setSameDeptOnly(s.same_department_only);
+        setNotifyCustomerOnTransfer(Boolean(s.notify_customer_on_department_transfer));
       }
       setLoading(false);
     })();
