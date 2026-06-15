@@ -157,8 +157,18 @@ const Tickets = () => {
   const myDeptIds = (myDeptsQuery.data ?? []).map((d) => d.department_id);
   const myManagedDeptIds = (myDeptsQuery.data ?? []).filter((d) => d.role === "manager").map((d) => d.department_id);
 
+  // Departments where the current user can see/accept the general queue
+  const generalQueueDeptIds = useMemo(() => {
+    const allowed = new Set(
+      (deptsQuery.data ?? []).filter((d) => d.allow_general_queue && d.status === "active").map((d) => d.id),
+    );
+    if (isAdmin) return Array.from(allowed);
+    return myDeptIds.filter((id) => allowed.has(id));
+  }, [deptsQuery.data, myDeptIds, isAdmin]);
+  const canSeeGeneralQueue = isAdmin || generalQueueDeptIds.length > 0;
+
   const ticketsQuery = useQuery({
-    queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(",")],
+    queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(","), generalQueueDeptIds.join(",")],
     enabled: !!activeCompanyId && (isAdmin || myDeptsQuery.isFetched || !profile?.id),
     refetchInterval: 5000,
     queryFn: async () => {
@@ -181,7 +191,15 @@ const Tickets = () => {
       } else if (filter === "closed") {
         q = q.eq("status", "closed");
       } else if (filter === "fila") {
-        q = q.is("department_id", null).is("assigned_user_id", null).neq("status", "closed");
+        q = q.is("assigned_user_id", null).neq("status", "closed");
+        if (!isAdmin) {
+          // Limit fila geral to user's allowed departments (or null department)
+          if (generalQueueDeptIds.length === 0) {
+            q = q.eq("id", "00000000-0000-0000-0000-000000000000"); // force empty
+          } else {
+            q = q.or(`department_id.is.null,department_id.in.(${generalQueueDeptIds.join(",")})`);
+          }
+        }
       } else if (filter === "meus" && profile?.id) {
         q = q.eq("assigned_user_id", profile.id).neq("status", "closed");
       } else {
@@ -193,9 +211,11 @@ const Tickets = () => {
         q = q.eq("department_id", deptFilter);
       }
 
-      if (!isAdmin && profile?.id) {
-        const parts: string[] = [`assigned_user_id.eq.${profile.id}`, `department_id.is.null`];
-        if (myDeptIds.length > 0) parts.push(`department_id.in.(${myDeptIds.join(",")})`);
+      if (!isAdmin && profile?.id && filter !== "meus" && filter !== "fila") {
+        const parts: string[] = [`assigned_user_id.eq.${profile.id}`];
+        if (generalQueueDeptIds.length > 0) parts.push(`department_id.is.null`);
+        const visibleDepts = Array.from(new Set([...myDeptIds, ...generalQueueDeptIds]));
+        if (visibleDepts.length > 0) parts.push(`department_id.in.(${visibleDepts.join(",")})`);
         q = q.or(parts.join(","));
       }
       const { data, error } = await q;
