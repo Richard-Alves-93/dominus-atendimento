@@ -13,85 +13,94 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+// fail = HTTP 200 with error payload, so frontend can read it
+function fail(step: string, message: string, extra: Record<string, unknown> = {}) {
+  console.error("[SEND_WA] fail", step, message, extra);
+  return json({ ok: false, error: message, step, ...extra }, 200);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    if (!EVO_URL || !EVO_KEY) return json({ error: "Evolution API not configured" }, 500);
+    console.log("[SEND_WA] start");
+    if (!EVO_URL || !EVO_KEY) return fail("config", "Evolution API not configured");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    if (!authHeader?.startsWith("Bearer ")) return fail("auth", "Missing bearer token");
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
-    const userId = claims.claims.sub as string;
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) return fail("auth", "Invalid session", { detail: userErr?.message });
+    const userId = userData.user.id;
+    console.log("[SEND_WA] user_id:", userId);
 
-    const { company_id, ticket_id, text } = await req.json();
-    if (!company_id || !ticket_id || !text || typeof text !== "string" || !text.trim()) {
-      return json({ error: "Invalid payload" }, 400);
+    const payload = await req.json().catch(() => ({} as any));
+    const company_id = payload.company_id;
+    const ticket_id = payload.ticket_id;
+    const text: string | undefined = payload.text ?? payload.body ?? payload.message;
+    console.log("[SEND_WA] payload:", { company_id, ticket_id, has_text: Boolean(text) });
+
+    if (!company_id || !ticket_id || !text?.trim()) {
+      return fail("payload", "Invalid payload (company_id, ticket_id, text required)");
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // authz: master or member
+    // authz
     const { data: profile } = await admin
-      .from("profiles")
-      .select("is_master")
-      .eq("id", userId)
-      .maybeSingle();
+      .from("profiles").select("is_master").eq("id", userId).maybeSingle();
     let allowed = profile?.is_master === true;
     if (!allowed) {
       const { data: member } = await admin
-        .from("company_users")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("company_id", company_id)
-        .eq("status", "active")
+        .from("company_users").select("id")
+        .eq("user_id", userId).eq("company_id", company_id).eq("status", "active")
         .maybeSingle();
       allowed = Boolean(member);
     }
-    if (!allowed) return json({ error: "Forbidden" }, 403);
+    if (!allowed) return fail("authz", "Forbidden");
 
-    // load ticket + contact
     const { data: ticket, error: tErr } = await admin
       .from("tickets")
       .select("id, company_id, contact_id, channel_id")
-      .eq("id", ticket_id)
-      .eq("company_id", company_id)
-      .maybeSingle();
-    if (tErr || !ticket) return json({ error: "Ticket not found" }, 404);
+      .eq("id", ticket_id).eq("company_id", company_id).maybeSingle();
+    if (tErr || !ticket) return fail("ticket", "Ticket not found", { detail: tErr?.message });
+    console.log("[SEND_WA] ticket:", ticket.id);
 
     const { data: contact } = await admin
-      .from("contacts")
-      .select("id, phone_number")
-      .eq("id", ticket.contact_id)
-      .maybeSingle();
-    if (!contact?.phone_number) return json({ error: "Contact has no phone" }, 400);
+      .from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle();
+    const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
+    console.log("[SEND_WA] contact phone len:", phone.length);
+    if (!phone) return fail("contact", "Contact has no phone");
 
     const { data: instance } = await admin
       .from("whatsapp_instances")
-      .select("instance_name, channel_id")
-      .eq("company_id", company_id)
-      .eq("status", "connected")
-      .maybeSingle();
-    if (!instance?.instance_name) return json({ error: "No connected WhatsApp instance" }, 400);
+      .select("instance_name, channel_id, status")
+      .eq("company_id", company_id).eq("status", "connected").maybeSingle();
+    console.log("[SEND_WA] instance:", instance?.instance_name, instance?.status);
+    if (!instance?.instance_name) return fail("instance", "No connected WhatsApp instance");
 
     const channelId = ticket.channel_id ?? instance.channel_id;
+    const endpoint = `${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`;
+    console.log("[SEND_WA] endpoint:", endpoint);
 
-    // send via Evolution
-    const evoRes = await fetch(`${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`, {
+    const evoRes = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-      body: JSON.stringify({ number: contact.phone_number, text }),
+      body: JSON.stringify({ number: phone, text }),
     });
-    const evoData = await evoRes.json().catch(() => ({}));
+    const evoText = await evoRes.text();
+    let evoData: any = {};
+    try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+    console.log("[SEND_WA] evolution status:", evoRes.status);
+
     if (!evoRes.ok) {
-      return json({ error: "Evolution send failed", detail: evoData }, 502);
+      return fail("evolution_send", `Evolution ${evoRes.status}`, {
+        status: evoRes.status,
+        detail: evoData?.message ?? evoData?.error ?? evoData?.raw ?? "unknown",
+      });
     }
 
     const externalId =
@@ -101,9 +110,8 @@ Deno.serve(async (req) => {
     const { data: inserted, error: insErr } = await admin
       .from("messages")
       .insert({
-        company_id,
-        ticket_id,
-        contact_id: contact.id,
+        company_id, ticket_id,
+        contact_id: contact!.id,
         channel_id: channelId,
         direction: "outbound",
         from_me: true,
@@ -114,17 +122,15 @@ Deno.serve(async (req) => {
         sent_at: nowIso,
         raw: evoData,
       })
-      .select("id")
-      .single();
-    if (insErr) return json({ error: "Failed to save message", detail: insErr.message }, 500);
+      .select("id").single();
+    if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
 
-    await admin
-      .from("tickets")
+    await admin.from("tickets")
       .update({ last_message_at: nowIso, status: "open" })
       .eq("id", ticket_id);
 
     return json({ ok: true, message_id: inserted.id, external_id: externalId });
   } catch (e) {
-    return json({ error: String((e as Error)?.message ?? e) }, 500);
+    return fail("exception", String((e as Error)?.message ?? e));
   }
 });
