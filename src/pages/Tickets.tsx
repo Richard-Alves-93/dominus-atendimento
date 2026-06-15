@@ -435,9 +435,31 @@ const Tickets = () => {
     },
   });
 
+  const pendingForSelected = useMemo(
+    () => pendingMessages.filter((p) => p.ticketId === selectedId),
+    [pendingMessages, selectedId],
+  );
+
+  const visibleMessages = useMemo<MessageRow[]>(() => {
+    const real = (messagesQuery.data ?? []) as MessageRow[];
+    const optimistic: MessageRow[] = pendingForSelected.map((p) => ({
+      id: p.tempId,
+      ticket_id: p.ticketId,
+      direction: "outbound",
+      from_me: true,
+      body: p.body,
+      msg_type: "text",
+      status: p.status === "error" ? "error" : "sending",
+      sent_at: p.createdAt,
+      created_at: p.createdAt,
+      _optimistic: true,
+    }));
+    return [...real, ...optimistic];
+  }, [messagesQuery.data, pendingForSelected]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messagesQuery.data?.length, selectedId]);
+  }, [visibleMessages.length, selectedId]);
 
   const sendMutation = useMutation({
     mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
