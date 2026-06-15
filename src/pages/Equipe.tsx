@@ -129,11 +129,24 @@ export default function Equipe() {
   };
 
   const toggleDept = (id: string) => {
+    setForm((f) => {
+      if (isSingleDeptRole(f.role)) {
+        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id] };
+      }
+      return {
+        ...f,
+        department_ids: f.department_ids.includes(id)
+          ? f.department_ids.filter((x) => x !== id)
+          : [...f.department_ids, id],
+      };
+    });
+  };
+
+  const changeRole = (v: Role) => {
     setForm((f) => ({
       ...f,
-      department_ids: f.department_ids.includes(id)
-        ? f.department_ids.filter((x) => x !== id)
-        : [...f.department_ids, id],
+      role: v,
+      department_ids: isSingleDeptRole(v) ? f.department_ids.slice(0, 1) : f.department_ids,
     }));
   };
 
