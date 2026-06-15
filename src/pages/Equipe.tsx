@@ -236,6 +236,27 @@ export default function Equipe() {
     await load();
   };
 
+  const confirmReset = async () => {
+    if (!resetting || !activeCompanyId) return;
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("reset-company-user-password", {
+      body: { company_id: activeCompanyId, user_id: resetting.user_id },
+    });
+    setBusy(false);
+    const d = data as any;
+    if (error || d?.ok === false) {
+      const msg = d?.error ?? error?.message ?? "Falha";
+      return toast({ title: "Erro ao redefinir senha", description: msg, variant: "destructive" });
+    }
+    toast({
+      title: "Senha redefinida",
+      description: d?.wa_sent
+        ? "Nova senha provisória enviada por WhatsApp."
+        : `Senha redefinida. Envio WhatsApp pendente: ${d?.wa_error ?? "indisponível"}`,
+    });
+    setResetting(null);
+  };
+
   const deptMap = useMemo(() => Object.fromEntries(depts.map((d) => [d.id, d.name])), [depts]);
 
   return (
