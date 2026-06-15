@@ -13,17 +13,76 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-// fail = HTTP 200 with error payload, so frontend can read it
 function fail(step: string, message: string, extra: Record<string, unknown> = {}) {
   console.error("[SEND_WA] fail", step, message, extra);
   return json({ ok: false, error: message, step, ...extra }, 200);
 }
 
+// Background: ship the message to Evolution and patch the row with the final status.
+async function dispatchToEvolution(params: {
+  admin: ReturnType<typeof createClient>;
+  messageId: string;
+  ticketId: string;
+  endpoint: string;
+  phone: string;
+  finalText: string;
+}) {
+  const { admin, messageId, ticketId, endpoint, phone, finalText } = params;
+  const t0 = performance.now();
+  try {
+    const evoRes = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+      body: JSON.stringify({ number: phone, text: finalText }),
+    });
+    const evoText = await evoRes.text();
+    let evoData: any = {};
+    try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+
+    if (!evoRes.ok) {
+      console.error("[SEND_WA] evolution_fail", evoRes.status, evoData?.message ?? evoData?.error);
+      await admin.from("messages").update({
+        delivery_status: "failed",
+        status: "failed",
+        failed_at: new Date().toISOString(),
+        failure_reason: `Evolution ${evoRes.status}: ${evoData?.message ?? evoData?.error ?? "unknown"}`,
+        raw: evoData,
+      }).eq("id", messageId);
+      return;
+    }
+
+    const externalId =
+      evoData?.key?.id ?? evoData?.messageId ?? evoData?.message?.key?.id ?? null;
+    const nowIso = new Date().toISOString();
+
+    await Promise.all([
+      admin.from("messages").update({
+        delivery_status: "sent",
+        status: "sent",
+        external_id: externalId,
+        provider_message_id: externalId,
+        sent_at: nowIso,
+        raw: evoData,
+      }).eq("id", messageId),
+      admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId),
+    ]);
+    console.log("[SEND_WA] dispatched ms=", Math.round(performance.now() - t0));
+  } catch (e) {
+    console.error("[SEND_WA] dispatch_exception", (e as Error)?.message);
+    await admin.from("messages").update({
+      delivery_status: "failed",
+      status: "failed",
+      failed_at: new Date().toISOString(),
+      failure_reason: String((e as Error)?.message ?? e),
+    }).eq("id", messageId);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  const tStart = performance.now();
   try {
-    console.log("[SEND_WA] start");
     if (!EVO_URL || !EVO_KEY) return fail("config", "Evolution API not configured");
 
     const authHeader = req.headers.get("Authorization");
@@ -33,13 +92,14 @@ Deno.serve(async (req) => {
     const token = authHeader.slice("Bearer ".length).trim();
     if (!token) return json({ ok: false, error: "Missing bearer token", step: "auth" }, 401);
 
-    // Validate JWT without depending on session_id claim
+    // ---- auth (JWT verify, no session_id dependency) ----
+    const tAuth0 = performance.now();
     const anonClient = createClient(SUPABASE_URL, ANON_KEY);
     let userId: string | null = null;
     try {
       const claimsRes = await (anonClient.auth as any).getClaims(token);
       if (claimsRes?.data?.claims?.sub) userId = claimsRes.data.claims.sub as string;
-    } catch (_) { /* fall through */ }
+    } catch (_) { /* fallthrough */ }
     if (!userId) {
       const { data: userData, error: userErr } = await anonClient.auth.getUser(token);
       if (userErr || !userData?.user) {
@@ -47,13 +107,12 @@ Deno.serve(async (req) => {
       }
       userId = userData.user.id;
     }
-    console.log("[SEND_WA] user_id:", userId);
+    const tAuth = Math.round(performance.now() - tAuth0);
 
     const payload = await req.json().catch(() => ({} as any));
     const company_id = payload.company_id;
     const ticket_id = payload.ticket_id;
     const text: string | undefined = payload.text ?? payload.body ?? payload.message;
-    console.log("[SEND_WA] payload:", { company_id, ticket_id, has_text: Boolean(text) });
 
     if (!company_id || !ticket_id || !text?.trim()) {
       return fail("payload", "Invalid payload (company_id, ticket_id, text required)");
@@ -61,28 +120,14 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // authz
-    const { data: profile } = await admin
-      .from("profiles").select("is_master").eq("id", userId).maybeSingle();
-    let allowed = profile?.is_master === true;
-    if (!allowed) {
-      const { data: member } = await admin
-        .from("company_users").select("id")
-        .eq("user_id", userId).eq("company_id", company_id).eq("status", "active")
-        .maybeSingle();
-      allowed = Boolean(member);
-    }
-    if (!allowed) return fail("authz", "Forbidden");
-
-    const { data: ticket, error: tErr } = await admin
-      .from("tickets")
-      .select("id, company_id, contact_id, channel_id")
-      .eq("id", ticket_id).eq("company_id", company_id).maybeSingle();
-    if (tErr || !ticket) return fail("ticket", "Ticket not found", { detail: tErr?.message });
-
-    // Parallel fetches: contact, instance, sender profile
-    const [contactRes, instanceRes, senderRes] = await Promise.all([
-      admin.from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle(),
+    // ---- authz + ticket + contact + instance + sender (parallel) ----
+    const tCtx0 = performance.now();
+    const [profileRes, memberRes, ticketRes, instanceRes, senderRes] = await Promise.all([
+      admin.from("profiles").select("is_master").eq("id", userId).maybeSingle(),
+      admin.from("company_users").select("id")
+        .eq("user_id", userId).eq("company_id", company_id).eq("status", "active").maybeSingle(),
+      admin.from("tickets").select("id, company_id, contact_id, channel_id")
+        .eq("id", ticket_id).eq("company_id", company_id).maybeSingle(),
       admin.from("whatsapp_instances")
         .select("instance_name, channel_id, status")
         .eq("company_id", company_id).eq("status", "connected").maybeSingle(),
@@ -91,46 +136,36 @@ Deno.serve(async (req) => {
         .eq("id", userId).maybeSingle(),
     ]);
 
-    const contact = contactRes.data;
-    const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
-    if (!phone) return fail("contact", "Contact has no phone");
+    const allowed = profileRes.data?.is_master === true || Boolean(memberRes.data);
+    if (!allowed) return fail("authz", "Forbidden");
+
+    const ticket = ticketRes.data;
+    if (!ticket) return fail("ticket", "Ticket not found");
 
     const instance = instanceRes.data;
     if (!instance?.instance_name) return fail("instance", "No connected WhatsApp instance");
 
+    // contact (needs ticket.contact_id, so issue after)
+    const { data: contact } = await admin
+      .from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle();
+    const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
+    if (!phone) return fail("contact", "Contact has no phone");
+
     const channelId = ticket.channel_id ?? instance.channel_id;
     const endpoint = `${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`;
 
-    const senderProfile = senderRes.data;
-    const senderName = senderProfile?.public_name ?? senderProfile?.full_name ?? null;
-    // Assinatura: usa signature se preenchida, senão cai para public_name ou full_name.
+    const sp = senderRes.data;
+    const senderName = sp?.public_name ?? sp?.full_name ?? null;
     const sigRaw =
-      (senderProfile?.signature && senderProfile.signature.trim()) ||
-      (senderProfile?.public_name && senderProfile.public_name.trim()) ||
-      (senderProfile?.full_name && senderProfile.full_name.trim()) ||
-      "";
-    const signatureLine = senderProfile?.signature_enabled && sigRaw ? sigRaw : null;
+      (sp?.signature && sp.signature.trim()) ||
+      (sp?.public_name && sp.public_name.trim()) ||
+      (sp?.full_name && sp.full_name.trim()) || "";
+    const signatureLine = sp?.signature_enabled && sigRaw ? sigRaw : null;
     const finalText = signatureLine ? `*${signatureLine}:*\n${text}` : text;
+    const tCtx = Math.round(performance.now() - tCtx0);
 
-    const evoRes = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-      body: JSON.stringify({ number: phone, text: finalText }),
-    });
-    const evoText = await evoRes.text();
-    let evoData: any = {};
-    try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
-
-    if (!evoRes.ok) {
-      return fail("evolution_send", `Evolution ${evoRes.status}`, {
-        status: evoRes.status,
-        detail: evoData?.message ?? evoData?.error ?? evoData?.raw ?? "unknown",
-      });
-    }
-
-    const externalId =
-      evoData?.key?.id ?? evoData?.messageId ?? evoData?.message?.key?.id ?? null;
-
+    // ---- insert message as 'sending' ----
+    const tIns0 = performance.now();
     const nowIso = new Date().toISOString();
     const { data: inserted, error: insErr } = await admin
       .from("messages")
@@ -146,23 +181,34 @@ Deno.serve(async (req) => {
         sent_by_user_id: userId,
         sent_by_name: senderName,
         sent_by_signature: signatureLine,
-        external_id: externalId,
-        provider_message_id: externalId,
-        status: "sent",
-        delivery_status: "sent",
-        sent_at: nowIso,
-        raw: evoData,
+        status: "sending",
+        delivery_status: "sending",
       })
       .select("id").single();
     if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
+    const tIns = Math.round(performance.now() - tIns0);
 
-    // Fire-and-forget ticket update so we can return as fast as possible.
+    // Bump ticket timestamp in background
     admin.from("tickets")
       .update({ last_message_at: nowIso, status: "open" })
       .eq("id", ticket_id)
-      .then(() => {}, (e: any) => console.error("[SEND_WA] ticket update failed", e?.message));
+      .then(() => {}, (e: any) => console.error("[SEND_WA] ticket bump failed", e?.message));
 
-    return json({ ok: true, message_id: inserted.id, external_id: externalId });
+    // Background dispatch to Evolution
+    const bg = dispatchToEvolution({
+      admin, messageId: inserted.id, ticketId: ticket_id, endpoint, phone, finalText,
+    });
+    try { (globalThis as any).EdgeRuntime?.waitUntil?.(bg); } catch (_) {}
+
+    const tTotal = Math.round(performance.now() - tStart);
+    console.log("[SEND_WA] times ms", { auth: tAuth, ctx: tCtx, insert: tIns, total: tTotal });
+
+    return json({
+      ok: true,
+      message_id: inserted.id,
+      delivery_status: "sending",
+      timings: { auth: tAuth, ctx: tCtx, insert: tIns, total: tTotal },
+    });
   } catch (e) {
     return fail("exception", String((e as Error)?.message ?? e));
   }
