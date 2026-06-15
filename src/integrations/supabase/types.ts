@@ -357,7 +357,11 @@ export type Database = {
           media_url: string | null
           msg_type: Database["public"]["Enums"]["message_type"]
           raw: Json
+          raw_body: string | null
           sent_at: string
+          sent_by_name: string | null
+          sent_by_signature: string | null
+          sent_by_user_id: string | null
           status: string | null
           ticket_id: string
         }
@@ -374,7 +378,11 @@ export type Database = {
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
           raw?: Json
+          raw_body?: string | null
           sent_at?: string
+          sent_by_name?: string | null
+          sent_by_signature?: string | null
+          sent_by_user_id?: string | null
           status?: string | null
           ticket_id: string
         }
@@ -391,7 +399,11 @@ export type Database = {
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
           raw?: Json
+          raw_body?: string | null
           sent_at?: string
+          sent_by_name?: string | null
+          sent_by_signature?: string | null
+          sent_by_user_id?: string | null
           status?: string | null
           ticket_id?: string
         }
@@ -435,7 +447,13 @@ export type Database = {
           global_role: Database["public"]["Enums"]["global_role"]
           id: string
           is_master: boolean
+          must_change_password: boolean
+          password_changed_at: string | null
           phone: string | null
+          public_name: string | null
+          signature: string | null
+          signature_enabled: boolean
+          temporary_password_set_at: string | null
           updated_at: string
         }
         Insert: {
@@ -446,7 +464,13 @@ export type Database = {
           global_role?: Database["public"]["Enums"]["global_role"]
           id: string
           is_master?: boolean
+          must_change_password?: boolean
+          password_changed_at?: string | null
           phone?: string | null
+          public_name?: string | null
+          signature?: string | null
+          signature_enabled?: boolean
+          temporary_password_set_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -457,7 +481,13 @@ export type Database = {
           global_role?: Database["public"]["Enums"]["global_role"]
           id?: string
           is_master?: boolean
+          must_change_password?: boolean
+          password_changed_at?: string | null
           phone?: string | null
+          public_name?: string | null
+          signature?: string | null
+          signature_enabled?: boolean
+          temporary_password_set_at?: string | null
           updated_at?: string
         }
         Relationships: []
