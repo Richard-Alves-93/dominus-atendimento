@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
 
     const { data: inst } = await admin
       .from("whatsapp_instances")
-      .select("id, channel_id, company_id")
+      .select("id, channel_id, company_id, instance_name")
       .eq("instance_name", instanceName)
       .maybeSingle();
 
