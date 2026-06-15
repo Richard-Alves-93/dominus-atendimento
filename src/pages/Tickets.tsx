@@ -22,6 +22,9 @@ import {
   RotateCcw,
   AlertCircle,
   AlarmClock,
+  FileText,
+  Download,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
