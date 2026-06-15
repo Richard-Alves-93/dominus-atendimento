@@ -7,7 +7,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
 
-const APP_URL = Deno.env.get("APP_PUBLIC_URL") ?? "https://dominus.lovable.app";
+const APP_URL = Deno.env.get("APP_PUBLIC_URL") ?? "https://dominus-atendimento.lovable.app";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
