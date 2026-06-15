@@ -6,6 +6,17 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
+const EVO_WEBHOOK = Deno.env.get("EVOLUTION_WEBHOOK_URL");
+
+const WEBHOOK_EVENTS = [
+  "QRCODE_UPDATED",
+  "CONNECTION_UPDATE",
+  "MESSAGES_UPSERT",
+  "MESSAGES_UPDATE",
+  "MESSAGES_SET",
+  "MESSAGE_STATUS",
+  "SEND_MESSAGE",
+];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -18,18 +29,59 @@ function fail(step: string, message: string, extra: Record<string, unknown> = {}
   return json({ ok: false, error: message, step, ...extra }, 200);
 }
 
+function evoBase() {
+  return EVO_URL!.replace(/\/$/, "");
+}
+
+async function syncEvolutionWebhook(instanceName: string) {
+  if (!EVO_WEBHOOK) return;
+  const body = {
+    url: EVO_WEBHOOK,
+    enabled: true,
+    webhook_by_events: false,
+    webhookByEvents: false,
+    byEvents: false,
+    webhook_base64: true,
+    webhookBase64: true,
+    base64: true,
+    events: WEBHOOK_EVENTS,
+  };
+  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`, `${evoBase()}/webhook/${instanceName}`];
+  for (const endpoint of endpoints) {
+    for (const payload of [body, { webhook: body }]) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          console.log("[SEND_WA] webhook_sync_ok events=", WEBHOOK_EVENTS);
+          return;
+        }
+        const text = await res.text().catch(() => "");
+        console.warn("[SEND_WA] webhook_sync_failed", res.status, text.slice(0, 160));
+      } catch (e) {
+        console.warn("[SEND_WA] webhook_sync_exception", (e as Error)?.message);
+      }
+    }
+  }
+}
+
 // Background: ship the message to Evolution and patch the row with the final status.
 async function dispatchToEvolution(params: {
   admin: ReturnType<typeof createClient>;
   messageId: string;
   ticketId: string;
   endpoint: string;
+  instanceName: string;
   phone: string;
   finalText: string;
 }) {
-  const { admin, messageId, ticketId, endpoint, phone, finalText } = params;
+  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText } = params;
   const t0 = performance.now();
   try {
+    await syncEvolutionWebhook(instanceName);
     const evoRes = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
@@ -164,7 +216,7 @@ Deno.serve(async (req) => {
     if (!phone) return fail("contact", "Contact has no phone");
 
     const channelId = ticket.channel_id ?? instance.channel_id;
-    const endpoint = `${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`;
+    const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
 
     const sp = senderRes.data;
     const senderName = sp?.public_name ?? sp?.full_name ?? null;
@@ -208,7 +260,7 @@ Deno.serve(async (req) => {
 
     // Background dispatch to Evolution
     const bg = dispatchToEvolution({
-      admin, messageId: inserted.id, ticketId: ticket_id, endpoint, phone, finalText,
+      admin, messageId: inserted.id, ticketId: ticket_id, endpoint, instanceName: instance.instance_name, phone, finalText,
     });
     try { (globalThis as any).EdgeRuntime?.waitUntil?.(bg); } catch (_) {}
 

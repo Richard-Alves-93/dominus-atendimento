@@ -16,6 +16,16 @@ const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
 const EVO_WEBHOOK = Deno.env.get("EVOLUTION_WEBHOOK_URL");
 const EVO_ENABLED = Boolean(EVO_URL && EVO_KEY);
 
+const WEBHOOK_EVENTS = [
+  "QRCODE_UPDATED",
+  "CONNECTION_UPDATE",
+  "MESSAGES_UPSERT",
+  "MESSAGES_UPDATE",
+  "MESSAGES_SET",
+  "MESSAGE_STATUS",
+  "SEND_MESSAGE",
+];
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -35,6 +45,20 @@ function evoHeaders() {
   return {
     "Content-Type": "application/json",
     apikey: EVO_KEY!,
+  };
+}
+
+function evoWebhookConfig() {
+  return {
+    url: EVO_WEBHOOK,
+    enabled: true,
+    webhook_by_events: false,
+    webhookByEvents: false,
+    byEvents: false,
+    webhook_base64: true,
+    webhookBase64: true,
+    base64: true,
+    events: WEBHOOK_EVENTS,
   };
 }
 
@@ -60,6 +84,31 @@ async function evoFetchInstance(instanceName: string) {
   return arr[0] ?? null;
 }
 
+async function evoSyncWebhook(instanceName: string) {
+  if (!EVO_WEBHOOK) return;
+  const body = evoWebhookConfig();
+  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`, `${evoBase()}/webhook/${instanceName}`];
+  for (const endpoint of endpoints) {
+    for (const payload of [body, { webhook: body }]) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: evoHeaders(),
+          body: JSON.stringify(payload),
+        });
+      if (res.ok) {
+        console.log("[WA_CONN] webhook_sync_ok", { instanceName, events: WEBHOOK_EVENTS });
+        return;
+      }
+      const text = await res.text().catch(() => "");
+      console.warn("[WA_CONN] webhook_sync_failed", { instanceName, status: res.status, endpoint: endpoint.replace(evoBase(), ""), body: text.slice(0, 160) });
+      } catch (e) {
+        console.warn("[WA_CONN] webhook_sync_exception", { instanceName, message: (e as Error)?.message });
+      }
+    }
+  }
+}
+
 async function evoCreateInstance(instanceName: string) {
   const body: Record<string, unknown> = {
     instanceName,
@@ -67,16 +116,7 @@ async function evoCreateInstance(instanceName: string) {
     integration: "WHATSAPP-BAILEYS",
   };
   if (EVO_WEBHOOK) {
-    body.webhook = {
-      url: EVO_WEBHOOK,
-      byEvents: false,
-      base64: true,
-      events: [
-        "QRCODE_UPDATED",
-        "CONNECTION_UPDATE",
-        "MESSAGES_UPSERT",
-      ],
-    };
+    body.webhook = evoWebhookConfig();
   }
   const res = await fetch(`${evoBase()}/instance/create`, {
     method: "POST",
@@ -204,6 +244,8 @@ Deno.serve(async (req) => {
         evo = await evoCreateInstance(instance_name);
       }
 
+      await evoSyncWebhook(instance_name);
+
       const { data: existingInst } = await admin
         .from("whatsapp_instances")
         .select("id")
@@ -247,6 +289,7 @@ Deno.serve(async (req) => {
 
       if (EVO_ENABLED && inst?.instance_name) {
         try {
+          await evoSyncWebhook(inst.instance_name);
           const { state } = await evoConnectionState(inst.instance_name);
           const mapped = mapState(state);
           if (mapped !== status) {
