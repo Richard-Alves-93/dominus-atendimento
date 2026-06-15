@@ -317,27 +317,32 @@ const Tickets = () => {
     if (selected.assigned_user_id) return false;
     if (isAdmin) return true;
     if (isManager) {
-      if (!selected.department_id) return true;
+      if (!selected.department_id) return canSeeGeneralQueue;
       return myManagedDeptIds.includes(selected.department_id);
     }
-    // agent: fila geral ou setores dele
-    if (!selected.department_id) return true;
+    // agent
+    if (!selected.department_id) return canSeeGeneralQueue;
     return myDeptIds.includes(selected.department_id);
-  }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds]);
+  }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds, canSeeGeneralQueue]);
 
   const acceptMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
       const nowIso = new Date().toISOString();
+      const patch: Record<string, any> = {
+        assigned_user_id: profile.id,
+        assigned_at: nowIso,
+        assigned_by: profile.id,
+        unread_count: 0,
+        status: "open",
+      };
+      // Auto-fill department if ticket has none and user has exactly one allowed general-queue dept
+      if (!selected.department_id && !isAdmin && generalQueueDeptIds.length === 1) {
+        patch.department_id = generalQueueDeptIds[0];
+      }
       const { error } = await (supabase as any)
         .from("tickets")
-        .update({
-          assigned_user_id: profile.id,
-          assigned_at: nowIso,
-          assigned_by: profile.id,
-          unread_count: 0,
-          status: "open",
-        })
+        .update(patch)
         .eq("id", selected.id);
       if (error) throw error;
     },
