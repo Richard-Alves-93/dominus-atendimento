@@ -176,6 +176,7 @@ Deno.serve(async (req) => {
     const company_id = payload.company_id;
     const ticket_id = payload.ticket_id;
     const text: string | undefined = payload.text ?? payload.body ?? payload.message;
+    const skipSignature: boolean = payload.skip_signature === true;
 
     if (!company_id || !ticket_id || !text?.trim()) {
       return fail("payload", "Invalid payload (company_id, ticket_id, text required)");
