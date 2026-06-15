@@ -35,6 +35,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, LogIn, MoreVertical, Pause, Play } from "lucide-react";
+import { COMPANY_STATUS_LABEL } from "@/lib/departments";
 
 interface Company {
   id: string;
@@ -141,7 +142,7 @@ export default function MasterEmpresas() {
                     <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell>{c.email ?? "—"}</TableCell>
                     <TableCell>{c.phone ?? "—"}</TableCell>
-                    <TableCell><Badge className={badge[c.status]}>{c.status}</Badge></TableCell>
+                    <TableCell><Badge className={badge[c.status]}>{COMPANY_STATUS_LABEL[c.status] ?? c.status}</Badge></TableCell>
                     <TableCell>{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -199,7 +200,7 @@ export default function MasterEmpresas() {
               <Row label="Nome" value={detailsCompany.name} />
               <Row label="E-mail" value={detailsCompany.email ?? "—"} />
               <Row label="Telefone" value={detailsCompany.phone ?? "—"} />
-              <Row label="Status" value={detailsCompany.status} />
+              <Row label="Status" value={COMPANY_STATUS_LABEL[detailsCompany.status] ?? detailsCompany.status} />
               <Row label="Criada em" value={new Date(detailsCompany.created_at).toLocaleString("pt-BR")} />
               <Row label="ID" value={detailsCompany.id} mono />
             </div>

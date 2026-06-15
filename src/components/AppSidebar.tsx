@@ -9,6 +9,7 @@ import {
   CalendarDays,
   LogOut,
   Zap,
+  Building,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -27,8 +28,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 
 const mainItems = [
-  { title: "Dashboard", url: "/app/dashboard", icon: LayoutDashboard },
-  { title: "Tickets", url: "/app/tickets", icon: MessageSquare },
+  { title: "Painel", url: "/app/dashboard", icon: LayoutDashboard },
+  { title: "Atendimentos", url: "/app/tickets", icon: MessageSquare },
   { title: "Contatos", url: "/app/contatos", icon: Users },
   { title: "Campanhas", url: "/app/campanhas", icon: Send },
   { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays },
@@ -36,6 +37,7 @@ const mainItems = [
 
 const configItems = [
   { title: "Conexões", url: "/app/conexoes", icon: Phone },
+  { title: "Setores", url: "/app/setores", icon: Building },
   { title: "Tags", url: "/app/tags", icon: Tag },
   { title: "Configurações", url: "/app/configuracoes", icon: Settings },
 ];
