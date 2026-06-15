@@ -32,16 +32,16 @@ const mainItems = [
   { title: "Painel", url: "/app/dashboard", icon: LayoutDashboard },
   { title: "Atendimentos", url: "/app/tickets", icon: MessageSquare },
   { title: "Contatos", url: "/app/contatos", icon: Users },
-  { title: "Campanhas", url: "/app/campanhas", icon: Send },
-  { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays },
+  { title: "Campanhas", url: "/app/campanhas", icon: Send, adminOnly: true },
+  { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays, adminOnly: true },
 ];
 
 const configItems = [
-  { title: "Conexões", url: "/app/conexoes", icon: Phone },
-  { title: "Setores", url: "/app/setores", icon: Building },
-  { title: "Equipe", url: "/app/equipe", icon: UsersRound },
-  { title: "Tags", url: "/app/tags", icon: Tag },
-  { title: "Configurações", url: "/app/configuracoes", icon: Settings },
+  { title: "Conexões", url: "/app/conexoes", icon: Phone, adminOnly: true },
+  { title: "Setores", url: "/app/setores", icon: Building, adminOnly: true },
+  { title: "Equipe", url: "/app/equipe", icon: UsersRound, adminOnly: true },
+  { title: "Tags", url: "/app/tags", icon: Tag, adminOnly: true },
+  { title: "Configurações", url: "/app/configuracoes", icon: Settings, adminOnly: true },
 ];
 
 export function AppSidebar() {
@@ -49,7 +49,13 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
+  const { activeMembership } = useCompany();
+  const isMaster = profile?.is_master === true || profile?.global_role === "master";
+  const role = activeMembership?.role;
+  const canAdmin = isMaster || role === "owner" || role === "admin" || role === "manager";
+  const filterByRole = <T extends { adminOnly?: boolean }>(items: T[]) =>
+    items.filter((i) => (i.adminOnly ? canAdmin : true));
   const isActive = (path: string) => location.pathname === path;
 
   const handleLogout = async () => {
