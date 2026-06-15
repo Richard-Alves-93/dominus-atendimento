@@ -964,7 +964,32 @@ const Tickets = () => {
       return;
     }
     if (isTransfer) {
+      const previousDeptName =
+        activeDepts.find((d) => d.id === previousDeptId)?.name ?? "Sem setor";
       const newDeptName = activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor";
+      const actorName = profile?.full_name || profile?.email || "Usuário";
+      // Mensagem de sistema no histórico (não enviada ao WhatsApp — apenas registro).
+      try {
+        await (supabase as any).from("messages").insert({
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          contact_id: selected.contact_id,
+          channel_id: selected.channel_id ?? null,
+          direction: "outbound",
+          msg_type: "text",
+          from_me: true,
+          body: `Atendimento transferido de ${previousDeptName} para ${newDeptName} por ${actorName}.`,
+          source: "system",
+          sent_by_user_id: profile?.id ?? null,
+          sent_by_name: actorName,
+          raw: {},
+          status: "system",
+          delivery_status: "sent",
+          sent_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn("system message (dept transfer) failed", e);
+      }
       // Auditoria: troca de setor
       try {
         await (supabase as any).from("audit_logs").insert({
@@ -983,6 +1008,7 @@ const Tickets = () => {
       } catch (e) {
         console.warn("audit_log dept change failed", e);
       }
+      qc.invalidateQueries({ queryKey: ["messages", ticketId] });
       toast({ title: `Atendimento transferido para ${newDeptName}.` });
     } else {
       toast({ title: "Setor definido." });
