@@ -73,7 +73,12 @@ export function MasterLayout({ children, title }: { children: ReactNode; title?:
             </NavLink>
           ))}
         </nav>
-        <div className="p-2 border-t">
+        <div className="p-2 border-t space-y-1">
+          {internal && (
+            <Button variant="ghost" className="w-full justify-start" onClick={goInternalCompany}>
+              <ArrowRightCircle className="w-4 h-4 mr-2" /> Ir para empresa
+            </Button>
+          )}
           <Button variant="ghost" className="w-full justify-start text-destructive" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" /> Sair
           </Button>
