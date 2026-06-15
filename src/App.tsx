@@ -16,6 +16,8 @@ import Tickets from "./pages/Tickets";
 import Contacts from "./pages/Contacts";
 import Conexoes from "./pages/Conexoes";
 import Setores from "./pages/Setores";
+import Equipe from "./pages/Equipe";
+import TrocarSenha from "./pages/TrocarSenha";
 import Placeholder from "./pages/Placeholder";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
@@ -39,6 +41,8 @@ const App = () => (
               <Route path="/cadastro" element={<PublicRoute><Cadastro /></PublicRoute>} />
               <Route path="/selecionar-empresa" element={<SelecionarEmpresa />} />
               <Route path="/empresa-bloqueada" element={<EmpresaBloqueada />} />
+              <Route path="/trocar-senha" element={<TrocarSenha />} />
+
 
               <Route path="/app" element={<ProtectedRoute><Navigate to="/app/dashboard" replace /></ProtectedRoute>} />
               <Route path="/app/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -48,6 +52,7 @@ const App = () => (
               <Route path="/app/agendamentos" element={<ProtectedRoute><Placeholder title="Agendamentos" description="Mensagens agendadas." /></ProtectedRoute>} />
               <Route path="/app/conexoes" element={<ProtectedRoute><Conexoes /></ProtectedRoute>} />
               <Route path="/app/setores" element={<ProtectedRoute><Setores /></ProtectedRoute>} />
+              <Route path="/app/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />
               <Route path="/app/tags" element={<ProtectedRoute><Placeholder title="Tags" description="Classifique contatos e tickets." /></ProtectedRoute>} />
               <Route path="/app/configuracoes" element={<ProtectedRoute><Placeholder title="Configurações" description="Preferências da empresa." /></ProtectedRoute>} />
 

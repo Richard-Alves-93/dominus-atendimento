@@ -10,6 +10,7 @@ import {
   LogOut,
   Zap,
   Building,
+  UsersRound,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -38,6 +39,7 @@ const mainItems = [
 const configItems = [
   { title: "Conexões", url: "/app/conexoes", icon: Phone },
   { title: "Setores", url: "/app/setores", icon: Building },
+  { title: "Equipe", url: "/app/equipe", icon: UsersRound },
   { title: "Tags", url: "/app/tags", icon: Tag },
   { title: "Configurações", url: "/app/configuracoes", icon: Settings },
 ];
