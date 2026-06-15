@@ -471,6 +471,26 @@ export default function Equipe() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset password confirmation */}
+      <Dialog open={!!resetting} onOpenChange={(o) => !o && setResetting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogDescription>
+              Deseja redefinir a senha de {resetting?.profile?.full_name ?? "este usuário"}? Uma nova senha provisória
+              será enviada por WhatsApp e o usuário será obrigado a trocar a senha no próximo acesso.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetting(null)}>Cancelar</Button>
+            <Button onClick={confirmReset} disabled={busy}>
+              {busy && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+              Redefinir senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
