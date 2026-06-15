@@ -84,6 +84,8 @@ interface MessageRow {
   delivery_status?: string | null;
   sent_at: string;
   created_at: string;
+  source?: string | null;
+  sent_by_name?: string | null;
   _optimistic?: boolean;
 }
 
