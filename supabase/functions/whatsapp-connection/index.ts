@@ -240,6 +240,8 @@ Deno.serve(async (req) => {
         evo = await evoCreateInstance(instance_name);
       }
 
+      await evoSyncWebhook(instance_name);
+
       const { data: existingInst } = await admin
         .from("whatsapp_instances")
         .select("id")
@@ -283,6 +285,7 @@ Deno.serve(async (req) => {
 
       if (EVO_ENABLED && inst?.instance_name) {
         try {
+          await evoSyncWebhook(inst.instance_name);
           const { state } = await evoConnectionState(inst.instance_name);
           const mapped = mapState(state);
           if (mapped !== status) {
