@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
         raw_body: text,
         sent_by_user_id: userId,
         sent_by_name: senderName,
-        sent_by_signature: signatureLine,
+        sent_by_signature: signatureLineEffective,
         status: "sending",
         delivery_status: "sending",
       })
