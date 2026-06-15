@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, Send, Phone, MoreVertical, Check, CheckCheck, MessageSquare, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 type TicketStatus = "open" | "pending" | "closed";
@@ -21,6 +22,8 @@ interface TicketRow {
   unread_count: number;
   last_message_at: string | null;
   subject: string | null;
+  department_id: string | null;
+  assigned_user_id: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
 }
 
@@ -58,25 +61,54 @@ function fmtTime(iso?: string | null) {
 
 const Tickets = () => {
   const qc = useQueryClient();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const { profile } = useAuth();
+  const isMaster = profile?.is_master === true || profile?.global_role === "master";
+  const role = activeMembership?.role;
+  const isAdmin = isMaster || role === "owner" || role === "admin";
+  const isManager = role === "manager";
   const [filter, setFilter] = useState<TicketStatus>("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
+  // Fetch user's departments for current company
+  const myDeptsQuery = useQuery({
+    queryKey: ["my-depts", activeCompanyId, profile?.id],
+    enabled: !!activeCompanyId && !!profile?.id && !isAdmin,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("department_users")
+        .select("department_id, role")
+        .eq("company_id", activeCompanyId!)
+        .eq("user_id", profile!.id)
+        .eq("status", "active");
+      return (data ?? []) as { department_id: string; role: string }[];
+    },
+  });
+
+  const myDeptIds = (myDeptsQuery.data ?? []).map((d) => d.department_id);
+
   const ticketsQuery = useQuery({
-    queryKey: ["tickets", activeCompanyId, filter],
-    enabled: !!activeCompanyId,
+    queryKey: ["tickets", activeCompanyId, filter, profile?.id, isAdmin, myDeptIds.join(",")],
+    enabled: !!activeCompanyId && (isAdmin || myDeptsQuery.isFetched || !profile?.id),
     refetchInterval: 5000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("tickets")
-        .select("id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, contact:contacts(id, name, phone_number, avatar_url)")
+        .select("id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url)")
         .eq("company_id", activeCompanyId!)
         .eq("status", filter)
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .limit(100);
+      if (!isAdmin && profile?.id) {
+        // Manager/agent: tickets in my departments OR assigned to me OR general queue (no dept)
+        const parts: string[] = [`assigned_user_id.eq.${profile.id}`, `department_id.is.null`];
+        if (myDeptIds.length > 0) parts.push(`department_id.in.(${myDeptIds.join(",")})`);
+        q = q.or(parts.join(","));
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as TicketRow[];
     },
