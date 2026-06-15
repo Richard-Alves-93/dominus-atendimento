@@ -244,7 +244,14 @@ Deno.serve(async (req) => {
         evo = await evoCreateInstance(instance_name);
       }
 
-      await evoSyncWebhook(instance_name);
+      let webhookOk = false;
+      let webhookErr: string | null = null;
+      try {
+        await evoSyncWebhook(instance_name);
+        webhookOk = true;
+      } catch (e) {
+        webhookErr = (e as Error)?.message ?? "unknown";
+      }
 
       const { data: existingInst } = await admin
         .from("whatsapp_instances")
@@ -252,10 +259,19 @@ Deno.serve(async (req) => {
         .eq("channel_id", channel.id)
         .maybeSingle();
 
+      const syncFields = webhookOk
+        ? {
+            webhook_configured: true,
+            events_configured: true,
+            last_settings_sync_at: new Date().toISOString(),
+            settings_sync_error: null,
+          }
+        : { settings_sync_error: webhookErr };
+
       if (existingInst) {
         await admin
           .from("whatsapp_instances")
-          .update({ status: "pending", qr_code: evo.qr_code, instance_name })
+          .update({ status: "pending", qr_code: evo.qr_code, instance_name, ...syncFields })
           .eq("id", existingInst.id);
       } else {
         await admin.from("whatsapp_instances").insert({
@@ -264,6 +280,7 @@ Deno.serve(async (req) => {
           instance_name,
           status: "pending",
           qr_code: evo.qr_code,
+          ...syncFields,
         });
       }
 
