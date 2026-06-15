@@ -238,9 +238,7 @@ const Tickets = () => {
     [tickets, selectedId],
   );
 
-  useEffect(() => {
-    if (!selectedId && tickets.length > 0) setSelectedId(tickets[0].id);
-  }, [tickets, selectedId]);
+  // Não selecionar nenhum atendimento automaticamente — o usuário escolhe.
 
   // Permission to manage current selected ticket
   const canEditSelected = useMemo(() => {
@@ -284,13 +282,19 @@ const Tickets = () => {
     },
   });
 
-  // Zero unread on open
+  // Zero unread on open (DB + cache otimista)
   useEffect(() => {
     if (!selected || (selected.unread_count ?? 0) === 0) return;
+    const ticketId = selected.id;
+    // Atualiza cache de todas as queries de tickets desta empresa
+    qc.setQueriesData<TicketRow[] | undefined>(
+      { queryKey: ["tickets", activeCompanyId] },
+      (old) => (old ? old.map((t) => (t.id === ticketId ? { ...t, unread_count: 0 } : t)) : old),
+    );
     (supabase as any)
       .from("tickets")
       .update({ unread_count: 0 })
-      .eq("id", selected.id)
+      .eq("id", ticketId)
       .then(() => {
         qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
       });
@@ -638,9 +642,9 @@ const Tickets = () => {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-secondary/20">
-            <div className="text-center">
+            <div className="text-center px-6">
               <MessageSquare className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground">Selecione uma conversa</p>
+              <p className="text-muted-foreground">Selecione um atendimento para visualizar a conversa.</p>
             </div>
           </div>
         )}
