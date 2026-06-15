@@ -34,6 +34,7 @@ export default function Configuracoes() {
   const [allowTakeover, setAllowTakeover] = useState(true);
   const [stalledMinutes, setStalledMinutes] = useState(15);
   const [sameDeptOnly, setSameDeptOnly] = useState(true);
+  const [notifyCustomerOnTransfer, setNotifyCustomerOnTransfer] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
