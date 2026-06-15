@@ -27,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 
 const mainItems = [
   { title: "Painel", url: "/app/dashboard", icon: LayoutDashboard },
