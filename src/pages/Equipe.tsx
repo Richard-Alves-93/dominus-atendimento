@@ -61,6 +61,7 @@ export default function Equipe() {
   const [disabling, setDisabling] = useState<Member | null>(null);
   const [disableReason, setDisableReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetting, setResetting] = useState<Member | null>(null);
 
   const empty = {
     full_name: "", email: "", phone: "",
