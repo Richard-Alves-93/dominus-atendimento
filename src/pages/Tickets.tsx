@@ -172,8 +172,14 @@ const Tickets = () => {
         .limit(200);
 
       // status filter
-      if (filter === "open" || filter === "pending" || filter === "closed") {
-        q = q.eq("status", filter);
+      if (filter === "pending") {
+        // Pendentes = não aceitos, não fechados, com unread_count > 0
+        q = q.is("assigned_user_id", null).neq("status", "closed").gt("unread_count", 0);
+      } else if (filter === "open") {
+        // Abertos = aceitos/em atendimento
+        q = q.eq("status", "open").not("assigned_user_id", "is", null);
+      } else if (filter === "closed") {
+        q = q.eq("status", "closed");
       } else if (filter === "fila") {
         q = q.is("department_id", null).is("assigned_user_id", null).neq("status", "closed");
       } else if (filter === "meus" && profile?.id) {
@@ -282,23 +288,47 @@ const Tickets = () => {
     },
   });
 
-  // Zero unread on open (DB + cache otimista)
-  useEffect(() => {
-    if (!selected || (selected.unread_count ?? 0) === 0) return;
-    const ticketId = selected.id;
-    // Atualiza cache de todas as queries de tickets desta empresa
-    qc.setQueriesData<TicketRow[] | undefined>(
-      { queryKey: ["tickets", activeCompanyId] },
-      (old) => (old ? old.map((t) => (t.id === ticketId ? { ...t, unread_count: 0 } : t)) : old),
-    );
-    (supabase as any)
-      .from("tickets")
-      .update({ unread_count: 0 })
-      .eq("id", ticketId)
-      .then(() => {
-        qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
-      });
-  }, [selected?.id]);
+  // unread_count só zera ao aceitar — não zerar apenas por visualizar.
+
+  const isPendingAcceptance = !!selected && !selected.assigned_user_id && selected.status !== "closed";
+  const canAcceptSelected = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (selected.status === "closed") return false;
+    if (selected.assigned_user_id) return false;
+    if (isAdmin) return true;
+    if (isManager) {
+      if (!selected.department_id) return true;
+      return myManagedDeptIds.includes(selected.department_id);
+    }
+    // agent: fila geral ou setores dele
+    if (!selected.department_id) return true;
+    return myDeptIds.includes(selected.department_id);
+  }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds]);
+
+  const acceptMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
+      const nowIso = new Date().toISOString();
+      const { error } = await (supabase as any)
+        .from("tickets")
+        .update({
+          assigned_user_id: profile.id,
+          assigned_at: nowIso,
+          assigned_by: profile.id,
+          unread_count: 0,
+          status: "open",
+        })
+        .eq("id", selected.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Atendimento aceito" });
+      qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Falha ao aceitar", description: e.message, variant: "destructive" });
+    },
+  });
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
@@ -609,6 +639,26 @@ const Tickets = () => {
               {selected.status === "closed" ? (
                 <div className="text-center text-sm text-muted-foreground py-2">
                   Este atendimento está fechado. Reabra para enviar mensagens.
+                </div>
+              ) : isPendingAcceptance ? (
+                <div className="flex flex-col items-center gap-2 py-2 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Este atendimento ainda não foi iniciado.
+                    <br />
+                    Aceite o atendimento para responder ao cliente.
+                  </p>
+                  <Button
+                    onClick={() => acceptMutation.mutate()}
+                    disabled={!canAcceptSelected || acceptMutation.isPending}
+                    className="gradient-primary text-primary-foreground rounded-full px-5"
+                  >
+                    {acceptMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <UserPlus className="w-4 h-4 mr-2" />
+                    )}
+                    Aceitar atendimento
+                  </Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
