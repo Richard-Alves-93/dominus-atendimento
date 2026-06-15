@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          changed_by: string | null
+          company_id: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          new_assigned_user_id: string | null
+          previous_assigned_user_id: string | null
+          reason: string | null
+          ticket_id: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          company_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          new_assigned_user_id?: string | null
+          previous_assigned_user_id?: string | null
+          reason?: string | null
+          ticket_id?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          company_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          new_assigned_user_id?: string | null
+          previous_assigned_user_id?: string | null
+          reason?: string | null
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channel_sync_logs: {
         Row: {
           channel_id: string | null
@@ -153,6 +207,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      company_settings: {
+        Row: {
+          allow_stalled_takeover: boolean
+          company_id: string
+          created_at: string
+          same_department_only: boolean
+          stalled_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          allow_stalled_takeover?: boolean
+          company_id: string
+          created_at?: string
+          same_department_only?: boolean
+          stalled_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          allow_stalled_takeover?: boolean
+          company_id?: string
+          created_at?: string
+          same_department_only?: boolean
+          stalled_minutes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_users: {
         Row: {
@@ -302,6 +391,7 @@ export type Database = {
       departments: {
         Row: {
           allow_general_queue: boolean
+          allow_stalled_takeover: boolean
           company_id: string
           created_at: string
           deleted_at: string | null
@@ -314,6 +404,7 @@ export type Database = {
         }
         Insert: {
           allow_general_queue?: boolean
+          allow_stalled_takeover?: boolean
           company_id: string
           created_at?: string
           deleted_at?: string | null
@@ -326,6 +417,7 @@ export type Database = {
         }
         Update: {
           allow_general_queue?: boolean
+          allow_stalled_takeover?: boolean
           company_id?: string
           created_at?: string
           deleted_at?: string | null
