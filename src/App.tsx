@@ -19,6 +19,7 @@ import Placeholder from "./pages/Placeholder";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
+import EmpresaBloqueada from "./pages/EmpresaBloqueada";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
               <Route path="/cadastro" element={<PublicRoute><Cadastro /></PublicRoute>} />
               <Route path="/selecionar-empresa" element={<SelecionarEmpresa />} />
+              <Route path="/empresa-bloqueada" element={<EmpresaBloqueada />} />
 
               <Route path="/app" element={<ProtectedRoute><Navigate to="/app/dashboard" replace /></ProtectedRoute>} />
               <Route path="/app/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

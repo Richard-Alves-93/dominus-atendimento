@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Loader2 } from "lucide-react";
+import { isCompanyAllowed } from "@/lib/companyStatus";
 
 function FullPageLoader() {
   return (
@@ -18,25 +19,32 @@ export function PublicRoute({ children }: { children: ReactNode }) {
   if (loading) return <FullPageLoader />;
   if (user) {
     if (isMaster) return <Navigate to="/master" replace />;
-    if (memberships.length === 1) return <Navigate to="/app" replace />;
-    if (memberships.length > 1) return <Navigate to="/selecionar-empresa" replace />;
+    const allowed = memberships.filter((m) => isCompanyAllowed(m.company?.status));
+    if (memberships.length > 0 && allowed.length === 0) return <Navigate to="/empresa-bloqueada" replace />;
+    if (allowed.length === 1) return <Navigate to="/app" replace />;
+    if (allowed.length > 1) return <Navigate to="/selecionar-empresa" replace />;
   }
   return <>{children}</>;
 }
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, profile, memberships, loading } = useAuth();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, isImpersonating } = useCompany();
   const location = useLocation();
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
   if (loading) return <FullPageLoader />;
   if (!user) return <Navigate to="/auth" replace state={{ from: location }} />;
   if (isMaster) {
     if (!activeCompanyId) return <Navigate to="/master" replace />;
+    // Master can access suspended companies (impersonation/internal) - banner shown
     return <>{children}</>;
   }
   if (memberships.length === 0) return <Navigate to="/auth" replace />;
-  if (memberships.length > 1 && !activeCompanyId) return <Navigate to="/selecionar-empresa" replace />;
+  const allowed = memberships.filter((m) => isCompanyAllowed(m.company?.status));
+  if (allowed.length === 0) return <Navigate to="/empresa-bloqueada" replace />;
+  if (allowed.length > 1 && !activeCompanyId) return <Navigate to="/selecionar-empresa" replace />;
+  const active = memberships.find((m) => m.company_id === activeCompanyId) ?? allowed[0];
+  if (!isCompanyAllowed(active.company?.status)) return <Navigate to="/empresa-bloqueada" replace />;
   return <>{children}</>;
 }
 
