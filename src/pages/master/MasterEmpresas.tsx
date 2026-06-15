@@ -5,10 +5,17 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { LogIn } from "lucide-react";
+import { LogIn, MoreVertical } from "lucide-react";
 
 interface Company {
   id: string;
@@ -79,9 +86,29 @@ export default function MasterEmpresas() {
                   <TableCell><Badge className={badge[c.status]}>{c.status}</Badge></TableCell>
                   <TableCell>{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => enterCompany(c)} disabled={!isMaster}>
-                      <LogIn className="w-3.5 h-3.5 mr-1.5" /> Entrar como empresa
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!isMaster}>
+                          <MoreVertical className="w-4 h-4" />
+                          <span className="sr-only">Abrir menu de ações</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => enterCompany(c)} disabled={!isMaster}>
+                          <LogIn className="w-3.5 h-3.5 mr-2" /> Entrar como empresa
+                        </DropdownMenuItem>
+                        {/* Futuro:
+                        <DropdownMenuItem>Ver detalhes</DropdownMenuItem>
+                        <DropdownMenuItem>Editar empresa</DropdownMenuItem>
+                        <DropdownMenuItem>Ver usuários</DropdownMenuItem>
+                        <DropdownMenuItem>Ver canais</DropdownMenuItem>
+                        <DropdownMenuItem>Alterar status</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive">Suspender empresa</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive">Excluir empresa</DropdownMenuItem>
+                        */}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
