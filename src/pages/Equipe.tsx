@@ -26,9 +26,11 @@ import { formatPhoneDisplay, normalizePhone, isValidPhone, onlyDigits } from "@/
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
 const ROLE_LABEL: Record<Role, string> = {
-  owner: "Dono", admin: "Administrador", manager: "Gerente",
+  owner: "Administrador", admin: "Administrador", manager: "Gerente",
   agent: "Atendente", financial: "Financeiro",
 };
+const SINGLE_DEPT_ROLES: Role[] = ["agent", "financial"];
+const isSingleDeptRole = (r: Role) => SINGLE_DEPT_ROLES.includes(r);
 
 interface Member {
   id: string;
