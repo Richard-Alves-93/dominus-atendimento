@@ -43,6 +43,9 @@ export function AppLayout({ children, title }: AppLayoutProps) {
               <ShieldAlert className="w-4 h-4 shrink-0" />
               <span className="flex-1 truncate">
                 Você está acessando a empresa <strong>{impersonatedCompanyName}</strong> como Master.
+                {activeMembership?.company?.status && activeMembership.company.status !== "active" && activeMembership.company.status !== "trial" && (
+                  <> Esta empresa está <strong>{activeMembership.company.status}</strong>.</>
+                )}
               </span>
             </div>
           )}
