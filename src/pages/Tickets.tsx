@@ -130,7 +130,11 @@ const Tickets = () => {
         body: { company_id: activeCompanyId, ticket_id: selected.id, text: body },
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      const d = data as any;
+      if (d?.ok === false || d?.error) {
+        const detail = d?.detail ? ` — ${d.detail}` : "";
+        throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${detail}`);
+      }
       return data;
     },
     onSuccess: () => {
