@@ -25,11 +25,16 @@ export function PublicRoute({ children }: { children: ReactNode }) {
 }
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, memberships, loading } = useAuth();
+  const { user, profile, memberships, loading } = useAuth();
   const { activeCompanyId } = useCompany();
   const location = useLocation();
+  const isMaster = profile?.is_master === true || profile?.global_role === "master";
   if (loading) return <FullPageLoader />;
   if (!user) return <Navigate to="/auth" replace state={{ from: location }} />;
+  if (isMaster) {
+    if (!activeCompanyId) return <Navigate to="/master" replace />;
+    return <>{children}</>;
+  }
   if (memberships.length === 0) return <Navigate to="/auth" replace />;
   if (memberships.length > 1 && !activeCompanyId) return <Navigate to="/selecionar-empresa" replace />;
   return <>{children}</>;
