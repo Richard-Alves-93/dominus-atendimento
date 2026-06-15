@@ -245,14 +245,14 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
   }
 }
 
-async function handleMessageUpdate(admin: any, inst: any, payload: any) {
+async function handleMessageUpdate(admin: any, inst: any, payload: any, source = "message_update") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const u of dataArr) {
     const providerId: string | undefined =
       u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id ?? u?.update?.key?.id;
     const statusRaw =
       u?.status ?? u?.update?.status ?? u?.messageStatus ?? u?.update?.messageStatus;
-    await patchOutboundStatus(admin, inst, providerId ?? null, statusRaw, "message_update");
+    await patchOutboundStatus(admin, inst, providerId ?? null, statusRaw, source);
   }
 }
 
@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
       normalized === "SEND_MESSAGE" ||
       normalized === "MESSAGES_SET"
     ) {
-      await handleMessageUpdate(admin, inst, payload);
+      await handleMessageUpdate(admin, inst, payload, normalized.toLowerCase());
     }
 
     await admin.from("channel_sync_logs").insert({
