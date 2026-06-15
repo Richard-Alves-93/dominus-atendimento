@@ -22,7 +22,6 @@ const WEBHOOK_EVENTS = [
   "MESSAGES_UPSERT",
   "MESSAGES_UPDATE",
   "MESSAGES_SET",
-  "MESSAGE_STATUS",
   "SEND_MESSAGE",
 ];
 
@@ -87,7 +86,7 @@ async function evoFetchInstance(instanceName: string) {
 async function evoSyncWebhook(instanceName: string) {
   if (!EVO_WEBHOOK) return;
   const body = evoWebhookConfig();
-  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`, `${evoBase()}/webhook/${instanceName}`];
+  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`];
   for (const endpoint of endpoints) {
     for (const payload of [body, { webhook: body }]) {
       try {
