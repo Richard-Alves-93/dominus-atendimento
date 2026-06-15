@@ -616,19 +616,63 @@ const Tickets = () => {
   //  • unread_count > 0
   //  • última mensagem é do cliente
   //  • tempo desde a última mensagem do cliente >= stalled_minutes
+  // Tick a cada 30s para recalcular sem F5
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTs(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+  // Refetch leve periódico para garantir frescor da timeline
+  useEffect(() => {
+    if (!selectedId) return;
+    const id = window.setInterval(() => {
+      void qc.invalidateQueries({ queryKey: ["messages", selectedId] });
+      void qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+    }, 60000);
+    return () => window.clearInterval(id);
+  }, [selectedId, activeCompanyId, qc]);
+
   const stalledInfo = useMemo(() => {
     if (!selected) return { stalled: false, minutes: 0 };
     if (selected.status !== "open") return { stalled: false, minutes: 0 };
     if (!selected.assigned_user_id) return { stalled: false, minutes: 0 };
     if ((selected.unread_count ?? 0) <= 0) return { stalled: false, minutes: 0 };
     const list = (messagesQuery.data ?? []) as MessageRow[];
-    if (list.length === 0) return { stalled: false, minutes: 0 };
-    const last = list[list.length - 1];
-    if (!last || last.from_me) return { stalled: false, minutes: 0 };
-    const ts = new Date(last.sent_at || last.created_at).getTime();
-    const ageMin = Math.floor((Date.now() - ts) / 60000);
-    return { stalled: ageMin >= settings.stalled_minutes, minutes: ageMin };
-  }, [selected, messagesQuery.data, settings.stalled_minutes]);
+    // Última mensagem inbound (do cliente)
+    let lastInboundTs: number | null = null;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (!list[i].from_me) {
+        lastInboundTs = new Date(list[i].sent_at || list[i].created_at).getTime();
+        break;
+      }
+    }
+    // Fallback para tickets.last_message_at quando ainda não carregou mensagens
+    if (lastInboundTs == null && selected.last_message_at) {
+      lastInboundTs = new Date(selected.last_message_at).getTime();
+    }
+    if (lastInboundTs == null) return { stalled: false, minutes: 0 };
+    // Se a última mensagem da lista é outbound, responsável já respondeu
+    if (list.length > 0 && list[list.length - 1].from_me) {
+      return { stalled: false, minutes: 0 };
+    }
+    const elapsedMs = nowTs - lastInboundTs;
+    const ageMin = Math.floor(elapsedMs / 60000);
+    const stalled = elapsedMs >= settings.stalled_minutes * 60000;
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.debug("[STALLED_AUDIT]", {
+        ticketId: selected.id,
+        assigned_user_id: selected.assigned_user_id,
+        unread_count: selected.unread_count,
+        lastMessageFromMe: list.length > 0 ? list[list.length - 1].from_me : null,
+        lastInboundAt: new Date(lastInboundTs).toISOString(),
+        stalledMinutes: settings.stalled_minutes,
+        elapsedMinutes: ageMin,
+        isStalled: stalled,
+      });
+    }
+    return { stalled, minutes: ageMin };
+  }, [selected, messagesQuery.data, settings.stalled_minutes, nowTs]);
 
   // Setor do ticket: também precisa permitir takeover quando regra exige mesmo setor
   const selectedDept = useMemo(
@@ -1092,13 +1136,21 @@ const Tickets = () => {
                 </div>
               ) : isAssignedToOther ? (
                 <div className="flex flex-col items-center gap-2 py-2 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Este atendimento está sendo realizado por{" "}
-                    <span className="font-medium text-foreground">
-                      {selected.assignee?.full_name || selected.assignee?.email || "outro atendente"}
-                    </span>
-                    .
-                  </p>
+                  {stalledInfo.stalled ? (
+                    <p className="text-sm text-foreground">
+                      Este atendimento está parado há mais de{" "}
+                      <span className="font-medium">{stalledInfo.minutes} min</span>.
+                      {canTakeOverStalled ? " Você pode assumir para responder ao cliente." : ""}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Este atendimento está sendo realizado por{" "}
+                      <span className="font-medium text-foreground">
+                        {selected.assignee?.full_name || selected.assignee?.email || "outro atendente"}
+                      </span>
+                      .
+                    </p>
+                  )}
                   {canTakeOverSelected ? (
                     <Button
                       onClick={() => setTakeOverOpen(true)}
