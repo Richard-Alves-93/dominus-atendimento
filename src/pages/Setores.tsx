@@ -41,6 +41,7 @@ interface Department {
   deleted_at: string | null;
   created_at: string;
   allow_general_queue?: boolean;
+  allow_stalled_takeover?: boolean;
 }
 
 const badge: Record<string, string> = {
