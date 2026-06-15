@@ -440,10 +440,10 @@ const Tickets = () => {
   }, [messagesQuery.data?.length, selectedId]);
 
   const sendMutation = useMutation({
-    mutationFn: async (body: string) => {
-      if (!activeCompanyId || !selected) throw new Error("Selecione um ticket");
+    mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
+      if (!activeCompanyId) throw new Error("Empresa não selecionada");
       const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
-        body: { company_id: activeCompanyId, ticket_id: selected.id, text: body },
+        body: { company_id: activeCompanyId, ticket_id: vars.ticketId, text: vars.body },
       });
       if (error) throw error;
       const d = data as any;
@@ -451,22 +451,38 @@ const Tickets = () => {
         const detail = d?.detail ? ` — ${d.detail}` : "";
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${detail}`);
       }
-      return data;
+      return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
-    onSuccess: () => {
-      setText("");
-      qc.invalidateQueries({ queryKey: ["messages", selectedId] });
+    onSuccess: (res) => {
+      // Remove optimistic; the refetch will bring the real persisted message.
+      setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
+      qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
       qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
     },
-    onError: (e: Error) => {
-      toast({ title: "Falha ao enviar", description: e.message, variant: "destructive" });
+    onError: (e: Error, vars) => {
+      setPendingMessages((prev) =>
+        prev.map((p) => (p.tempId === vars.tempId ? { ...p, status: "error" } : p)),
+      );
+      toast({
+        title: "Não foi possível enviar a mensagem. Tente novamente.",
+        description: e.message,
+        variant: "destructive",
+      });
     },
   });
 
   const handleSend = () => {
     const v = text.trim();
-    if (!v || sendMutation.isPending) return;
-    sendMutation.mutate(v);
+    if (!v || !selected) return;
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const ticketId = selected.id;
+    setPendingMessages((prev) => [
+      ...prev,
+      { tempId, ticketId, body: v, createdAt: new Date().toISOString(), status: "sending" },
+    ]);
+    setText("");
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+    sendMutation.mutate({ body: v, tempId, ticketId });
   };
 
   const updateTicket = async (patch: Record<string, any>, successMsg: string) => {
