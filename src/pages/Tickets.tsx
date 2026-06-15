@@ -625,6 +625,7 @@ const Tickets = () => {
         { event: "*", schema: "public", table: "tickets", filter: `company_id=eq.${activeCompanyId}` },
         () => {
           qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+          qc.invalidateQueries({ queryKey: ["ticket-timelines", activeCompanyId] });
         },
       )
       .subscribe();
