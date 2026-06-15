@@ -82,6 +82,15 @@ interface MessageRow {
   status: string | null;
   sent_at: string;
   created_at: string;
+  _optimistic?: boolean;
+}
+
+interface PendingMessage {
+  tempId: string;
+  ticketId: string;
+  body: string;
+  createdAt: string;
+  status: "sending" | "error";
 }
 
 interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean }
@@ -133,6 +142,7 @@ const Tickets = () => {
   const [takeOverOpen, setTakeOverOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
   const [pendingUserId, setPendingUserId] = useState<string>("");
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Departments of company
@@ -425,15 +435,37 @@ const Tickets = () => {
     },
   });
 
+  const pendingForSelected = useMemo(
+    () => pendingMessages.filter((p) => p.ticketId === selectedId),
+    [pendingMessages, selectedId],
+  );
+
+  const visibleMessages = useMemo<MessageRow[]>(() => {
+    const real = (messagesQuery.data ?? []) as MessageRow[];
+    const optimistic: MessageRow[] = pendingForSelected.map((p) => ({
+      id: p.tempId,
+      ticket_id: p.ticketId,
+      direction: "outbound",
+      from_me: true,
+      body: p.body,
+      msg_type: "text",
+      status: p.status === "error" ? "error" : "sending",
+      sent_at: p.createdAt,
+      created_at: p.createdAt,
+      _optimistic: true,
+    }));
+    return [...real, ...optimistic];
+  }, [messagesQuery.data, pendingForSelected]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messagesQuery.data?.length, selectedId]);
+  }, [visibleMessages.length, selectedId]);
 
   const sendMutation = useMutation({
-    mutationFn: async (body: string) => {
-      if (!activeCompanyId || !selected) throw new Error("Selecione um ticket");
+    mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
+      if (!activeCompanyId) throw new Error("Empresa não selecionada");
       const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
-        body: { company_id: activeCompanyId, ticket_id: selected.id, text: body },
+        body: { company_id: activeCompanyId, ticket_id: vars.ticketId, text: vars.body },
       });
       if (error) throw error;
       const d = data as any;
@@ -441,22 +473,38 @@ const Tickets = () => {
         const detail = d?.detail ? ` — ${d.detail}` : "";
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${detail}`);
       }
-      return data;
+      return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
-    onSuccess: () => {
-      setText("");
-      qc.invalidateQueries({ queryKey: ["messages", selectedId] });
+    onSuccess: (res) => {
+      // Remove optimistic; the refetch will bring the real persisted message.
+      setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
+      qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
       qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
     },
-    onError: (e: Error) => {
-      toast({ title: "Falha ao enviar", description: e.message, variant: "destructive" });
+    onError: (e: Error, vars) => {
+      setPendingMessages((prev) =>
+        prev.map((p) => (p.tempId === vars.tempId ? { ...p, status: "error" } : p)),
+      );
+      toast({
+        title: "Não foi possível enviar a mensagem. Tente novamente.",
+        description: e.message,
+        variant: "destructive",
+      });
     },
   });
 
   const handleSend = () => {
     const v = text.trim();
-    if (!v || sendMutation.isPending) return;
-    sendMutation.mutate(v);
+    if (!v || !selected) return;
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const ticketId = selected.id;
+    setPendingMessages((prev) => [
+      ...prev,
+      { tempId, ticketId, body: v, createdAt: new Date().toISOString(), status: "sending" },
+    ]);
+    setText("");
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+    sendMutation.mutate({ body: v, tempId, ticketId });
   };
 
   const updateTicket = async (patch: Record<string, any>, successMsg: string) => {
@@ -726,18 +774,20 @@ const Tickets = () => {
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
                 </div>
-              ) : (messagesQuery.data ?? []).length === 0 ? (
+              ) : visibleMessages.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8">
                   Nenhuma mensagem ainda
                 </div>
               ) : (
-                (messagesQuery.data ?? []).map((m) => (
+                visibleMessages.map((m) => (
                   <div key={m.id} className={`flex ${m.from_me ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                         m.from_me
                           ? "bg-primary text-primary-foreground rounded-br-md"
                           : "bg-card text-foreground shadow-card rounded-bl-md"
+                      } ${m._optimistic && m.status === "sending" ? "opacity-70" : ""} ${
+                        m.status === "error" ? "ring-1 ring-destructive" : ""
                       }`}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
@@ -747,12 +797,20 @@ const Tickets = () => {
                         className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/60" : "text-muted-foreground"}`}
                       >
                         <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
-                        {m.from_me &&
+                        {m.from_me && m._optimistic ? (
+                          m.status === "error" ? (
+                            <span className="text-[10px] text-destructive-foreground/90">Erro ao enviar</span>
+                          ) : (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          )
+                        ) : (
+                          m.from_me &&
                           (m.status === "read" ? (
                             <CheckCheck className="w-3.5 h-3.5" />
                           ) : (
                             <Check className="w-3.5 h-3.5" />
-                          ))}
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
@@ -827,15 +885,11 @@ const Tickets = () => {
                   />
                   <Button
                     onClick={handleSend}
-                    disabled={!text.trim() || sendMutation.isPending}
+                    disabled={!text.trim()}
                     size="icon"
                     className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
                   >
-                    {sendMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
+                    <Send className="w-4 h-4" />
                   </Button>
                 </div>
               )}
