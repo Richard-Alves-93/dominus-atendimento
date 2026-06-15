@@ -19,6 +19,7 @@ import Setores from "./pages/Setores";
 import Equipe from "./pages/Equipe";
 import TrocarSenha from "./pages/TrocarSenha";
 import Placeholder from "./pages/Placeholder";
+import Configuracoes from "./pages/Configuracoes";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
@@ -54,7 +55,7 @@ const App = () => (
               <Route path="/app/setores" element={<ProtectedRoute><Setores /></ProtectedRoute>} />
               <Route path="/app/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />
               <Route path="/app/tags" element={<ProtectedRoute><Placeholder title="Tags" description="Classifique contatos e tickets." /></ProtectedRoute>} />
-              <Route path="/app/configuracoes" element={<ProtectedRoute><Placeholder title="Configurações" description="Preferências da empresa." /></ProtectedRoute>} />
+              <Route path="/app/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
 
               <Route path="/master" element={<MasterRoute><MasterDashboard /></MasterRoute>} />
               <Route path="/master/empresas" element={<MasterRoute><MasterEmpresas /></MasterRoute>} />

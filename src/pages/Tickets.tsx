@@ -21,6 +21,7 @@ import {
   Clock,
   RotateCcw,
   AlertCircle,
+  AlarmClock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -164,6 +165,33 @@ const Tickets = () => {
     },
   });
   const activeDepts = (deptsQuery.data ?? []).filter((d) => d.status === "active");
+
+  // Company settings (regras de atendimento)
+  const settingsQuery = useQuery({
+    queryKey: ["company-settings", activeCompanyId],
+    enabled: !!activeCompanyId,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("company_settings")
+        .select("allow_stalled_takeover, stalled_minutes, same_department_only")
+        .eq("company_id", activeCompanyId!)
+        .maybeSingle();
+      return (data ?? {
+        allow_stalled_takeover: true,
+        stalled_minutes: 15,
+        same_department_only: true,
+      }) as {
+        allow_stalled_takeover: boolean;
+        stalled_minutes: number;
+        same_department_only: boolean;
+      };
+    },
+  });
+  const settings = settingsQuery.data ?? {
+    allow_stalled_takeover: true,
+    stalled_minutes: 15,
+    same_department_only: true,
+  };
 
   // My departments (non-admin)
   const myDeptsQuery = useQuery({
@@ -379,6 +407,28 @@ const Tickets = () => {
     return myDeptIds.includes(selected.department_id);
   }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds, canSeeGeneralQueue]);
 
+  const writeAuditLog = async (
+    ticketId: string,
+    previous: string | null,
+    next: string | null,
+    reason: string,
+  ) => {
+    if (!activeCompanyId || !profile?.id) return;
+    try {
+      await (supabase as any).from("audit_logs").insert({
+        company_id: activeCompanyId,
+        ticket_id: ticketId,
+        event_type: "ticket_assigned_changed",
+        previous_assigned_user_id: previous,
+        new_assigned_user_id: next,
+        changed_by: profile.id,
+        reason,
+      });
+    } catch (e) {
+      console.warn("audit_log insert failed", e);
+    }
+  };
+
   const acceptMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
@@ -394,11 +444,14 @@ const Tickets = () => {
       if (!selected.department_id && !isAdmin && generalQueueDeptIds.length === 1) {
         patch.department_id = generalQueueDeptIds[0];
       }
+      const previous = selected.assigned_user_id ?? null;
+      const ticketId = selected.id;
       const { error } = await (supabase as any)
         .from("tickets")
         .update(patch)
-        .eq("id", selected.id);
+        .eq("id", ticketId);
       if (error) throw error;
+      await writeAuditLog(ticketId, previous, profile.id, "aceitar_atendimento");
     },
     onSuccess: () => {
       toast({ title: "Atendimento aceito" });
@@ -411,7 +464,7 @@ const Tickets = () => {
 
   // Assumir atendimento: usuário superior pega ticket já atribuído a outro
   const isAssignedToOther = !!selected?.assigned_user_id && selected.assigned_user_id !== profile?.id;
-  const canTakeOverSelected = useMemo(() => {
+  const canTakeOverPrivileged = useMemo(() => {
     if (!selected || !profile?.id) return false;
     if (!isAssignedToOther) return false;
     if (selected.status === "closed") return false;
@@ -424,9 +477,11 @@ const Tickets = () => {
   }, [selected, profile?.id, isAssignedToOther, isAdmin, isManager, myManagedDeptIds]);
 
   const takeOverMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (reason: string = "assumir_atendimento") => {
       if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
       const nowIso = new Date().toISOString();
+      const previous = selected.assigned_user_id ?? null;
+      const ticketId = selected.id;
       const { error } = await (supabase as any)
         .from("tickets")
         .update({
@@ -436,9 +491,10 @@ const Tickets = () => {
           unread_count: 0,
           status: "open",
         })
-        .eq("id", selected.id)
+        .eq("id", ticketId)
         .eq("company_id", activeCompanyId!);
       if (error) throw error;
+      await writeAuditLog(ticketId, previous, profile.id, reason);
     },
     onSuccess: () => {
       toast({ title: "Atendimento assumido" });
@@ -450,6 +506,7 @@ const Tickets = () => {
       toast({ title: "Falha ao assumir", description: e.message, variant: "destructive" });
     },
   });
+
 
 
   const messagesQuery = useQuery({
@@ -552,6 +609,62 @@ const Tickets = () => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [visibleMessages.length, selectedId]);
 
+  // ─── Atendimento parado ────────────────────────────────────────────
+  // Considerado parado quando:
+  //  • status = open
+  //  • assigned_user_id != null
+  //  • unread_count > 0
+  //  • última mensagem é do cliente
+  //  • tempo desde a última mensagem do cliente >= stalled_minutes
+  const stalledInfo = useMemo(() => {
+    if (!selected) return { stalled: false, minutes: 0 };
+    if (selected.status !== "open") return { stalled: false, minutes: 0 };
+    if (!selected.assigned_user_id) return { stalled: false, minutes: 0 };
+    if ((selected.unread_count ?? 0) <= 0) return { stalled: false, minutes: 0 };
+    const list = (messagesQuery.data ?? []) as MessageRow[];
+    if (list.length === 0) return { stalled: false, minutes: 0 };
+    const last = list[list.length - 1];
+    if (!last || last.from_me) return { stalled: false, minutes: 0 };
+    const ts = new Date(last.sent_at || last.created_at).getTime();
+    const ageMin = Math.floor((Date.now() - ts) / 60000);
+    return { stalled: ageMin >= settings.stalled_minutes, minutes: ageMin };
+  }, [selected, messagesQuery.data, settings.stalled_minutes]);
+
+  // Setor do ticket: também precisa permitir takeover quando regra exige mesmo setor
+  const selectedDept = useMemo(
+    () => (deptsQuery.data ?? []).find((d) => d.id === selected?.department_id) ?? null,
+    [deptsQuery.data, selected?.department_id],
+  );
+
+  const canTakeOverStalled = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (!isAssignedToOther) return false;
+    if (!stalledInfo.stalled) return false;
+    if (!settings.allow_stalled_takeover) return false;
+    if (selectedDept && (selectedDept as any).allow_stalled_takeover === false) return false;
+    // Agent precisa estar no mesmo setor quando exigido
+    if (settings.same_department_only) {
+      if (!selected.department_id) return false;
+      if (!myDeptIds.includes(selected.department_id)) return false;
+    }
+    return true;
+  }, [
+    selected,
+    profile?.id,
+    isAssignedToOther,
+    stalledInfo.stalled,
+    settings.allow_stalled_takeover,
+    settings.same_department_only,
+    selectedDept,
+    myDeptIds,
+  ]);
+
+  const canTakeOverSelected = canTakeOverPrivileged || canTakeOverStalled;
+  const takeOverReason = canTakeOverPrivileged
+    ? "assumir_atendimento"
+    : "assumir_atendimento_parado";
+
+
   const sendMutation = useMutation({
     mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
@@ -640,11 +753,14 @@ const Tickets = () => {
   };
 
   const saveAssignee = async () => {
-    if (!pendingUserId) return;
+    if (!pendingUserId || !selected) return;
+    const previous = selected.assigned_user_id ?? null;
+    const ticketId = selected.id;
     await updateTicket(
       { assigned_user_id: pendingUserId, assigned_at: new Date().toISOString(), assigned_by: profile?.id ?? null },
       "Responsável atribuído.",
     );
+    await writeAuditLog(ticketId, previous, pendingUserId, "transferencia_manual");
     setAssignUserOpen(false);
     setPendingUserId("");
   };
@@ -822,6 +938,16 @@ const Tickets = () => {
                     <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                       {STATUS_LABEL[selected.status]}
                     </Badge>
+                    {stalledInfo.stalled && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-4 px-1.5 border-amber-500/40 text-amber-600 dark:text-amber-400 gap-1"
+                        title={`Sem resposta há ${stalledInfo.minutes} min`}
+                      >
+                        <AlarmClock className="w-3 h-3" />
+                        Atendimento parado
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1102,7 +1228,7 @@ const Tickets = () => {
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                takeOverMutation.mutate();
+                takeOverMutation.mutate(takeOverReason);
               }}
               disabled={takeOverMutation.isPending}
             >
