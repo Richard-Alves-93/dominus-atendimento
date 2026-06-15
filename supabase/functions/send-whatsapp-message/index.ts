@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     const signatureLine = senderProfile?.signature_enabled && senderProfile?.signature
       ? senderProfile.signature.trim()
       : null;
-    const finalText = signatureLine ? `${signatureLine}:\n${text}` : text;
+    const finalText = signatureLine ? `*${signatureLine}:*\n${text}` : text;
 
     const evoRes = await fetch(endpoint, {
       method: "POST",

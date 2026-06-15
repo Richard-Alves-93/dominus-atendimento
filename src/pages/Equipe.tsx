@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { MoreVertical, Plus, UserX, RotateCcw, Loader2 } from "lucide-react";
+import { formatPhoneDisplay, normalizePhone, isValidPhone } from "@/lib/phone";
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
 const ROLE_LABEL: Record<Role, string> = {
@@ -138,13 +139,16 @@ export default function Equipe() {
     if (!form.full_name.trim() || !form.email.trim()) {
       return toast({ title: "Nome e e-mail são obrigatórios", variant: "destructive" });
     }
+    if (!isValidPhone(form.phone)) {
+      return toast({ title: "WhatsApp inválido", description: "Informe um WhatsApp válido com DDD.", variant: "destructive" });
+    }
     setBusy(true);
     const { data, error } = await supabase.functions.invoke("create-company-user", {
       body: {
         company_id: activeCompanyId,
         full_name: form.full_name.trim(),
         email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
+        phone: normalizePhone(form.phone),
         role: form.role,
         department_ids: form.department_ids,
         signature: form.signature.trim() || null,
@@ -173,7 +177,7 @@ export default function Equipe() {
     // Update profile basics
     await supabase.from("profiles").update({
       full_name: form.full_name.trim(),
-      phone: form.phone.trim() || null,
+      phone: form.phone ? normalizePhone(form.phone) : null,
       signature: form.signature.trim() || null,
       signature_enabled: form.signature_enabled,
     }).eq("id", editing.user_id);
@@ -338,10 +342,14 @@ export default function Equipe() {
               <div className="space-y-1.5">
                 <Label>WhatsApp</Label>
                 <Input
-                  value={form.phone}
+                  value={formatPhoneDisplay(form.phone)}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  placeholder="5511999999999"
+                  placeholder="+55 11 99999-9999"
+                  inputMode="tel"
                 />
+                {form.phone && !isValidPhone(form.phone) && (
+                  <p className="text-xs text-destructive">Informe um WhatsApp válido com DDD.</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Cargo</Label>
