@@ -22,7 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { MoreVertical, Plus, UserX, RotateCcw, Loader2 } from "lucide-react";
-import { formatPhoneDisplay, normalizePhone, isValidPhone } from "@/lib/phone";
+import { formatPhoneDisplay, normalizePhone, isValidPhone, onlyDigits } from "@/lib/phone";
 
 type Role = "owner" | "admin" | "manager" | "agent" | "financial";
 const ROLE_LABEL: Record<Role, string> = {
