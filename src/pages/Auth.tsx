@@ -39,16 +39,20 @@ export default function Auth() {
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, email, is_master, global_role")
+        .select("id, email, is_master, global_role, must_change_password")
         .eq("id", data.user.id)
         .maybeSingle();
 
       console.log("[LOGIN_DEBUG] profile:", profile, "error:", profileError);
 
       const isMaster = profile?.is_master === true || profile?.global_role === "master";
-      console.log("[LOGIN_DEBUG] isMaster:", isMaster);
 
       await refresh(data.user.id);
+
+      if (profile?.must_change_password) {
+        navigate("/trocar-senha", { replace: true });
+        return;
+      }
 
       if (isMaster) {
         navigate("/master", { replace: true });
