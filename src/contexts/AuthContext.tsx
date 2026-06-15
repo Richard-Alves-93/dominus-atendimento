@@ -10,6 +10,10 @@ export interface ProfileInfo {
   avatar_url: string | null;
   is_master: boolean;
   global_role: "master" | "user";
+  must_change_password?: boolean;
+  signature?: string | null;
+  signature_enabled?: boolean;
+  public_name?: string | null;
 }
 
 export interface CompanyMembership {
@@ -48,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", uid)
         .eq("status", "active"),
     ]);
-    setProfile((p as ProfileInfo | null) ?? null);
+    setProfile((p as unknown as ProfileInfo | null) ?? null);
     setMemberships((m as CompanyMembership[] | null) ?? []);
   };
 

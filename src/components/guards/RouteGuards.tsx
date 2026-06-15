@@ -34,6 +34,9 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
   if (loading) return <FullPageLoader />;
   if (!user) return <Navigate to="/auth" replace state={{ from: location }} />;
+  if (profile?.must_change_password && location.pathname !== "/trocar-senha") {
+    return <Navigate to="/trocar-senha" replace />;
+  }
   if (isMaster) {
     if (!activeCompanyId) return <Navigate to="/master" replace />;
     // Master can access suspended companies (impersonation/internal) - banner shown
@@ -45,6 +48,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   if (allowed.length > 1 && !activeCompanyId) return <Navigate to="/selecionar-empresa" replace />;
   const active = memberships.find((m) => m.company_id === activeCompanyId) ?? allowed[0];
   if (!isCompanyAllowed(active.company?.status)) return <Navigate to="/empresa-bloqueada" replace />;
+  // Role-based page guard for /app/equipe and /app/setores
+  if ((location.pathname === "/app/equipe" || location.pathname === "/app/setores") &&
+      !["owner","admin","manager"].includes(active.role)) {
+    return <Navigate to="/app/dashboard" replace />;
+  }
   return <>{children}</>;
 }
 
