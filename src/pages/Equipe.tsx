@@ -139,13 +139,16 @@ export default function Equipe() {
     if (!form.full_name.trim() || !form.email.trim()) {
       return toast({ title: "Nome e e-mail são obrigatórios", variant: "destructive" });
     }
+    if (!isValidPhone(form.phone)) {
+      return toast({ title: "WhatsApp inválido", description: "Informe um WhatsApp válido com DDD.", variant: "destructive" });
+    }
     setBusy(true);
     const { data, error } = await supabase.functions.invoke("create-company-user", {
       body: {
         company_id: activeCompanyId,
         full_name: form.full_name.trim(),
         email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
+        phone: normalizePhone(form.phone),
         role: form.role,
         department_ids: form.department_ids,
         signature: form.signature.trim() || null,
