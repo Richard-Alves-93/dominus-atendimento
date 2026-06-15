@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -39,6 +40,7 @@ interface Department {
   status: "active" | "inactive";
   deleted_at: string | null;
   created_at: string;
+  allow_general_queue?: boolean;
 }
 
 const badge: Record<string, string> = {
@@ -60,7 +62,7 @@ export default function Setores() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Department | null>(null);
   const [targetId, setTargetId] = useState<string>("");
-  const [form, setForm] = useState({ name: "", description: "", status: "active" as "active" | "inactive" });
+  const [form, setForm] = useState({ name: "", description: "", status: "active" as "active" | "inactive", allow_general_queue: false });
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -68,7 +70,7 @@ export default function Setores() {
     setLoading(true);
     const { data } = await (supabase as any)
       .from("departments")
-      .select("id, company_id, name, description, status, deleted_at, created_at")
+      .select("id, company_id, name, description, status, deleted_at, created_at, allow_general_queue")
       .eq("company_id", activeCompanyId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
@@ -82,12 +84,12 @@ export default function Setores() {
   }, [activeCompanyId]);
 
   const openCreate = () => {
-    setForm({ name: "", description: "", status: "active" });
+    setForm({ name: "", description: "", status: "active", allow_general_queue: false });
     setCreating(true);
   };
 
   const openEdit = (d: Department) => {
-    setForm({ name: d.name, description: d.description ?? "", status: d.status });
+    setForm({ name: d.name, description: d.description ?? "", status: d.status, allow_general_queue: !!d.allow_general_queue });
     setEditing(d);
   };
 
@@ -101,7 +103,7 @@ export default function Setores() {
     if (editing) {
       const { error } = await (supabase as any)
         .from("departments")
-        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status })
+        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status, allow_general_queue: form.allow_general_queue })
         .eq("id", editing.id);
       setBusy(false);
       if (error) {
@@ -116,6 +118,7 @@ export default function Setores() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         status: form.status,
+        allow_general_queue: form.allow_general_queue,
       });
       setBusy(false);
       if (error) {
@@ -359,6 +362,19 @@ export default function Setores() {
                   <SelectItem value="inactive">Inativo</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="allow_gq" className="text-sm">Participa da Fila geral</Label>
+                <p className="text-xs text-muted-foreground">
+                  Permite que usuários deste setor visualizem e aceitem atendimentos sem responsável.
+                </p>
+              </div>
+              <Switch
+                id="allow_gq"
+                checked={form.allow_general_queue}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, allow_general_queue: !!v }))}
+              />
             </div>
           </div>
           <DialogFooter>

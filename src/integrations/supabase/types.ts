@@ -301,6 +301,7 @@ export type Database = {
       }
       departments: {
         Row: {
+          allow_general_queue: boolean
           company_id: string
           created_at: string
           deleted_at: string | null
@@ -312,6 +313,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_general_queue?: boolean
           company_id: string
           created_at?: string
           deleted_at?: string | null
@@ -323,6 +325,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_general_queue?: boolean
           company_id?: string
           created_at?: string
           deleted_at?: string | null

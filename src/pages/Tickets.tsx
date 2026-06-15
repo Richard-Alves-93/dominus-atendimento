@@ -74,7 +74,7 @@ interface MessageRow {
   created_at: string;
 }
 
-interface DeptRow { id: string; name: string; status: string }
+interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean }
 interface UserOption { user_id: string; full_name: string | null; email: string | null }
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -131,7 +131,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("departments")
-        .select("id, name, status")
+        .select("id, name, status, allow_general_queue")
         .eq("company_id", activeCompanyId!)
         .is("deleted_at", null)
         .order("name");
@@ -157,8 +157,18 @@ const Tickets = () => {
   const myDeptIds = (myDeptsQuery.data ?? []).map((d) => d.department_id);
   const myManagedDeptIds = (myDeptsQuery.data ?? []).filter((d) => d.role === "manager").map((d) => d.department_id);
 
+  // Departments where the current user can see/accept the general queue
+  const generalQueueDeptIds = useMemo(() => {
+    const allowed = new Set(
+      (deptsQuery.data ?? []).filter((d) => d.allow_general_queue && d.status === "active").map((d) => d.id),
+    );
+    if (isAdmin) return Array.from(allowed);
+    return myDeptIds.filter((id) => allowed.has(id));
+  }, [deptsQuery.data, myDeptIds, isAdmin]);
+  const canSeeGeneralQueue = isAdmin || generalQueueDeptIds.length > 0;
+
   const ticketsQuery = useQuery({
-    queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(",")],
+    queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(","), generalQueueDeptIds.join(",")],
     enabled: !!activeCompanyId && (isAdmin || myDeptsQuery.isFetched || !profile?.id),
     refetchInterval: 5000,
     queryFn: async () => {
@@ -181,7 +191,15 @@ const Tickets = () => {
       } else if (filter === "closed") {
         q = q.eq("status", "closed");
       } else if (filter === "fila") {
-        q = q.is("department_id", null).is("assigned_user_id", null).neq("status", "closed");
+        q = q.is("assigned_user_id", null).neq("status", "closed");
+        if (!isAdmin) {
+          // Limit fila geral to user's allowed departments (or null department)
+          if (generalQueueDeptIds.length === 0) {
+            q = q.eq("id", "00000000-0000-0000-0000-000000000000"); // force empty
+          } else {
+            q = q.or(`department_id.is.null,department_id.in.(${generalQueueDeptIds.join(",")})`);
+          }
+        }
       } else if (filter === "meus" && profile?.id) {
         q = q.eq("assigned_user_id", profile.id).neq("status", "closed");
       } else {
@@ -193,9 +211,11 @@ const Tickets = () => {
         q = q.eq("department_id", deptFilter);
       }
 
-      if (!isAdmin && profile?.id) {
-        const parts: string[] = [`assigned_user_id.eq.${profile.id}`, `department_id.is.null`];
-        if (myDeptIds.length > 0) parts.push(`department_id.in.(${myDeptIds.join(",")})`);
+      if (!isAdmin && profile?.id && filter !== "meus" && filter !== "fila") {
+        const parts: string[] = [`assigned_user_id.eq.${profile.id}`];
+        if (generalQueueDeptIds.length > 0) parts.push(`department_id.is.null`);
+        const visibleDepts = Array.from(new Set([...myDeptIds, ...generalQueueDeptIds]));
+        if (visibleDepts.length > 0) parts.push(`department_id.in.(${visibleDepts.join(",")})`);
         q = q.or(parts.join(","));
       }
       const { data, error } = await q;
@@ -297,27 +317,32 @@ const Tickets = () => {
     if (selected.assigned_user_id) return false;
     if (isAdmin) return true;
     if (isManager) {
-      if (!selected.department_id) return true;
+      if (!selected.department_id) return canSeeGeneralQueue;
       return myManagedDeptIds.includes(selected.department_id);
     }
-    // agent: fila geral ou setores dele
-    if (!selected.department_id) return true;
+    // agent
+    if (!selected.department_id) return canSeeGeneralQueue;
     return myDeptIds.includes(selected.department_id);
-  }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds]);
+  }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds, canSeeGeneralQueue]);
 
   const acceptMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
       const nowIso = new Date().toISOString();
+      const patch: Record<string, any> = {
+        assigned_user_id: profile.id,
+        assigned_at: nowIso,
+        assigned_by: profile.id,
+        unread_count: 0,
+        status: "open",
+      };
+      // Auto-fill department if ticket has none and user has exactly one allowed general-queue dept
+      if (!selected.department_id && !isAdmin && generalQueueDeptIds.length === 1) {
+        patch.department_id = generalQueueDeptIds[0];
+      }
       const { error } = await (supabase as any)
         .from("tickets")
-        .update({
-          assigned_user_id: profile.id,
-          assigned_at: nowIso,
-          assigned_by: profile.id,
-          unread_count: 0,
-          status: "open",
-        })
+        .update(patch)
         .eq("id", selected.id);
       if (error) throw error;
     },
@@ -430,31 +455,78 @@ const Tickets = () => {
               />
             </div>
 
-            <Select value={filter} onValueChange={(v) => setFilter(v as ListFilter)}>
-              <SelectTrigger className="h-9 bg-secondary border-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="fila">Fila geral</SelectItem>
-                <SelectItem value="meus">Meus atendimentos</SelectItem>
-                <SelectItem value="open">Abertos</SelectItem>
-                <SelectItem value="pending">Pendentes</SelectItem>
-                <SelectItem value="closed">Fechados</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={filter === "open" ? "default" : "secondary"}
+                className="flex-1 h-9 text-xs"
+                onClick={() => setFilter("open")}
+              >
+                Abertos
+              </Button>
+              <Button
+                size="sm"
+                variant={filter === "pending" ? "default" : "secondary"}
+                className="flex-1 h-9 text-xs"
+                onClick={() => setFilter("pending")}
+              >
+                Pendentes
+              </Button>
+              <Button
+                size="sm"
+                variant={filter === "closed" ? "default" : "secondary"}
+                className="flex-1 h-9 text-xs"
+                onClick={() => setFilter("closed")}
+              >
+                Fechados
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant={filter === "todos" || filter === "fila" || filter === "meus" ? "default" : "secondary"}
+                    className="h-9 w-9 flex-shrink-0"
+                    aria-label="Mais filtros"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setFilter("todos")}>
+                    {filter === "todos" && <Check className="w-3.5 h-3.5 mr-2" />}
+                    {filter !== "todos" && <span className="w-3.5 h-3.5 mr-2" />}
+                    Todos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFilter("fila")}
+                    disabled={!canSeeGeneralQueue}
+                  >
+                    {filter === "fila" && <Check className="w-3.5 h-3.5 mr-2" />}
+                    {filter !== "fila" && <span className="w-3.5 h-3.5 mr-2" />}
+                    Fila geral
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilter("meus")}>
+                    {filter === "meus" && <Check className="w-3.5 h-3.5 mr-2" />}
+                    {filter !== "meus" && <span className="w-3.5 h-3.5 mr-2" />}
+                    Meus atendimentos
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-            <Select value={deptFilter} onValueChange={setDeptFilter}>
-              <SelectTrigger className="h-9 bg-secondary border-0">
-                <SelectValue placeholder="Setor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os setores</SelectItem>
-                {activeDepts.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {activeDepts.length > 0 && (
+              <Select value={deptFilter} onValueChange={setDeptFilter}>
+                <SelectTrigger className="h-8 bg-secondary border-0 text-xs">
+                  <SelectValue placeholder="Setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os setores</SelectItem>
+                  {activeDepts.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-thin">
