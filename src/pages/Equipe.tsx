@@ -317,6 +317,14 @@ export default function Equipe() {
                       <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuLabel>Ações</DropdownMenuLabel>
                         <DropdownMenuItem onClick={() => openEdit(m)}>Editar</DropdownMenuItem>
+                        {m.status === "active" && (
+                          <DropdownMenuItem
+                            onClick={() => setResetting(m)}
+                            disabled={m.user_id === profile?.id}
+                          >
+                            <KeyRound className="w-3.5 h-3.5 mr-2" /> Redefinir senha
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         {m.status === "active" ? (
                           <DropdownMenuItem
