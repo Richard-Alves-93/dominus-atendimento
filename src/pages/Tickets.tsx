@@ -862,39 +862,32 @@ const Tickets = () => {
                         m.from_me
                           ? "bg-primary text-primary-foreground rounded-br-md"
                           : "bg-card text-foreground shadow-card rounded-bl-md"
-                      } ${m._optimistic && m.status === "sending" ? "opacity-70" : ""} ${
-                        m.status === "error" ? "ring-1 ring-destructive" : ""
-                      }`}
+                      } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                         {m.body || <span className="italic opacity-70">[{m.msg_type}]</span>}
                       </p>
                       <div
-                        className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/60" : "text-muted-foreground"}`}
+                        className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                       >
                         <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
                         {m.from_me && (() => {
                           const ds = m._optimistic
                             ? (m.status === "error" ? "failed" : "sending")
                             : (m.delivery_status || m.status || "sent");
-                          if (ds === "sending") {
-                            return <Clock className="w-3 h-3" aria-label="Enviando" />;
-                          }
                           if (ds === "failed") {
-                            return (
-                              <span className="flex items-center gap-1" aria-label="Falhou">
-                                <AlertCircle className="w-3.5 h-3.5 text-destructive" />
-                                <span className="text-[10px] text-destructive">Erro ao enviar</span>
-                              </span>
-                            );
+                            return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" title="Falhou" />;
                           }
                           if (ds === "read") {
-                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
+                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" title="Lida" />;
                           }
                           if (ds === "delivered") {
-                            return <CheckCheck className="w-3.5 h-3.5" aria-label="Entregue" />;
+                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" title="Entregue" />;
                           }
-                          return <Check className="w-3.5 h-3.5" aria-label="Enviada" />;
+                          if (ds === "sending") {
+                            return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" title="Enviando" />;
+                          }
+                          return <Check className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" title="Enviada" />;
                         })()}
                       </div>
                     </div>
