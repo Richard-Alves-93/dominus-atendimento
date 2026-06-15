@@ -6,7 +6,13 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 const MEDIA_BUCKET = "message-media";
-let lastMediaFetchAudit = { hasWebhookBase64: false, triedGetBase64Endpoint: false, getBase64Status: null as number | string | null };
+
+type MediaFetchResult = {
+  base64: string | null;
+  hasWebhookBase64: boolean;
+  triedGetBase64Endpoint: boolean;
+  getBase64Status: number | string | null;
+};
 
 function extOfMime(mime?: string | null, fallback = "bin"): string {
   if (!mime) return fallback;
