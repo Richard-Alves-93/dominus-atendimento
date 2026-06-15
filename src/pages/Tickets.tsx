@@ -1266,7 +1266,8 @@ const Tickets = () => {
                         setPendingUserId(selected.assigned_user_id ?? "");
                         setAssignUserOpen(true);
                       }}
-                      disabled={!canEditSelected}
+                      disabled={!canAssignUser}
+                      title={!canAssignUser ? "Você não tem permissão para atribuir atendente." : undefined}
                     >
                       <UserPlus className="w-4 h-4 mr-2" /> Atribuir atendente
                     </DropdownMenuItem>
