@@ -1244,7 +1244,7 @@ const Tickets = () => {
                       }}
                       disabled={!canEditSelected}
                     >
-                      <Building2 className="w-4 h-4 mr-2" /> Definir setor
+                      <Building2 className="w-4 h-4 mr-2" /> {selected.department_id ? "Transferir setor" : "Definir setor"}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
