@@ -463,6 +463,7 @@ export type Database = {
           sent_by_name: string | null
           sent_by_signature: string | null
           sent_by_user_id: string | null
+          source: string
           status: string | null
           ticket_id: string
         }
@@ -490,6 +491,7 @@ export type Database = {
           sent_by_name?: string | null
           sent_by_signature?: string | null
           sent_by_user_id?: string | null
+          source?: string
           status?: string | null
           ticket_id: string
         }
@@ -517,6 +519,7 @@ export type Database = {
           sent_by_name?: string | null
           sent_by_signature?: string | null
           sent_by_user_id?: string | null
+          source?: string
           status?: string | null
           ticket_id?: string
         }

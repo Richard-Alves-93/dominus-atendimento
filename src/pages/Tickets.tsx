@@ -84,6 +84,8 @@ interface MessageRow {
   delivery_status?: string | null;
   sent_at: string;
   created_at: string;
+  source?: string | null;
+  sent_by_name?: string | null;
   _optimistic?: boolean;
 }
 
@@ -426,7 +428,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at, source, sent_by_name")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
@@ -867,6 +869,14 @@ const Tickets = () => {
                       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                         {m.body || <span className="italic opacity-70">[{m.msg_type}]</span>}
                       </p>
+                      {m.from_me && m.source === "whatsapp_device" && (
+                        <div
+                          className="text-[10px] mt-1 opacity-70 italic"
+                          title="Mensagem enviada diretamente pelo WhatsApp conectado"
+                        >
+                          Enviado pelo WhatsApp
+                        </div>
+                      )}
                       <div
                         className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                       >

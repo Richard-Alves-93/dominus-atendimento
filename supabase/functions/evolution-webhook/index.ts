@@ -156,9 +156,100 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         if (status) console.log("[WEBHOOK] msg_update_rows=", 1);
         auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status ?? null, status ? 1 : 0);
       } else {
-        console.log("[WEBHOOK] upsert_fromMe_orphan keyId=", externalId);
-        const { status } = mapDeliveryStatus(statusRaw);
-        auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status, 0);
+        // Mensagem enviada diretamente pelo WhatsApp (celular), não pelo Dominus.
+        // Criar contato/ticket se necessário e inserir como from_me=true / source=whatsapp_device.
+        console.log("[WEBHOOK] upsert_fromMe_device keyId=", externalId);
+        const { status: mappedStatus } = mapDeliveryStatus(statusRaw);
+
+        let contactId: string | null = null;
+        const { data: existingContact } = await admin
+          .from("contacts")
+          .select("id, name")
+          .eq("company_id", inst.company_id)
+          .eq("phone_number", phone)
+          .maybeSingle();
+        if (existingContact) {
+          contactId = existingContact.id;
+          if (!existingContact.name && pushName) {
+            await admin.from("contacts").update({ name: pushName }).eq("id", contactId);
+          }
+        } else {
+          const { data: created } = await admin
+            .from("contacts")
+            .insert({ company_id: inst.company_id, phone_number: phone, name: pushName })
+            .select("id")
+            .single();
+          contactId = created?.id ?? null;
+        }
+        if (!contactId) {
+          auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, mappedStatus, 0);
+          continue;
+        }
+
+        let { data: ticket } = await admin
+          .from("tickets")
+          .select("id, status")
+          .eq("company_id", inst.company_id)
+          .eq("contact_id", contactId)
+          .order("last_message_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!ticket) {
+          const { data: created } = await admin
+            .from("tickets")
+            .insert({
+              company_id: inst.company_id,
+              contact_id: contactId,
+              channel_id: inst.channel_id,
+              status: "open",
+              last_message_at: new Date().toISOString(),
+            })
+            .select("id, status")
+            .single();
+          ticket = created;
+        }
+        if (!ticket) {
+          auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, mappedStatus, 0);
+          continue;
+        }
+
+        const msgType = detectMsgType(m);
+        const body = extractBody(m);
+        const sentAt = m?.messageTimestamp
+          ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
+          : new Date().toISOString();
+        const deliveryStatus = mappedStatus ?? "sent";
+
+        await admin.from("messages").upsert(
+          {
+            company_id: inst.company_id,
+            ticket_id: ticket.id,
+            contact_id: contactId,
+            channel_id: inst.channel_id,
+            direction: "outbound",
+            msg_type: msgType,
+            body,
+            raw_body: body,
+            external_id: externalId,
+            provider_message_id: externalId,
+            from_me: true,
+            source: "whatsapp_device",
+            sent_by_user_id: null,
+            sent_by_name: "WhatsApp",
+            sent_by_signature: null,
+            delivery_status: deliveryStatus,
+            status: deliveryStatus,
+            raw: m,
+            sent_at: sentAt,
+          },
+          { onConflict: "channel_id,external_id" },
+        );
+
+        const ticketPatch: Record<string, unknown> = { last_message_at: sentAt };
+        if (ticket.status === "closed") ticketPatch.status = "open";
+        await admin.from("tickets").update(ticketPatch).eq("id", ticket.id);
+
+        auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, deliveryStatus, 1);
       }
       continue;
     }
