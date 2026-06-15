@@ -885,15 +885,11 @@ const Tickets = () => {
                   />
                   <Button
                     onClick={handleSend}
-                    disabled={!text.trim() || sendMutation.isPending}
+                    disabled={!text.trim()}
                     size="icon"
                     className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
                   >
-                    {sendMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
+                    <Send className="w-4 h-4" />
                   </Button>
                 </div>
               )}
