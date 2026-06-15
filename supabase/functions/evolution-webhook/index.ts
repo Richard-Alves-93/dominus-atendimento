@@ -61,10 +61,23 @@ function mapDeliveryStatus(raw: any): { status: string | null; ts: string } {
   return { status: null, ts };
 }
 
+function auditStatus(event: string, instanceName: string | null, providerId: string | null, statusRaw: any, mapped: string | null, rows?: number) {
+  console.log(
+    `[WEBHOOK_STATUS_AUDIT] event=${event} instance=${instanceName ?? ""} messageId=${providerId ?? ""} rawStatus=${statusRaw ?? ""} mappedStatus=${mapped ?? ""} rowsUpdated=${rows ?? ""}`,
+  );
+}
+
 async function patchOutboundStatus(admin: any, inst: any, providerId: string | null, statusRaw: any, source: string) {
-  const { status, ts } = mapDeliveryStatus(statusRaw);
+  const mapped = mapDeliveryStatus(statusRaw);
+  const ts = mapped.ts;
+  const status = source === "send_message" && (mapped.status === "delivered" || mapped.status === "read")
+    ? "sent"
+    : mapped.status;
   console.log("[WEBHOOK] msg_update keyId=", providerId, "rawStatus=", statusRaw, "mapped=", status, "source=", source);
-  if (!providerId || !status) return 0;
+  if (!providerId || !status) {
+    auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, 0);
+    return 0;
+  }
 
   const patch: Record<string, unknown> = { delivery_status: status, status };
   if (status === "delivered") patch.delivered_at = ts;
@@ -87,13 +100,15 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
     .select("id");
   if (error) {
     console.error("[WEBHOOK] msg_update_err", error.message);
+    auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, 0);
     return 0;
   }
   console.log("[WEBHOOK] msg_update_rows=", updated?.length ?? 0);
+  auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, updated?.length ?? 0);
   return updated?.length ?? 0;
 }
 
-async function handleMessageUpsert(admin: any, inst: any, payload: any) {
+async function handleMessageUpsert(admin: any, inst: any, payload: any, source = "messages_upsert") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const m of dataArr) {
     const key = m?.key ?? {};
@@ -116,6 +131,8 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
         .from("messages")
         .select("id, provider_message_id, external_id")
         .eq("company_id", inst.company_id)
+        .eq("channel_id", inst.channel_id)
+        .eq("from_me", true)
         .or(`external_id.eq.${externalId},provider_message_id.eq.${externalId}`)
         .limit(1)
         .maybeSingle();
@@ -137,8 +154,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
         }
         await admin.from("messages").update(patch).eq("id", existing.id);
         if (status) console.log("[WEBHOOK] msg_update_rows=", 1);
+        auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status ?? null, status ? 1 : 0);
       } else {
         console.log("[WEBHOOK] upsert_fromMe_orphan keyId=", externalId);
+        const { status } = mapDeliveryStatus(statusRaw);
+        auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status, 0);
       }
       continue;
     }
@@ -227,14 +247,14 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
   }
 }
 
-async function handleMessageUpdate(admin: any, inst: any, payload: any) {
+async function handleMessageUpdate(admin: any, inst: any, payload: any, source = "message_update") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const u of dataArr) {
     const providerId: string | undefined =
       u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id ?? u?.update?.key?.id;
     const statusRaw =
       u?.status ?? u?.update?.status ?? u?.messageStatus ?? u?.update?.messageStatus;
-    await patchOutboundStatus(admin, inst, providerId ?? null, statusRaw, "message_update");
+    await patchOutboundStatus(admin, inst, providerId ?? null, statusRaw, source);
   }
 }
 
@@ -254,7 +274,7 @@ Deno.serve(async (req) => {
 
     const { data: inst } = await admin
       .from("whatsapp_instances")
-      .select("id, channel_id, company_id")
+      .select("id, channel_id, company_id, instance_name")
       .eq("instance_name", instanceName)
       .maybeSingle();
 
@@ -302,7 +322,7 @@ Deno.serve(async (req) => {
       if (status === "connected" && phone) channelUpdate.phone_number = phone;
       await admin.from("channels").update(channelUpdate).eq("id", inst.channel_id);
     } else if (normalized === "MESSAGES_UPSERT") {
-      await handleMessageUpsert(admin, inst, payload);
+      await handleMessageUpsert(admin, inst, payload, normalized.toLowerCase());
     } else if (
       normalized === "MESSAGES_UPDATE" ||
       normalized === "MESSAGE_UPDATE" ||
@@ -310,7 +330,7 @@ Deno.serve(async (req) => {
       normalized === "SEND_MESSAGE" ||
       normalized === "MESSAGES_SET"
     ) {
-      await handleMessageUpdate(admin, inst, payload);
+      await handleMessageUpdate(admin, inst, payload, normalized.toLowerCase());
     }
 
     await admin.from("channel_sync_logs").insert({

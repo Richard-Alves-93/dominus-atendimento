@@ -14,7 +14,6 @@ const WEBHOOK_EVENTS = [
   "MESSAGES_UPSERT",
   "MESSAGES_UPDATE",
   "MESSAGES_SET",
-  "MESSAGE_STATUS",
   "SEND_MESSAGE",
 ];
 
@@ -46,7 +45,7 @@ async function syncEvolutionWebhook(instanceName: string) {
     base64: true,
     events: WEBHOOK_EVENTS,
   };
-  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`, `${evoBase()}/webhook/${instanceName}`];
+  const endpoints = [`${evoBase()}/webhook/set/${instanceName}`];
   for (const endpoint of endpoints) {
     for (const payload of [body, { webhook: body }]) {
       try {
