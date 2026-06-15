@@ -177,7 +177,7 @@ export default function Equipe() {
     // Update profile basics
     await supabase.from("profiles").update({
       full_name: form.full_name.trim(),
-      phone: form.phone.trim() || null,
+      phone: form.phone ? normalizePhone(form.phone) : null,
       signature: form.signature.trim() || null,
       signature_enabled: form.signature_enabled,
     }).eq("id", editing.user_id);
