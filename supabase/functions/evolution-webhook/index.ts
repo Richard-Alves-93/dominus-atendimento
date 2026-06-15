@@ -52,13 +52,43 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
   for (const m of dataArr) {
     const key = m?.key ?? {};
     const remoteJid: string | undefined = key.remoteJid;
-    if (!remoteJid || remoteJid.endsWith("@g.us")) continue; // skip groups for now
+    if (!remoteJid || remoteJid.endsWith("@g.us")) continue;
     const fromMe = Boolean(key.fromMe);
     const phone = jidToPhone(remoteJid);
-    const externalId = key.id ?? null;
+    const externalId: string | null = key.id ?? null;
     const pushName = m?.pushName ?? null;
 
-    // upsert contact
+    // ── Outbound (fromMe): we already created this message in send-whatsapp-message.
+    // Just patch the existing row by external_id / provider_message_id so we don't duplicate.
+    if (fromMe) {
+      if (!externalId) {
+        console.log("[WEBHOOK] upsert_fromMe_no_keyId skip");
+        continue;
+      }
+      const { data: existing } = await admin
+        .from("messages")
+        .select("id, provider_message_id, external_id")
+        .eq("company_id", inst.company_id)
+        .or(`external_id.eq.${externalId},provider_message_id.eq.${externalId}`)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        await admin
+          .from("messages")
+          .update({
+            external_id: externalId,
+            provider_message_id: externalId,
+            delivery_status: "sent",
+            status: "sent",
+          })
+          .eq("id", existing.id);
+      } else {
+        console.log("[WEBHOOK] upsert_fromMe_orphan keyId=", externalId);
+      }
+      continue;
+    }
+
+    // ── Inbound contact + ticket + insert
     let contactId: string | null = null;
     const { data: existingContact } = await admin
       .from("contacts")
@@ -81,7 +111,6 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
     }
     if (!contactId) continue;
 
-    // find or create open ticket
     let { data: ticket } = await admin
       .from("tickets")
       .select("id, unread_count")
@@ -119,13 +148,13 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
         ticket_id: ticket.id,
         contact_id: contactId,
         channel_id: inst.channel_id,
-        direction: fromMe ? "outbound" : "inbound",
+        direction: "inbound",
         msg_type: msgType,
         body,
         external_id: externalId,
         provider_message_id: externalId,
-        from_me: fromMe,
-        delivery_status: fromMe ? "sent" : "received",
+        from_me: false,
+        delivery_status: "received",
         raw: m,
         sent_at: sentAt,
       },
@@ -136,10 +165,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
       .from("tickets")
       .update({
         last_message_at: sentAt,
-        unread_count: fromMe ? ticket.unread_count : (ticket.unread_count ?? 0) + 1,
+        unread_count: (ticket.unread_count ?? 0) + 1,
         status: "open",
       })
       .eq("id", ticket.id);
+  }
 }
 
 // Maps Evolution/Baileys status values to our delivery_status.
@@ -149,10 +179,10 @@ function mapDeliveryStatus(raw: any): { status: string | null; ts: string } {
   const ts = new Date().toISOString();
   if (raw === null || raw === undefined) return { status: null, ts };
   const v = typeof raw === "string" ? raw.toUpperCase() : raw;
-  if (v === 0 || v === "ERROR" || v === "FAILED") return { status: "failed", ts };
-  if (v === 2 || v === "SERVER_ACK" || v === "SENT") return { status: "sent", ts };
+  if (v === 0 || v === "ERROR" || v === "FAILED" || v === -1) return { status: "failed", ts };
+  if (v === 2 || v === "SERVER_ACK" || v === "SENT" || v === "ACK") return { status: "sent", ts };
   if (v === 3 || v === "DELIVERY_ACK" || v === "DELIVERED") return { status: "delivered", ts };
-  if (v === 4 || v === 5 || v === "READ" || v === "PLAYED") return { status: "read", ts };
+  if (v === 4 || v === 5 || v === "READ" || v === "PLAYED" || v === "READ_SELF") return { status: "read", ts };
   return { status: null, ts };
 }
 
@@ -160,17 +190,17 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any) {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const u of dataArr) {
     const providerId: string | undefined =
-      u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id;
-    if (!providerId) continue;
-    const statusRaw = u?.status ?? u?.update?.status ?? u?.messageStatus;
+      u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id ?? u?.update?.key?.id;
+    const statusRaw =
+      u?.status ?? u?.update?.status ?? u?.messageStatus ?? u?.update?.messageStatus;
     const { status, ts } = mapDeliveryStatus(statusRaw);
-    if (!status) continue;
+    console.log("[WEBHOOK] msg_update keyId=", providerId, "rawStatus=", statusRaw, "mapped=", status);
+    if (!providerId || !status) continue;
 
     const patch: Record<string, unknown> = { delivery_status: status, status };
     if (status === "delivered") patch.delivered_at = ts;
     if (status === "read") {
       patch.read_at = ts;
-      // ensure delivered_at is set too
       patch.delivered_at = ts;
     }
     if (status === "failed") {
@@ -178,13 +208,17 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any) {
       patch.failure_reason = u?.error ?? u?.reason ?? u?.message ?? "unknown";
     }
 
-    await admin
+    const { data: updated, error } = await admin
       .from("messages")
       .update(patch)
       .eq("company_id", inst.company_id)
-      .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`);
+      .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`)
+      .select("id");
+    if (error) console.error("[WEBHOOK] msg_update_err", error.message);
+    else console.log("[WEBHOOK] msg_update_rows=", updated?.length ?? 0);
   }
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -210,11 +244,12 @@ Deno.serve(async (req) => {
         company_id: null,
         channel_id: null,
         event_type: event || "unknown",
-        payload,
+        metadata: payload,
         status: "ignored",
       });
       return json({ ok: true, skipped: "unknown instance" });
     }
+
 
     const normalized = event.toUpperCase().replace(/\./g, "_");
 
@@ -252,7 +287,9 @@ Deno.serve(async (req) => {
     } else if (
       normalized === "MESSAGES_UPDATE" ||
       normalized === "MESSAGE_UPDATE" ||
-      normalized === "MESSAGE_STATUS"
+      normalized === "MESSAGE_STATUS" ||
+      normalized === "SEND_MESSAGE" ||
+      normalized === "MESSAGES_SET"
     ) {
       await handleMessageUpdate(admin, inst, payload);
     }
@@ -261,9 +298,10 @@ Deno.serve(async (req) => {
       company_id: inst.company_id,
       channel_id: inst.channel_id,
       event_type: event || "unknown",
-      payload,
+      metadata: payload,
       status: "ok",
     });
+
 
     return json({ ok: true });
   } catch (e) {
