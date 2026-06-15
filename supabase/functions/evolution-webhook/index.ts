@@ -6,6 +6,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 const MEDIA_BUCKET = "message-media";
+let lastMediaFetchAudit = { hasWebhookBase64: false, triedGetBase64Endpoint: false, getBase64Status: null as number | string | null };
 
 function extOfMime(mime?: string | null, fallback = "bin"): string {
   if (!mime) return fallback;
@@ -73,6 +74,7 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
     null;
   const messageId = m?.key?.id ?? null;
   const hasWebhookBase64 = typeof inline === "string" && inline.length > 0;
+  lastMediaFetchAudit = { hasWebhookBase64, triedGetBase64Endpoint: false, getBase64Status: null };
   console.log("[MEDIA_DOWNLOAD_AUDIT]", {
     messageId,
     instance: instanceName,
@@ -108,6 +110,7 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
       let data: any = {};
       try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
       const base64 = data?.base64 ?? data?.data?.base64 ?? data?.message?.base64 ?? null;
+      lastMediaFetchAudit = { hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: res.status };
       console.log("[MEDIA_DOWNLOAD_AUDIT]", {
         messageId,
         instance: instanceName,
@@ -140,6 +143,7 @@ async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<
       uploadError: (e as Error)?.message,
       storagePath: null,
     });
+    lastMediaFetchAudit = { hasWebhookBase64: false, triedGetBase64Endpoint: true, getBase64Status: "exception" };
     return null;
   }
 }
@@ -165,9 +169,9 @@ async function persistMedia(
       type: info.type,
       mime: info.mime,
       providerId: info.providerId,
-      hasWebhookBase64: true,
-      triedGetBase64Endpoint: false,
-      getBase64Status: null,
+      hasWebhookBase64: lastMediaFetchAudit.hasWebhookBase64,
+      triedGetBase64Endpoint: lastMediaFetchAudit.triedGetBase64Endpoint,
+      getBase64Status: lastMediaFetchAudit.getBase64Status,
       base64Length: base64.length,
       uploadSuccess: false,
       uploadError: (e as Error)?.message ?? "invalid_base64",
@@ -191,9 +195,9 @@ async function persistMedia(
       type: info.type,
       mime: info.mime,
       providerId: info.providerId,
-      hasWebhookBase64: true,
-      triedGetBase64Endpoint: false,
-      getBase64Status: null,
+      hasWebhookBase64: lastMediaFetchAudit.hasWebhookBase64,
+      triedGetBase64Endpoint: lastMediaFetchAudit.triedGetBase64Endpoint,
+      getBase64Status: lastMediaFetchAudit.getBase64Status,
       base64Length: base64.length,
       uploadSuccess: false,
       uploadError: error.message,
@@ -207,9 +211,9 @@ async function persistMedia(
     type: info.type,
     mime: info.mime,
     providerId: info.providerId,
-    hasWebhookBase64: true,
-    triedGetBase64Endpoint: false,
-    getBase64Status: null,
+    hasWebhookBase64: lastMediaFetchAudit.hasWebhookBase64,
+    triedGetBase64Endpoint: lastMediaFetchAudit.triedGetBase64Endpoint,
+    getBase64Status: lastMediaFetchAudit.getBase64Status,
     base64Length: base64.length,
     uploadSuccess: true,
     uploadError: null,
