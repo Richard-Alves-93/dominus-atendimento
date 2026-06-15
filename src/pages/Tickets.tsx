@@ -410,6 +410,20 @@ const Tickets = () => {
     return false;
   }, [selected, isAdmin, isManager, myManagedDeptIds]);
 
+  // Permissão para transferir setor / atribuir atendente:
+  // Master, Admin/Owner, Gerente do setor, ou Atendente responsável pelo ticket.
+  const canTransferDepartment = useMemo(() => {
+    if (!selected) return false;
+    if (isAdmin) return true;
+    if (isManager) {
+      if (!selected.department_id) return true;
+      return myManagedDeptIds.includes(selected.department_id);
+    }
+    if (profile?.id && selected.assigned_user_id === profile.id) return true;
+    return false;
+  }, [selected, isAdmin, isManager, myManagedDeptIds, profile?.id]);
+  const canAssignUser = canTransferDepartment;
+
   // Users for assignment (filtered by selected ticket's department)
   const assignableUsersQuery = useQuery({
     queryKey: ["assignable-users", activeCompanyId, selected?.department_id],
