@@ -876,18 +876,18 @@ const Tickets = () => {
                             ? (m.status === "error" ? "failed" : "sending")
                             : (m.delivery_status || m.status || "sent");
                           if (ds === "failed") {
-                            return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" title="Falhou" />;
+                            return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
                           }
                           if (ds === "read") {
-                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" title="Lida" />;
+                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
                           }
                           if (ds === "delivered") {
-                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" title="Entregue" />;
+                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
                           }
                           if (ds === "sending") {
-                            return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" title="Enviando" />;
+                            return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
                           }
-                          return <Check className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" title="Enviada" />;
+                          return <Check className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
                         })()}
                       </div>
                     </div>
