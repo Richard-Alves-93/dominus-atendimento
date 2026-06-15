@@ -165,6 +165,22 @@ export default function Configuracoes() {
                 />
               </div>
 
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Avisar cliente ao transferir setor</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Quando ativo, ao transferir um atendimento entre setores o cliente recebe
+                    uma mensagem automática no WhatsApp informando o novo setor.
+                  </p>
+                </div>
+                <Switch
+                  checked={notifyCustomerOnTransfer}
+                  onCheckedChange={setNotifyCustomerOnTransfer}
+                  disabled={!canManage}
+                />
+              </div>
+
+
               <div className="pt-2">
                 <Button
                   onClick={handleSave}
