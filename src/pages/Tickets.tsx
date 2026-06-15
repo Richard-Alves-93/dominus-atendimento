@@ -938,6 +938,16 @@ const Tickets = () => {
                     <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                       {STATUS_LABEL[selected.status]}
                     </Badge>
+                    {stalledInfo.stalled && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-4 px-1.5 border-amber-500/40 text-amber-600 dark:text-amber-400 gap-1"
+                        title={`Sem resposta há ${stalledInfo.minutes} min`}
+                      >
+                        <AlarmClock className="w-3 h-3" />
+                        Atendimento parado
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
