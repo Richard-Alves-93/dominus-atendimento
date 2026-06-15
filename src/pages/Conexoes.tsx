@@ -9,7 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
