@@ -410,6 +410,20 @@ const Tickets = () => {
     return false;
   }, [selected, isAdmin, isManager, myManagedDeptIds]);
 
+  // Permissão para transferir setor / atribuir atendente:
+  // Master, Admin/Owner, Gerente do setor, ou Atendente responsável pelo ticket.
+  const canTransferDepartment = useMemo(() => {
+    if (!selected) return false;
+    if (isAdmin) return true;
+    if (isManager) {
+      if (!selected.department_id) return true;
+      return myManagedDeptIds.includes(selected.department_id);
+    }
+    if (profile?.id && selected.assigned_user_id === profile.id) return true;
+    return false;
+  }, [selected, isAdmin, isManager, myManagedDeptIds, profile?.id]);
+  const canAssignUser = canTransferDepartment;
+
   // Users for assignment (filtered by selected ticket's department)
   const assignableUsersQuery = useQuery({
     queryKey: ["assignable-users", activeCompanyId, selected?.department_id],
@@ -950,7 +964,32 @@ const Tickets = () => {
       return;
     }
     if (isTransfer) {
+      const previousDeptName =
+        activeDepts.find((d) => d.id === previousDeptId)?.name ?? "Sem setor";
       const newDeptName = activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor";
+      const actorName = profile?.full_name || profile?.email || "Usuário";
+      // Mensagem de sistema no histórico (não enviada ao WhatsApp — apenas registro).
+      try {
+        await (supabase as any).from("messages").insert({
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          contact_id: selected.contact_id,
+          channel_id: selected.channel_id ?? null,
+          direction: "outbound",
+          msg_type: "text",
+          from_me: true,
+          body: `Atendimento transferido de ${previousDeptName} para ${newDeptName} por ${actorName}.`,
+          source: "system",
+          sent_by_user_id: profile?.id ?? null,
+          sent_by_name: actorName,
+          raw: {},
+          status: "system",
+          delivery_status: "sent",
+          sent_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn("system message (dept transfer) failed", e);
+      }
       // Auditoria: troca de setor
       try {
         await (supabase as any).from("audit_logs").insert({
@@ -969,6 +1008,7 @@ const Tickets = () => {
       } catch (e) {
         console.warn("audit_log dept change failed", e);
       }
+      qc.invalidateQueries({ queryKey: ["messages", ticketId] });
       toast({ title: `Atendimento transferido para ${newDeptName}.` });
     } else {
       toast({ title: "Setor definido." });
@@ -1242,7 +1282,8 @@ const Tickets = () => {
                         setPendingDeptId(selected.department_id ?? "");
                         setAssignDeptOpen(true);
                       }}
-                      disabled={!canEditSelected}
+                      disabled={!canTransferDepartment}
+                      title={!canTransferDepartment ? "Você não tem permissão para transferir este atendimento." : undefined}
                     >
                       <Building2 className="w-4 h-4 mr-2" /> {selected.department_id ? "Transferir setor" : "Definir setor"}
                     </DropdownMenuItem>
@@ -1251,7 +1292,8 @@ const Tickets = () => {
                         setPendingUserId(selected.assigned_user_id ?? "");
                         setAssignUserOpen(true);
                       }}
-                      disabled={!canEditSelected}
+                      disabled={!canAssignUser}
+                      title={!canAssignUser ? "Você não tem permissão para atribuir atendente." : undefined}
                     >
                       <UserPlus className="w-4 h-4 mr-2" /> Atribuir atendente
                     </DropdownMenuItem>
@@ -1270,7 +1312,17 @@ const Tickets = () => {
                   Nenhuma mensagem ainda
                 </div>
               ) : (
-                visibleMessages.map((m) => (
+                visibleMessages.map((m) => {
+                  if (m.source === "system") {
+                    return (
+                      <div key={m.id} className="flex justify-center">
+                        <div className="max-w-[80%] rounded-full bg-muted text-muted-foreground px-3 py-1 text-[11px] text-center italic">
+                          {m.body}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
                   <div key={m.id} className={`flex ${m.from_me ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
@@ -1317,7 +1369,9 @@ const Tickets = () => {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
+
               )}
               <div ref={endRef} />
             </div>
