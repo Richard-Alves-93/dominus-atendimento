@@ -926,13 +926,66 @@ const Tickets = () => {
     updateTicket({ status }, `Atendimento marcado como ${STATUS_LABEL[status].toLowerCase()}.`);
 
   const saveDepartment = async () => {
-    if (!pendingDeptId) return;
-    await updateTicket(
-      { department_id: pendingDeptId, assigned_at: new Date().toISOString(), assigned_by: profile?.id ?? null },
-      "Setor definido.",
-    );
+    if (!pendingDeptId || !selected) return;
+    const previousDeptId = selected.department_id ?? null;
+    const previousAssigned = selected.assigned_user_id ?? null;
+    const isTransfer = previousDeptId && previousDeptId !== pendingDeptId;
+    const ticketId = selected.id;
+    const patch: Record<string, any> = {
+      department_id: pendingDeptId,
+    };
+    if (isTransfer) {
+      // Transferência entre setores: limpar responsável para cair na fila do novo setor
+      patch.assigned_user_id = null;
+      patch.assigned_at = null;
+      patch.assigned_by = null;
+      patch.status = "open";
+    } else {
+      patch.assigned_at = new Date().toISOString();
+      patch.assigned_by = profile?.id ?? null;
+    }
+    const { error } = await (supabase as any).from("tickets").update(patch).eq("id", ticketId);
+    if (error) {
+      toast({ title: "Falha ao atualizar", description: error.message, variant: "destructive" });
+      return;
+    }
+    if (isTransfer) {
+      const newDeptName = activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor";
+      // Auditoria: troca de setor
+      try {
+        await (supabase as any).from("audit_logs").insert({
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          event_type: "ticket_department_changed",
+          previous_assigned_user_id: previousAssigned,
+          new_assigned_user_id: null,
+          changed_by: profile?.id ?? null,
+          reason: "transferencia_setor",
+          metadata: {
+            previous_department_id: previousDeptId,
+            new_department_id: pendingDeptId,
+          },
+        });
+      } catch (e) {
+        console.warn("audit_log dept change failed", e);
+      }
+      toast({ title: `Atendimento transferido para ${newDeptName}.` });
+    } else {
+      toast({ title: "Setor definido." });
+    }
+    qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
     setAssignDeptOpen(false);
+    setTransferConfirmOpen(false);
     setPendingDeptId("");
+  };
+
+  const handleDeptSaveClick = () => {
+    if (!pendingDeptId || !selected) return;
+    if (selected.department_id && selected.department_id !== pendingDeptId) {
+      setTransferConfirmOpen(true);
+      return;
+    }
+    void saveDepartment();
   };
 
   const saveAssignee = async () => {
