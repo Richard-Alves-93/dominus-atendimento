@@ -194,6 +194,7 @@ function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | n
     let cancelled = false;
     setUrl(null);
     setError(false);
+    setLoading(false);
     if (!path) {
       if (safeExternalUrl) setUrl(safeExternalUrl);
       return;
