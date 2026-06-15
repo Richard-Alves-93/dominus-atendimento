@@ -3,6 +3,125 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const EVO_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
+const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
+const MEDIA_BUCKET = "message-media";
+
+function extOfMime(mime?: string | null, fallback = "bin"): string {
+  if (!mime) return fallback;
+  const m = mime.toLowerCase();
+  if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
+  if (m.includes("png")) return "png";
+  if (m.includes("webp")) return "webp";
+  if (m.includes("gif")) return "gif";
+  if (m.includes("mp4")) return "mp4";
+  if (m.includes("webm")) return "webm";
+  if (m.includes("quicktime")) return "mov";
+  if (m.includes("ogg")) return "ogg";
+  if (m.includes("mpeg") && m.startsWith("audio")) return "mp3";
+  if (m.includes("wav")) return "wav";
+  if (m.includes("pdf")) return "pdf";
+  if (m.includes("msword")) return "doc";
+  if (m.includes("wordprocessingml")) return "docx";
+  if (m.includes("spreadsheetml")) return "xlsx";
+  if (m.includes("presentationml")) return "pptx";
+  if (m.includes("zip")) return "zip";
+  if (m.includes("plain")) return "txt";
+  return fallback;
+}
+
+function extractMediaInfo(m: any) {
+  const msg = m?.message ?? {};
+  const candidates: Array<[string, any]> = [
+    ["image", msg.imageMessage],
+    ["audio", msg.audioMessage],
+    ["video", msg.videoMessage],
+    ["document", msg.documentMessage ?? msg.documentWithCaptionMessage?.message?.documentMessage],
+    ["sticker", msg.stickerMessage],
+  ];
+  for (const [type, mm] of candidates) {
+    if (!mm) continue;
+    return {
+      type,
+      mime: mm.mimetype ?? mm.mimeType ?? null,
+      fileName: mm.fileName ?? mm.title ?? null,
+      size: mm.fileLength ? Number(mm.fileLength) : null,
+      duration: mm.seconds ?? null,
+      caption: mm.caption ?? null,
+      providerId: mm.mediaKey ?? null,
+    };
+  }
+  return null;
+}
+
+function b64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/^data:[^;]+;base64,/, "");
+  const bin = atob(clean);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function fetchMediaBase64(instanceName: string, m: any): Promise<string | null> {
+  // 1) Payload may already contain base64 (webhook_base64=true).
+  const inline =
+    m?.message?.base64 ??
+    m?.message?.mediaBase64 ??
+    m?.media?.base64 ??
+    m?.base64 ??
+    null;
+  if (typeof inline === "string" && inline.length > 0) return inline;
+
+  // 2) Ask Evolution to provide the base64.
+  if (!EVO_URL || !EVO_KEY) return null;
+  const url = `${EVO_URL.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: EVO_KEY },
+      body: JSON.stringify({ message: { key: m?.key, message: m?.message }, convertToMp4: false }),
+    });
+    if (!res.ok) {
+      console.warn("[WEBHOOK] media_fetch_failed", res.status, await res.text().catch(() => "").then(t => t.slice(0, 120)));
+      return null;
+    }
+    const data: any = await res.json().catch(() => ({}));
+    return data?.base64 ?? data?.data?.base64 ?? null;
+  } catch (e) {
+    console.warn("[WEBHOOK] media_fetch_exception", (e as Error)?.message);
+    return null;
+  }
+}
+
+async function persistMedia(
+  admin: any,
+  inst: any,
+  ticketId: string,
+  externalId: string | null,
+  info: ReturnType<typeof extractMediaInfo>,
+  m: any,
+  instanceName: string,
+): Promise<{ storage_path: string | null; mime: string | null; size: number | null; fileName: string | null }> {
+  if (!info) return { storage_path: null, mime: null, size: null, fileName: null };
+  const base64 = await fetchMediaBase64(instanceName, m);
+  if (!base64) return { storage_path: null, mime: info.mime, size: info.size, fileName: info.fileName };
+  let bytes: Uint8Array;
+  try { bytes = b64ToBytes(base64); } catch { return { storage_path: null, mime: info.mime, size: info.size, fileName: info.fileName }; }
+  const ext = extOfMime(info.mime, info.type === "sticker" ? "webp" : info.type === "audio" ? "ogg" : "bin");
+  const safeName = (info.fileName && info.fileName.replace(/[^\w.\-]+/g, "_")) || `${info.type}.${ext}`;
+  const fileName = safeName.includes(".") ? safeName : `${safeName}.${ext}`;
+  const idPart = externalId?.replace(/[^\w-]+/g, "_") || crypto.randomUUID();
+  const path = `${inst.company_id}/${inst.channel_id}/${ticketId}/${idPart}/${fileName}`;
+  const { error } = await admin.storage.from(MEDIA_BUCKET).upload(path, bytes, {
+    contentType: info.mime ?? "application/octet-stream",
+    upsert: true,
+  });
+  if (error) {
+    console.warn("[WEBHOOK] media_upload_failed", error.message);
+    return { storage_path: null, mime: info.mime, size: info.size, fileName };
+  }
+  return { storage_path: path, mime: info.mime, size: bytes.byteLength, fileName };
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -220,6 +339,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
           : new Date().toISOString();
         const deliveryStatus = mappedStatus ?? "sent";
 
+        const mediaInfo = extractMediaInfo(m);
+        const media = mediaInfo
+          ? await persistMedia(admin, inst, ticket.id, externalId, mediaInfo, m, inst.instance_name)
+          : null;
+
         await admin.from("messages").upsert(
           {
             company_id: inst.company_id,
@@ -241,9 +365,17 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
             status: deliveryStatus,
             raw: m,
             sent_at: sentAt,
+            media_mime_type: media?.mime ?? mediaInfo?.mime ?? null,
+            media_file_name: media?.fileName ?? mediaInfo?.fileName ?? null,
+            media_size: media?.size ?? mediaInfo?.size ?? null,
+            media_duration: mediaInfo?.duration ?? null,
+            media_caption: mediaInfo?.caption ?? null,
+            media_storage_path: media?.storage_path ?? null,
+            media_provider_id: mediaInfo?.providerId ?? null,
           },
           { onConflict: "channel_id,external_id" },
         );
+
 
         const ticketPatch: Record<string, unknown> = { last_message_at: sentAt };
         if (ticket.status === "closed") ticketPatch.status = "open";
@@ -307,6 +439,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
       : new Date().toISOString();
 
+    const mediaInfo = extractMediaInfo(m);
+    const media = mediaInfo
+      ? await persistMedia(admin, inst, ticket.id, externalId, mediaInfo, m, inst.instance_name)
+      : null;
+
     await admin.from("messages").upsert(
       {
         company_id: inst.company_id,
@@ -322,9 +459,17 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         delivery_status: "received",
         raw: m,
         sent_at: sentAt,
+        media_mime_type: media?.mime ?? mediaInfo?.mime ?? null,
+        media_file_name: media?.fileName ?? mediaInfo?.fileName ?? null,
+        media_size: media?.size ?? mediaInfo?.size ?? null,
+        media_duration: mediaInfo?.duration ?? null,
+        media_caption: mediaInfo?.caption ?? null,
+        media_storage_path: media?.storage_path ?? null,
+        media_provider_id: mediaInfo?.providerId ?? null,
       },
       { onConflict: "channel_id,external_id" },
     );
+
 
     await admin
       .from("tickets")

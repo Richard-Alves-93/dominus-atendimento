@@ -22,6 +22,9 @@ import {
   RotateCcw,
   AlertCircle,
   AlarmClock,
+  FileText,
+  Download,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -87,8 +90,15 @@ interface MessageRow {
   created_at: string;
   source?: string | null;
   sent_by_name?: string | null;
+  media_mime_type?: string | null;
+  media_file_name?: string | null;
+  media_size?: number | null;
+  media_duration?: number | null;
+  media_caption?: string | null;
+  media_storage_path?: string | null;
   _optimistic?: boolean;
 }
+
 
 interface PendingMessage {
   tempId: string;
@@ -132,6 +142,92 @@ function fmtTime(iso?: string | null) {
   y.setDate(y.getDate() - 1);
   if (d.toDateString() === y.toDateString()) return "Ontem";
   return d.toLocaleDateString();
+}
+
+function formatBytes(n?: number | null) {
+  if (!n || n <= 0) return "";
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${u[i]}`;
+}
+
+function formatDuration(s?: number | null) {
+  if (!s || s <= 0) return "";
+  const m = Math.floor(s / 60);
+  const r = Math.floor(s % 60);
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | null) => string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const path = m.media_storage_path;
+  const type = m.msg_type;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!path) return;
+    setLoading(true);
+    supabase.storage.from("message-media").createSignedUrl(path, 3600).then(({ data }) => {
+      if (!cancelled) {
+        setUrl(data?.signedUrl ?? null);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [path]);
+
+  if (!path) {
+    const fallback =
+      type === "image" ? "Imagem recebida" :
+      type === "audio" ? "Áudio recebido" :
+      type === "video" ? "Vídeo recebido" :
+      type === "document" ? "Documento recebido" :
+      type === "sticker" ? "Figurinha recebida" :
+      `[${type}]`;
+    return <p className="text-sm italic opacity-80">{fallback}</p>;
+  }
+
+  if (loading || !url) {
+    return <div className="flex items-center gap-2 text-xs opacity-70"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando mídia...</div>;
+  }
+
+  if (type === "image" || type === "sticker") {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="block">
+        <img
+          src={url}
+          alt={m.media_file_name ?? "imagem"}
+          className={type === "sticker" ? "max-h-32 object-contain" : "max-h-72 rounded-lg object-cover"}
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+  if (type === "audio") {
+    return <audio src={url} controls preload="metadata" className="w-64 max-w-full" />;
+  }
+  if (type === "video") {
+    return <video src={url} controls preload="metadata" className="max-h-72 rounded-lg" />;
+  }
+  if (type === "document") {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" download={m.media_file_name ?? undefined}
+        className="flex items-center gap-3 rounded-lg border border-current/20 bg-background/40 px-3 py-2 hover:bg-background/60 transition-colors">
+        <FileText className="w-6 h-6 shrink-0 opacity-80" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{m.media_file_name ?? "Arquivo"}</div>
+          <div className="text-[11px] opacity-70">
+            {[onMime(m.media_mime_type), formatBytes(m.media_size)].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        <Download className="w-4 h-4 opacity-70" />
+      </a>
+    );
+  }
+  return <a href={url} target="_blank" rel="noreferrer" className="text-sm underline">Baixar mídia</a>;
 }
 
 const Tickets = () => {
@@ -580,7 +676,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at, source, sent_by_name")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at, source, sent_by_name, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
@@ -1359,9 +1455,27 @@ const Tickets = () => {
                           : "bg-card text-foreground shadow-card rounded-bl-md"
                       } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
                     >
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                        {m.body || <span className="italic opacity-70">[{m.msg_type}]</span>}
-                      </p>
+                      {(() => {
+                        const mediaTypes = ["image", "audio", "video", "document", "sticker"];
+                        const isMedia = mediaTypes.includes(m.msg_type);
+                        const caption = m.media_caption ?? (isMedia ? m.body : null);
+                        return (
+                          <>
+                            {isMedia && (
+                              <div className="mb-1">
+                                <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
+                              </div>
+                            )}
+                            {(isMedia ? caption : m.body) ? (
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                {isMedia ? caption : m.body}
+                              </p>
+                            ) : isMedia ? null : (
+                              <p className="text-sm italic opacity-70">[{m.msg_type}]</p>
+                            )}
+                          </>
+                        );
+                      })()}
                       {m.from_me && m.source === "whatsapp_device" && (
                         <div
                           className="text-[10px] mt-1 opacity-70 italic"
