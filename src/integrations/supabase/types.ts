@@ -158,6 +158,10 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          delete_after: string | null
+          disabled_at: string | null
+          disabled_by: string | null
+          disabled_reason: string | null
           id: string
           role: Database["public"]["Enums"]["company_user_role"]
           status: Database["public"]["Enums"]["company_user_status"]
@@ -167,6 +171,10 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          delete_after?: string | null
+          disabled_at?: string | null
+          disabled_by?: string | null
+          disabled_reason?: string | null
           id?: string
           role?: Database["public"]["Enums"]["company_user_role"]
           status?: Database["public"]["Enums"]["company_user_status"]
@@ -176,6 +184,10 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          delete_after?: string | null
+          disabled_at?: string | null
+          disabled_by?: string | null
+          disabled_reason?: string | null
           id?: string
           role?: Database["public"]["Enums"]["company_user_role"]
           status?: Database["public"]["Enums"]["company_user_status"]
@@ -232,6 +244,98 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      department_users: {
+        Row: {
+          company_id: string
+          created_at: string
+          department_id: string
+          id: string
+          role: Database["public"]["Enums"]["department_user_role"]
+          status: Database["public"]["Enums"]["department_user_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          department_id: string
+          id?: string
+          role?: Database["public"]["Enums"]["department_user_role"]
+          status?: Database["public"]["Enums"]["department_user_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          department_id?: string
+          id?: string
+          role?: Database["public"]["Enums"]["department_user_role"]
+          status?: Database["public"]["Enums"]["department_user_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_users_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      departments: {
+        Row: {
+          company_id: string
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          description: string | null
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["department_status"]
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["department_status"]
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["department_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "departments_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -360,11 +464,14 @@ export type Database = {
       }
       tickets: {
         Row: {
+          assigned_at: string | null
+          assigned_by: string | null
           assigned_user_id: string | null
           channel_id: string | null
           company_id: string
           contact_id: string
           created_at: string
+          department_id: string | null
           id: string
           last_message_at: string | null
           metadata: Json
@@ -374,11 +481,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
           assigned_user_id?: string | null
           channel_id?: string | null
           company_id: string
           contact_id: string
           created_at?: string
+          department_id?: string | null
           id?: string
           last_message_at?: string | null
           metadata?: Json
@@ -388,11 +498,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
           assigned_user_id?: string | null
           channel_id?: string | null
           company_id?: string
           contact_id?: string
           created_at?: string
+          department_id?: string | null
           id?: string
           last_message_at?: string | null
           metadata?: Json
@@ -421,6 +534,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
@@ -509,6 +629,9 @@ export type Database = {
       company_status: "trial" | "active" | "pending" | "suspended" | "canceled"
       company_user_role: "owner" | "admin" | "manager" | "agent" | "financial"
       company_user_status: "active" | "pending" | "disabled"
+      department_status: "active" | "inactive"
+      department_user_role: "manager" | "agent" | "viewer"
+      department_user_status: "active" | "inactive"
       global_role: "master" | "user"
       message_direction: "inbound" | "outbound"
       message_type:
@@ -661,6 +784,9 @@ export const Constants = {
       company_status: ["trial", "active", "pending", "suspended", "canceled"],
       company_user_role: ["owner", "admin", "manager", "agent", "financial"],
       company_user_status: ["active", "pending", "disabled"],
+      department_status: ["active", "inactive"],
+      department_user_role: ["manager", "agent", "viewer"],
+      department_user_status: ["active", "inactive"],
       global_role: ["master", "user"],
       message_direction: ["inbound", "outbound"],
       message_type: [
