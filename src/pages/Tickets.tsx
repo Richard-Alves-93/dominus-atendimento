@@ -869,6 +869,14 @@ const Tickets = () => {
                       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                         {m.body || <span className="italic opacity-70">[{m.msg_type}]</span>}
                       </p>
+                      {m.from_me && m.source === "whatsapp_device" && (
+                        <div
+                          className="text-[10px] mt-1 opacity-70 italic"
+                          title="Mensagem enviada diretamente pelo WhatsApp conectado"
+                        >
+                          Enviado pelo WhatsApp
+                        </div>
+                      )}
                       <div
                         className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                       >
