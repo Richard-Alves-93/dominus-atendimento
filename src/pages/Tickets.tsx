@@ -198,16 +198,40 @@ const Tickets = () => {
     },
   });
 
+  // Fetch assignee profiles separately (FK is to auth.users, not embeddable into profiles)
+  const assigneeIds = useMemo(() => {
+    const set = new Set<string>();
+    (ticketsQuery.data ?? []).forEach((t) => { if (t.assigned_user_id) set.add(t.assigned_user_id); });
+    return Array.from(set);
+  }, [ticketsQuery.data]);
+
+  const assigneeProfilesQuery = useQuery({
+    queryKey: ["assignee-profiles", assigneeIds.join(",")],
+    enabled: assigneeIds.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("profiles").select("id, full_name, email").in("id", assigneeIds);
+      const map: Record<string, { id: string; full_name: string | null; email: string | null }> = {};
+      (data ?? []).forEach((p: any) => { map[p.id] = p; });
+      return map;
+    },
+  });
+
   const tickets = useMemo(() => {
     const list = ticketsQuery.data ?? [];
-    if (!search.trim()) return list;
+    const pmap = assigneeProfilesQuery.data ?? {};
+    const withAssignee = list.map((t) => ({
+      ...t,
+      assignee: t.assigned_user_id ? pmap[t.assigned_user_id] ?? null : null,
+    }));
+    if (!search.trim()) return withAssignee;
     const s = search.toLowerCase();
-    return list.filter(
+    return withAssignee.filter(
       (t) =>
         (t.contact?.name || "").toLowerCase().includes(s) ||
         (t.contact?.phone_number || "").includes(s),
     );
-  }, [ticketsQuery.data, search]);
+  }, [ticketsQuery.data, assigneeProfilesQuery.data, search]);
 
   const selected = useMemo(
     () => tickets.find((t) => t.id === selectedId) ?? null,
