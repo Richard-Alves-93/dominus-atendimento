@@ -753,11 +753,14 @@ const Tickets = () => {
   };
 
   const saveAssignee = async () => {
-    if (!pendingUserId) return;
+    if (!pendingUserId || !selected) return;
+    const previous = selected.assigned_user_id ?? null;
+    const ticketId = selected.id;
     await updateTicket(
       { assigned_user_id: pendingUserId, assigned_at: new Date().toISOString(), assigned_by: profile?.id ?? null },
       "Responsável atribuído.",
     );
+    await writeAuditLog(ticketId, previous, pendingUserId, "transferencia_manual");
     setAssignUserOpen(false);
     setPendingUserId("");
   };
