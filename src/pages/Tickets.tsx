@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Clock,
   RotateCcw,
+  AlertCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -80,6 +81,7 @@ interface MessageRow {
   body: string | null;
   msg_type: string;
   status: string | null;
+  delivery_status?: string | null;
   sent_at: string;
   created_at: string;
   _optimistic?: boolean;
@@ -424,7 +426,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, sent_at, created_at")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
@@ -855,20 +857,29 @@ const Tickets = () => {
                         className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/60" : "text-muted-foreground"}`}
                       >
                         <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
-                        {m.from_me && m._optimistic ? (
-                          m.status === "error" ? (
-                            <span className="text-[10px] text-destructive-foreground/90">Erro ao enviar</span>
-                          ) : (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          )
-                        ) : (
-                          m.from_me &&
-                          (m.status === "read" ? (
-                            <CheckCheck className="w-3.5 h-3.5" />
-                          ) : (
-                            <Check className="w-3.5 h-3.5" />
-                          ))
-                        )}
+                        {m.from_me && (() => {
+                          const ds = m._optimistic
+                            ? (m.status === "error" ? "failed" : "sending")
+                            : (m.delivery_status || m.status || "sent");
+                          if (ds === "sending") {
+                            return <Clock className="w-3 h-3" aria-label="Enviando" />;
+                          }
+                          if (ds === "failed") {
+                            return (
+                              <span className="flex items-center gap-1" aria-label="Falhou">
+                                <AlertCircle className="w-3.5 h-3.5 text-destructive" />
+                                <span className="text-[10px] text-destructive">Erro ao enviar</span>
+                              </span>
+                            );
+                          }
+                          if (ds === "read") {
+                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
+                          }
+                          if (ds === "delivered") {
+                            return <CheckCheck className="w-3.5 h-3.5" aria-label="Entregue" />;
+                          }
+                          return <Check className="w-3.5 h-3.5" aria-label="Enviada" />;
+                        })()}
                       </div>
                     </div>
                   </div>

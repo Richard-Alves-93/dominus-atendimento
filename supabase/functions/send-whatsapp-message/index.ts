@@ -135,7 +135,9 @@ Deno.serve(async (req) => {
         sent_by_name: senderName,
         sent_by_signature: signatureLine,
         external_id: externalId,
+        provider_message_id: externalId,
         status: "sent",
+        delivery_status: "sent",
         sent_at: nowIso,
         raw: evoData,
       })
