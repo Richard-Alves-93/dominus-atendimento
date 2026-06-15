@@ -27,14 +27,26 @@ Deno.serve(async (req) => {
     if (!EVO_URL || !EVO_KEY) return fail("config", "Evolution API not configured");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return fail("auth", "Missing bearer token");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ ok: false, error: "Missing bearer token", step: "auth" }, 401);
+    }
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) return json({ ok: false, error: "Missing bearer token", step: "auth" }, 401);
 
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData?.user) return fail("auth", "Invalid session", { detail: userErr?.message });
-    const userId = userData.user.id;
+    // Validate JWT without depending on session_id claim
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY);
+    let userId: string | null = null;
+    try {
+      const claimsRes = await (anonClient.auth as any).getClaims(token);
+      if (claimsRes?.data?.claims?.sub) userId = claimsRes.data.claims.sub as string;
+    } catch (_) { /* fall through */ }
+    if (!userId) {
+      const { data: userData, error: userErr } = await anonClient.auth.getUser(token);
+      if (userErr || !userData?.user) {
+        return json({ ok: false, error: "Invalid session", step: "auth", detail: userErr?.message }, 401);
+      }
+      userId = userData.user.id;
+    }
     console.log("[SEND_WA] user_id:", userId);
 
     const payload = await req.json().catch(() => ({} as any));
