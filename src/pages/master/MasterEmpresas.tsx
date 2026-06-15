@@ -133,8 +133,9 @@ export default function MasterEmpresas() {
                 </TableRow>
               )}
               {companies.map((c) => {
-                const canSuspend = SUSPENDABLE.has(c.status);
-                const canReactivate = REACTIVATABLE.has(c.status);
+                const canSuspend = !c.is_internal && SUSPENDABLE.has(c.status);
+                const canReactivate = !c.is_internal && REACTIVATABLE.has(c.status);
+                const showSeparator = canSuspend || canReactivate;
                 return (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.name}</TableCell>
