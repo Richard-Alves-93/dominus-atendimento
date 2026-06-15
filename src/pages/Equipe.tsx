@@ -162,6 +162,10 @@ export default function Equipe() {
     if (!isValidPhone(form.phone)) {
       return toast({ title: "WhatsApp inválido", description: "Informe um WhatsApp válido com DDD.", variant: "destructive" });
     }
+    if (isSingleDeptRole(form.role) && form.department_ids.length > 1) {
+      return toast({ title: "Este cargo permite vínculo com apenas um setor.", variant: "destructive" });
+    }
+    const safeRole: Role = form.role === "owner" ? "admin" : form.role;
     setBusy(true);
     const { data, error } = await supabase.functions.invoke("create-company-user", {
       body: {
@@ -169,7 +173,7 @@ export default function Equipe() {
         full_name: form.full_name.trim(),
         email: form.email.trim().toLowerCase(),
         phone: normalizePhone(form.phone),
-        role: form.role,
+        role: safeRole,
         department_ids: form.department_ids,
         signature: form.signature.trim() || null,
         signature_enabled: form.signature_enabled,
