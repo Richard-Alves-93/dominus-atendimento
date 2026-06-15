@@ -152,6 +152,7 @@ const Tickets = () => {
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
   const [takeOverOpen, setTakeOverOpen] = useState(false);
+  const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
   const [pendingUserId, setPendingUserId] = useState<string>("");
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
