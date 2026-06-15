@@ -455,31 +455,78 @@ const Tickets = () => {
               />
             </div>
 
-            <Select value={filter} onValueChange={(v) => setFilter(v as ListFilter)}>
-              <SelectTrigger className="h-9 bg-secondary border-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="fila">Fila geral</SelectItem>
-                <SelectItem value="meus">Meus atendimentos</SelectItem>
-                <SelectItem value="open">Abertos</SelectItem>
-                <SelectItem value="pending">Pendentes</SelectItem>
-                <SelectItem value="closed">Fechados</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={filter === "open" ? "default" : "secondary"}
+                className="flex-1 h-9 text-xs"
+                onClick={() => setFilter("open")}
+              >
+                Abertos
+              </Button>
+              <Button
+                size="sm"
+                variant={filter === "pending" ? "default" : "secondary"}
+                className="flex-1 h-9 text-xs"
+                onClick={() => setFilter("pending")}
+              >
+                Pendentes
+              </Button>
+              <Button
+                size="sm"
+                variant={filter === "closed" ? "default" : "secondary"}
+                className="flex-1 h-9 text-xs"
+                onClick={() => setFilter("closed")}
+              >
+                Fechados
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant={filter === "todos" || filter === "fila" || filter === "meus" ? "default" : "secondary"}
+                    className="h-9 w-9 flex-shrink-0"
+                    aria-label="Mais filtros"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setFilter("todos")}>
+                    {filter === "todos" && <Check className="w-3.5 h-3.5 mr-2" />}
+                    {filter !== "todos" && <span className="w-3.5 h-3.5 mr-2" />}
+                    Todos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFilter("fila")}
+                    disabled={!canSeeGeneralQueue}
+                  >
+                    {filter === "fila" && <Check className="w-3.5 h-3.5 mr-2" />}
+                    {filter !== "fila" && <span className="w-3.5 h-3.5 mr-2" />}
+                    Fila geral
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilter("meus")}>
+                    {filter === "meus" && <Check className="w-3.5 h-3.5 mr-2" />}
+                    {filter !== "meus" && <span className="w-3.5 h-3.5 mr-2" />}
+                    Meus atendimentos
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-            <Select value={deptFilter} onValueChange={setDeptFilter}>
-              <SelectTrigger className="h-9 bg-secondary border-0">
-                <SelectValue placeholder="Setor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os setores</SelectItem>
-                {activeDepts.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {activeDepts.length > 0 && (
+              <Select value={deptFilter} onValueChange={setDeptFilter}>
+                <SelectTrigger className="h-8 bg-secondary border-0 text-xs">
+                  <SelectValue placeholder="Setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os setores</SelectItem>
+                  {activeDepts.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-thin">
