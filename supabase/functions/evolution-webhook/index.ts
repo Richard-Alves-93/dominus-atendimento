@@ -48,7 +48,8 @@ function extractMediaInfo(m: any) {
       size: mm.fileLength ? Number(mm.fileLength) : null,
       duration: mm.seconds ?? null,
       caption: mm.caption ?? null,
-      providerId: mm.mediaKey ?? null,
+      providerId: m?.key?.id ?? mm.url ?? mm.directPath ?? null,
+      mediaUrl: mm.url ?? null,
     };
   }
   return null;
@@ -62,7 +63,7 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-async function fetchMediaBase64(instanceName: string, m: any): Promise<string | null> {
+async function fetchMediaBase64(instanceName: string, m: any, info?: ReturnType<typeof extractMediaInfo>): Promise<string | null> {
   // 1) Payload may already contain base64 (webhook_base64=true).
   const inline =
     m?.message?.base64 ??
@@ -70,25 +71,75 @@ async function fetchMediaBase64(instanceName: string, m: any): Promise<string | 
     m?.media?.base64 ??
     m?.base64 ??
     null;
-  if (typeof inline === "string" && inline.length > 0) return inline;
+  const messageId = m?.key?.id ?? null;
+  const hasWebhookBase64 = typeof inline === "string" && inline.length > 0;
+  console.log("[MEDIA_DOWNLOAD_AUDIT]", {
+    messageId,
+    instance: instanceName,
+    type: info?.type ?? null,
+    mime: info?.mime ?? null,
+    providerId: info?.providerId ?? null,
+    hasWebhookBase64,
+    triedGetBase64Endpoint: false,
+    getBase64Status: null,
+    base64Length: hasWebhookBase64 ? inline.length : 0,
+    uploadSuccess: null,
+    uploadError: null,
+    storagePath: null,
+  });
+  if (hasWebhookBase64) return inline;
 
   // 2) Ask Evolution to provide the base64.
   if (!EVO_URL || !EVO_KEY) return null;
   const url = `${EVO_URL.replace(/\/$/, "")}/chat/getBase64FromMediaMessage/${instanceName}`;
+  const bodies = [
+    { message: { key: m?.key, message: m?.message }, convertToMp4: false },
+    { key: m?.key, message: m?.message, convertToMp4: false },
+    { messageId, key: m?.key, convertToMp4: false },
+  ];
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-      body: JSON.stringify({ message: { key: m?.key, message: m?.message }, convertToMp4: false }),
-    });
-    if (!res.ok) {
-      console.warn("[WEBHOOK] media_fetch_failed", res.status, await res.text().catch(() => "").then(t => t.slice(0, 120)));
-      return null;
+    for (const body of bodies) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: EVO_KEY },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text().catch(() => "");
+      let data: any = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+      const base64 = data?.base64 ?? data?.data?.base64 ?? data?.message?.base64 ?? null;
+      console.log("[MEDIA_DOWNLOAD_AUDIT]", {
+        messageId,
+        instance: instanceName,
+        type: info?.type ?? null,
+        mime: info?.mime ?? data?.mimetype ?? data?.data?.mimetype ?? null,
+        providerId: info?.providerId ?? null,
+        hasWebhookBase64: false,
+        triedGetBase64Endpoint: true,
+        getBase64Status: res.status,
+        base64Length: typeof base64 === "string" ? base64.length : 0,
+        uploadSuccess: null,
+        uploadError: res.ok ? null : text.slice(0, 120),
+        storagePath: null,
+      });
+      if (res.ok && typeof base64 === "string" && base64.length > 0) return base64;
     }
-    const data: any = await res.json().catch(() => ({}));
-    return data?.base64 ?? data?.data?.base64 ?? null;
+    return null;
   } catch (e) {
-    console.warn("[WEBHOOK] media_fetch_exception", (e as Error)?.message);
+    console.warn("[MEDIA_DOWNLOAD_AUDIT]", {
+      messageId,
+      instance: instanceName,
+      type: info?.type ?? null,
+      mime: info?.mime ?? null,
+      providerId: info?.providerId ?? null,
+      hasWebhookBase64: false,
+      triedGetBase64Endpoint: true,
+      getBase64Status: "exception",
+      base64Length: 0,
+      uploadSuccess: false,
+      uploadError: (e as Error)?.message,
+      storagePath: null,
+    });
     return null;
   }
 }
