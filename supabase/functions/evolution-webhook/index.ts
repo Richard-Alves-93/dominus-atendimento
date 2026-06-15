@@ -47,6 +47,52 @@ function extractBody(m: any): string | null {
   );
 }
 
+// Maps Evolution/Baileys status values to our delivery_status.
+// Strings: PENDING, SERVER_ACK, DELIVERY_ACK, READ, PLAYED
+// Numbers: 0 ERROR, 1 PENDING, 2 SERVER_ACK(sent), 3 DELIVERY_ACK(delivered), 4 READ, 5 PLAYED
+function mapDeliveryStatus(raw: any): { status: string | null; ts: string } {
+  const ts = new Date().toISOString();
+  if (raw === null || raw === undefined) return { status: null, ts };
+  const v = typeof raw === "string" ? raw.toUpperCase() : raw;
+  if (v === 0 || v === "ERROR" || v === "FAILED" || v === -1) return { status: "failed", ts };
+  if (v === 2 || v === "SERVER_ACK" || v === "SENT" || v === "ACK") return { status: "sent", ts };
+  if (v === 3 || v === "DELIVERY_ACK" || v === "DELIVERED") return { status: "delivered", ts };
+  if (v === 4 || v === 5 || v === "READ" || v === "PLAYED" || v === "READ_SELF") return { status: "read", ts };
+  return { status: null, ts };
+}
+
+async function patchOutboundStatus(admin: any, inst: any, providerId: string | null, statusRaw: any, source: string) {
+  const { status, ts } = mapDeliveryStatus(statusRaw);
+  console.log("[WEBHOOK] msg_update keyId=", providerId, "rawStatus=", statusRaw, "mapped=", status, "source=", source);
+  if (!providerId || !status) return 0;
+
+  const patch: Record<string, unknown> = { delivery_status: status, status };
+  if (status === "delivered") patch.delivered_at = ts;
+  if (status === "read") {
+    patch.read_at = ts;
+    patch.delivered_at = ts;
+  }
+  if (status === "failed") {
+    patch.failed_at = ts;
+    patch.failure_reason = "status_webhook";
+  }
+
+  const { data: updated, error } = await admin
+    .from("messages")
+    .update(patch)
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .eq("from_me", true)
+    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`)
+    .select("id");
+  if (error) {
+    console.error("[WEBHOOK] msg_update_err", error.message);
+    return 0;
+  }
+  console.log("[WEBHOOK] msg_update_rows=", updated?.length ?? 0);
+  return updated?.length ?? 0;
+}
+
 async function handleMessageUpsert(admin: any, inst: any, payload: any) {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const m of dataArr) {
@@ -57,6 +103,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
     const phone = jidToPhone(remoteJid);
     const externalId: string | null = key.id ?? null;
     const pushName = m?.pushName ?? null;
+    const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
 
     // ── Outbound (fromMe): we already created this message in send-whatsapp-message.
     // Just patch the existing row by external_id / provider_message_id so we don't duplicate.
@@ -73,15 +120,23 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
         .limit(1)
         .maybeSingle();
       if (existing) {
-        await admin
-          .from("messages")
-          .update({
-            external_id: externalId,
-            provider_message_id: externalId,
-            delivery_status: "sent",
-            status: "sent",
-          })
-          .eq("id", existing.id);
+        const { status } = mapDeliveryStatus(statusRaw);
+        const patch: Record<string, unknown> = {
+          external_id: externalId,
+          provider_message_id: externalId,
+        };
+        if (status) {
+          patch.delivery_status = status;
+          patch.status = status;
+          const now = new Date().toISOString();
+          if (status === "delivered") patch.delivered_at = now;
+          if (status === "read") {
+            patch.delivered_at = now;
+            patch.read_at = now;
+          }
+        }
+        await admin.from("messages").update(patch).eq("id", existing.id);
+        if (status) console.log("[WEBHOOK] msg_update_rows=", 1);
       } else {
         console.log("[WEBHOOK] upsert_fromMe_orphan keyId=", externalId);
       }
@@ -172,20 +227,6 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
   }
 }
 
-// Maps Evolution/Baileys status values to our delivery_status.
-// Strings: PENDING, SERVER_ACK, DELIVERY_ACK, READ, PLAYED
-// Numbers: 0 ERROR, 1 PENDING, 2 SERVER_ACK(sent), 3 DELIVERY_ACK(delivered), 4 READ, 5 PLAYED
-function mapDeliveryStatus(raw: any): { status: string | null; ts: string } {
-  const ts = new Date().toISOString();
-  if (raw === null || raw === undefined) return { status: null, ts };
-  const v = typeof raw === "string" ? raw.toUpperCase() : raw;
-  if (v === 0 || v === "ERROR" || v === "FAILED" || v === -1) return { status: "failed", ts };
-  if (v === 2 || v === "SERVER_ACK" || v === "SENT" || v === "ACK") return { status: "sent", ts };
-  if (v === 3 || v === "DELIVERY_ACK" || v === "DELIVERED") return { status: "delivered", ts };
-  if (v === 4 || v === 5 || v === "READ" || v === "PLAYED" || v === "READ_SELF") return { status: "read", ts };
-  return { status: null, ts };
-}
-
 async function handleMessageUpdate(admin: any, inst: any, payload: any) {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const u of dataArr) {
@@ -193,29 +234,7 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any) {
       u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id ?? u?.update?.key?.id;
     const statusRaw =
       u?.status ?? u?.update?.status ?? u?.messageStatus ?? u?.update?.messageStatus;
-    const { status, ts } = mapDeliveryStatus(statusRaw);
-    console.log("[WEBHOOK] msg_update keyId=", providerId, "rawStatus=", statusRaw, "mapped=", status);
-    if (!providerId || !status) continue;
-
-    const patch: Record<string, unknown> = { delivery_status: status, status };
-    if (status === "delivered") patch.delivered_at = ts;
-    if (status === "read") {
-      patch.read_at = ts;
-      patch.delivered_at = ts;
-    }
-    if (status === "failed") {
-      patch.failed_at = ts;
-      patch.failure_reason = u?.error ?? u?.reason ?? u?.message ?? "unknown";
-    }
-
-    const { data: updated, error } = await admin
-      .from("messages")
-      .update(patch)
-      .eq("company_id", inst.company_id)
-      .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`)
-      .select("id");
-    if (error) console.error("[WEBHOOK] msg_update_err", error.message);
-    else console.log("[WEBHOOK] msg_update_rows=", updated?.length ?? 0);
+    await patchOutboundStatus(admin, inst, providerId ?? null, statusRaw, "message_update");
   }
 }
 
