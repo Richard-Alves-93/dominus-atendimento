@@ -342,7 +342,7 @@ const Tickets = () => {
       }
       return map;
     },
-    staleTime: 15_000,
+    staleTime: 0,
   });
 
   const tickets = useMemo(() => {
