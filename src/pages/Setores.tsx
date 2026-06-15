@@ -120,6 +120,7 @@ export default function Setores() {
         description: form.description.trim() || null,
         status: form.status,
         allow_general_queue: form.allow_general_queue,
+        allow_stalled_takeover: form.allow_stalled_takeover,
       });
       setBusy(false);
       if (error) {
