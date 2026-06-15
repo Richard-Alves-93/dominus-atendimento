@@ -1186,7 +1186,11 @@ const Tickets = () => {
                     <span>·</span>
                     <span>
                       Responsável:{" "}
-                      {selected.assignee?.full_name || selected.assignee?.email || "Sem responsável"}
+                      {selected.assigned_user_id
+                        ? (selected.assigned_user_id === profile?.id
+                            ? "Você"
+                            : (selected.assignee?.full_name || selected.assignee?.email || "Responsável"))
+                        : "Sem responsável"}
                     </span>
                     <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                       {STATUS_LABEL[selected.status]}
