@@ -288,23 +288,47 @@ const Tickets = () => {
     },
   });
 
-  // Zero unread on open (DB + cache otimista)
-  useEffect(() => {
-    if (!selected || (selected.unread_count ?? 0) === 0) return;
-    const ticketId = selected.id;
-    // Atualiza cache de todas as queries de tickets desta empresa
-    qc.setQueriesData<TicketRow[] | undefined>(
-      { queryKey: ["tickets", activeCompanyId] },
-      (old) => (old ? old.map((t) => (t.id === ticketId ? { ...t, unread_count: 0 } : t)) : old),
-    );
-    (supabase as any)
-      .from("tickets")
-      .update({ unread_count: 0 })
-      .eq("id", ticketId)
-      .then(() => {
-        qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
-      });
-  }, [selected?.id]);
+  // unread_count só zera ao aceitar — não zerar apenas por visualizar.
+
+  const isPendingAcceptance = !!selected && !selected.assigned_user_id && selected.status !== "closed";
+  const canAcceptSelected = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (selected.status === "closed") return false;
+    if (selected.assigned_user_id) return false;
+    if (isAdmin) return true;
+    if (isManager) {
+      if (!selected.department_id) return true;
+      return myManagedDeptIds.includes(selected.department_id);
+    }
+    // agent: fila geral ou setores dele
+    if (!selected.department_id) return true;
+    return myDeptIds.includes(selected.department_id);
+  }, [selected, profile?.id, isAdmin, isManager, myManagedDeptIds, myDeptIds]);
+
+  const acceptMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
+      const nowIso = new Date().toISOString();
+      const { error } = await (supabase as any)
+        .from("tickets")
+        .update({
+          assigned_user_id: profile.id,
+          assigned_at: nowIso,
+          assigned_by: profile.id,
+          unread_count: 0,
+          status: "open",
+        })
+        .eq("id", selected.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Atendimento aceito" });
+      qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Falha ao aceitar", description: e.message, variant: "destructive" });
+    },
+  });
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
