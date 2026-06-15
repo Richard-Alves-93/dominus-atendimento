@@ -69,11 +69,11 @@ export default function MasterEmpresas() {
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
 
   const load = () =>
-    supabase
+    (supabase
       .from("companies")
-      .select("id, name, email, phone, status, created_at")
+      .select("id, name, email, phone, status, created_at, is_internal") as any)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setCompanies((data as Company[] | null) ?? []));
+      .then(({ data }: { data: Company[] | null }) => setCompanies(data ?? []));
 
   useEffect(() => {
     void load();
@@ -87,6 +87,14 @@ export default function MasterEmpresas() {
 
   const changeStatus = async (c: Company, status: "suspended" | "active") => {
     if (!isMaster) return;
+    if (c.is_internal && status === "suspended") {
+      toast({
+        title: "Ação bloqueada",
+        description: "A empresa interna Dominus não pode ser suspensa.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusyId(c.id);
     const { error } = await supabase.from("companies").update({ status }).eq("id", c.id);
     setBusyId(null);
