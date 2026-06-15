@@ -213,6 +213,7 @@ export type Database = {
           allow_stalled_takeover: boolean
           company_id: string
           created_at: string
+          notify_customer_on_department_transfer: boolean
           same_department_only: boolean
           stalled_minutes: number
           updated_at: string
@@ -221,6 +222,7 @@ export type Database = {
           allow_stalled_takeover?: boolean
           company_id: string
           created_at?: string
+          notify_customer_on_department_transfer?: boolean
           same_department_only?: boolean
           stalled_minutes?: number
           updated_at?: string
@@ -229,6 +231,7 @@ export type Database = {
           allow_stalled_takeover?: boolean
           company_id?: string
           created_at?: string
+          notify_customer_on_department_transfer?: boolean
           same_department_only?: boolean
           stalled_minutes?: number
           updated_at?: string

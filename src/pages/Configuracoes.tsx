@@ -17,6 +17,7 @@ interface CompanySettings {
   allow_stalled_takeover: boolean;
   stalled_minutes: number;
   same_department_only: boolean;
+  notify_customer_on_department_transfer: boolean;
 }
 
 export default function Configuracoes() {
@@ -33,6 +34,7 @@ export default function Configuracoes() {
   const [allowTakeover, setAllowTakeover] = useState(true);
   const [stalledMinutes, setStalledMinutes] = useState(15);
   const [sameDeptOnly, setSameDeptOnly] = useState(true);
+  const [notifyCustomerOnTransfer, setNotifyCustomerOnTransfer] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -48,6 +50,7 @@ export default function Configuracoes() {
         setAllowTakeover(s.allow_stalled_takeover);
         setStalledMinutes(s.stalled_minutes);
         setSameDeptOnly(s.same_department_only);
+        setNotifyCustomerOnTransfer(Boolean(s.notify_customer_on_department_transfer));
       }
       setLoading(false);
     })();
@@ -65,6 +68,7 @@ export default function Configuracoes() {
           allow_stalled_takeover: allowTakeover,
           stalled_minutes: minutes,
           same_department_only: sameDeptOnly,
+          notify_customer_on_department_transfer: notifyCustomerOnTransfer,
         },
         { onConflict: "company_id" },
       );
@@ -78,6 +82,7 @@ export default function Configuracoes() {
       allow_stalled_takeover: allowTakeover,
       stalled_minutes: minutes,
       same_department_only: sameDeptOnly,
+      notify_customer_on_department_transfer: notifyCustomerOnTransfer,
     });
     qc.invalidateQueries({ queryKey: ["company-settings", activeCompanyId] });
     toast({ title: "Regras de atendimento salvas" });
@@ -159,6 +164,22 @@ export default function Configuracoes() {
                   disabled={!canManage}
                 />
               </div>
+
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Avisar cliente ao transferir setor</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Quando ativo, ao transferir um atendimento entre setores o cliente recebe
+                    uma mensagem automática no WhatsApp informando o novo setor.
+                  </p>
+                </div>
+                <Switch
+                  checked={notifyCustomerOnTransfer}
+                  onCheckedChange={setNotifyCustomerOnTransfer}
+                  disabled={!canManage}
+                />
+              </div>
+
 
               <div className="pt-2">
                 <Button

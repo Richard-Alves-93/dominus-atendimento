@@ -967,8 +967,12 @@ const Tickets = () => {
       const previousDeptName =
         activeDepts.find((d) => d.id === previousDeptId)?.name ?? "Sem setor";
       const newDeptName = activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor";
-      const actorName = profile?.full_name || profile?.email || "Usuário";
-      // Mensagem de sistema no histórico (não enviada ao WhatsApp — apenas registro).
+      const actorName =
+        (profile?.public_name && profile.public_name.trim()) ||
+        (profile?.full_name && profile.full_name.trim()) ||
+        (profile?.email && profile.email.trim()) ||
+        "Usuário";
+      // Mensagem de sistema no histórico (NUNCA enviada ao WhatsApp — insert direto em messages).
       try {
         await (supabase as any).from("messages").insert({
           company_id: activeCompanyId,
@@ -978,7 +982,7 @@ const Tickets = () => {
           direction: "outbound",
           msg_type: "text",
           from_me: true,
-          body: `Atendimento transferido de ${previousDeptName} para ${newDeptName} por ${actorName}.`,
+          body: `${actorName} transferiu o atendimento de ${previousDeptName} para ${newDeptName}.`,
           source: "system",
           sent_by_user_id: profile?.id ?? null,
           sent_by_name: actorName,
@@ -989,6 +993,27 @@ const Tickets = () => {
         });
       } catch (e) {
         console.warn("system message (dept transfer) failed", e);
+      }
+      // Aviso opcional ao cliente via Evolution (somente se configurado).
+      try {
+        const { data: cs } = await (supabase as any)
+          .from("company_settings")
+          .select("notify_customer_on_department_transfer")
+          .eq("company_id", activeCompanyId)
+          .maybeSingle();
+        if (cs?.notify_customer_on_department_transfer) {
+          const customerText = `Seu atendimento foi encaminhado para o setor ${newDeptName}. Em instantes alguém continuará o atendimento.`;
+          await supabase.functions.invoke("send-whatsapp-message", {
+            body: {
+              company_id: activeCompanyId,
+              ticket_id: ticketId,
+              text: customerText,
+              skip_signature: true,
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("notify customer on transfer failed", e);
       }
       // Auditoria: troca de setor
       try {
@@ -1002,7 +1027,10 @@ const Tickets = () => {
           reason: "transferencia_setor",
           metadata: {
             previous_department_id: previousDeptId,
+            previous_department_name: previousDeptName,
             new_department_id: pendingDeptId,
+            new_department_name: newDeptName,
+            changed_by_name: actorName,
           },
         });
       } catch (e) {
