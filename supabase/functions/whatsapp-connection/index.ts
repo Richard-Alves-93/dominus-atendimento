@@ -258,7 +258,9 @@ Deno.serve(async (req) => {
               qr_code = null;
             }
             await admin.from("whatsapp_instances").update(update).eq("channel_id", channel.id);
-            await admin.from("channels").update({ status }).eq("id", channel.id);
+            const chUpdate: Record<string, unknown> = { status };
+            if (mapped === "connected" && inst?.phone_number) chUpdate.phone_number = inst.phone_number;
+            await admin.from("channels").update(chUpdate).eq("id", channel.id);
           }
         } catch (_) { /* ignore */ }
       }
