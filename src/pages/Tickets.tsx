@@ -786,6 +786,31 @@ const Tickets = () => {
                     Aceitar atendimento
                   </Button>
                 </div>
+              ) : isAssignedToOther ? (
+                <div className="flex flex-col items-center gap-2 py-2 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Este atendimento está sendo realizado por{" "}
+                    <span className="font-medium text-foreground">
+                      {selected.assignee?.full_name || selected.assignee?.email || "outro atendente"}
+                    </span>
+                    .
+                  </p>
+                  {canTakeOverSelected ? (
+                    <Button
+                      onClick={() => setTakeOverOpen(true)}
+                      disabled={takeOverMutation.isPending}
+                      variant="outline"
+                      className="rounded-full px-5"
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Assumir atendimento
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Você não tem permissão para enviar mensagens neste atendimento.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Input
