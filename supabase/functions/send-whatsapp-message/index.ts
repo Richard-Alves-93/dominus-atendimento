@@ -67,30 +67,29 @@ Deno.serve(async (req) => {
       .select("id, company_id, contact_id, channel_id")
       .eq("id", ticket_id).eq("company_id", company_id).maybeSingle();
     if (tErr || !ticket) return fail("ticket", "Ticket not found", { detail: tErr?.message });
-    console.log("[SEND_WA] ticket:", ticket.id);
 
-    const { data: contact } = await admin
-      .from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle();
+    // Parallel fetches: contact, instance, sender profile
+    const [contactRes, instanceRes, senderRes] = await Promise.all([
+      admin.from("contacts").select("id, phone_number").eq("id", ticket.contact_id).maybeSingle(),
+      admin.from("whatsapp_instances")
+        .select("instance_name, channel_id, status")
+        .eq("company_id", company_id).eq("status", "connected").maybeSingle(),
+      admin.from("profiles")
+        .select("full_name, public_name, signature, signature_enabled")
+        .eq("id", userId).maybeSingle(),
+    ]);
+
+    const contact = contactRes.data;
     const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
-    console.log("[SEND_WA] contact phone len:", phone.length);
     if (!phone) return fail("contact", "Contact has no phone");
 
-    const { data: instance } = await admin
-      .from("whatsapp_instances")
-      .select("instance_name, channel_id, status")
-      .eq("company_id", company_id).eq("status", "connected").maybeSingle();
-    console.log("[SEND_WA] instance:", instance?.instance_name, instance?.status);
+    const instance = instanceRes.data;
     if (!instance?.instance_name) return fail("instance", "No connected WhatsApp instance");
 
     const channelId = ticket.channel_id ?? instance.channel_id;
     const endpoint = `${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`;
-    console.log("[SEND_WA] endpoint:", endpoint);
 
-    // Load sender profile for signature
-    const { data: senderProfile } = await admin
-      .from("profiles")
-      .select("full_name, public_name, signature, signature_enabled")
-      .eq("id", userId).maybeSingle();
+    const senderProfile = senderRes.data;
     const senderName = senderProfile?.public_name ?? senderProfile?.full_name ?? null;
     // Assinatura: usa signature se preenchida, senão cai para public_name ou full_name.
     const sigRaw =
