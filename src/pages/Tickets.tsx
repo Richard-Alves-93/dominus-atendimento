@@ -1312,7 +1312,17 @@ const Tickets = () => {
                   Nenhuma mensagem ainda
                 </div>
               ) : (
-                visibleMessages.map((m) => (
+                visibleMessages.map((m) => {
+                  if (m.source === "system") {
+                    return (
+                      <div key={m.id} className="flex justify-center">
+                        <div className="max-w-[80%] rounded-full bg-muted text-muted-foreground px-3 py-1 text-[11px] text-center italic">
+                          {m.body}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
                   <div key={m.id} className={`flex ${m.from_me ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
