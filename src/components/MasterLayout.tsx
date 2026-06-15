@@ -1,9 +1,11 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Building2, Package, Plug, ScrollText, Settings, LogOut, Zap } from "lucide-react";
+import { LayoutDashboard, Building2, Package, Plug, ScrollText, Settings, LogOut, Zap, ArrowRightCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -18,11 +20,28 @@ const items = [
 export function MasterLayout({ children, title }: { children: ReactNode; title?: string }) {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const { setActiveCompanyId, stopImpersonation } = useCompany();
+  const [internal, setInternal] = useState<{ id: string; name: string } | null>(null);
   const initials = (profile?.full_name ?? profile?.email ?? "M").slice(0, 2).toUpperCase();
+
+  useEffect(() => {
+    (supabase.from("companies") as any)
+      .select("id, name")
+      .eq("is_internal", true)
+      .maybeSingle()
+      .then(({ data }: { data: { id: string; name: string } | null }) => setInternal(data));
+  }, []);
 
   const handleLogout = async () => {
     await signOut();
     navigate("/", { replace: true });
+  };
+
+  const goInternalCompany = () => {
+    if (!internal) return;
+    stopImpersonation();
+    setActiveCompanyId(internal.id);
+    navigate("/app/dashboard");
   };
 
   return (
@@ -54,7 +73,12 @@ export function MasterLayout({ children, title }: { children: ReactNode; title?:
             </NavLink>
           ))}
         </nav>
-        <div className="p-2 border-t">
+        <div className="p-2 border-t space-y-1">
+          {internal && (
+            <Button variant="ghost" className="w-full justify-start" onClick={goInternalCompany}>
+              <ArrowRightCircle className="w-4 h-4 mr-2" /> Ir para empresa
+            </Button>
+          )}
           <Button variant="ghost" className="w-full justify-start text-destructive" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" /> Sair
           </Button>
