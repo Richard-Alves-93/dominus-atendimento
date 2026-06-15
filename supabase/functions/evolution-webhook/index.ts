@@ -108,7 +108,7 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
   return updated?.length ?? 0;
 }
 
-async function handleMessageUpsert(admin: any, inst: any, payload: any) {
+async function handleMessageUpsert(admin: any, inst: any, payload: any, source = "messages_upsert") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const m of dataArr) {
     const key = m?.key ?? {};
@@ -152,8 +152,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any) {
         }
         await admin.from("messages").update(patch).eq("id", existing.id);
         if (status) console.log("[WEBHOOK] msg_update_rows=", 1);
+        auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status ?? null, status ? 1 : 0);
       } else {
         console.log("[WEBHOOK] upsert_fromMe_orphan keyId=", externalId);
+        const { status } = mapDeliveryStatus(statusRaw);
+        auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status, 0);
       }
       continue;
     }
@@ -317,7 +320,7 @@ Deno.serve(async (req) => {
       if (status === "connected" && phone) channelUpdate.phone_number = phone;
       await admin.from("channels").update(channelUpdate).eq("id", inst.channel_id);
     } else if (normalized === "MESSAGES_UPSERT") {
-      await handleMessageUpsert(admin, inst, payload);
+      await handleMessageUpsert(admin, inst, payload, normalized.toLowerCase());
     } else if (
       normalized === "MESSAGES_UPDATE" ||
       normalized === "MESSAGE_UPDATE" ||
