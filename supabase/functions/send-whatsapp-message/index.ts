@@ -86,10 +86,21 @@ Deno.serve(async (req) => {
     const endpoint = `${EVO_URL.replace(/\/$/, "")}/message/sendText/${instance.instance_name}`;
     console.log("[SEND_WA] endpoint:", endpoint);
 
+    // Load sender profile for signature
+    const { data: senderProfile } = await admin
+      .from("profiles")
+      .select("full_name, public_name, signature, signature_enabled")
+      .eq("id", userId).maybeSingle();
+    const senderName = senderProfile?.public_name ?? senderProfile?.full_name ?? null;
+    const signatureLine = senderProfile?.signature_enabled && senderProfile?.signature
+      ? senderProfile.signature.trim()
+      : null;
+    const finalText = signatureLine ? `${signatureLine}:\n${text}` : text;
+
     const evoRes = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-      body: JSON.stringify({ number: phone, text }),
+      body: JSON.stringify({ number: phone, text: finalText }),
     });
     const evoText = await evoRes.text();
     let evoData: any = {};
