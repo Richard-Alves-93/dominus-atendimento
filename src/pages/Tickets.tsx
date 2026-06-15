@@ -921,13 +921,15 @@ const Tickets = () => {
                           if (ds === "read") {
                             return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
                           }
-                          if (ds === "delivered") {
-                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
-                          }
                           if (ds === "sending") {
                             return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
                           }
-                          return <Check className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
+                          if (ds === "delivered") {
+                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
+                          }
+                          // sent (e fallback) → 2 checks discretos = Enviada
+                          return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
+
                         })()}
                       </div>
                     </div>
