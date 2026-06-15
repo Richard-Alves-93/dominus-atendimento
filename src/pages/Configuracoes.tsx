@@ -17,6 +17,7 @@ interface CompanySettings {
   allow_stalled_takeover: boolean;
   stalled_minutes: number;
   same_department_only: boolean;
+  notify_customer_on_department_transfer: boolean;
 }
 
 export default function Configuracoes() {
