@@ -197,6 +197,9 @@ export default function Equipe() {
 
   const submitEdit = async () => {
     if (!editing || !activeCompanyId) return;
+    if (isSingleDeptRole(form.role) && form.department_ids.length > 1) {
+      return toast({ title: "Este cargo permite vínculo com apenas um setor.", variant: "destructive" });
+    }
     setBusy(true);
     // Update profile basics
     await supabase.from("profiles").update({
