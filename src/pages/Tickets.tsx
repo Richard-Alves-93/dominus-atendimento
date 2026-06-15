@@ -1131,10 +1131,17 @@ const Tickets = () => {
                             Fila geral
                           </Badge>
                         )}
-                        {t.department?.name && (
-                          <span className="text-[10px] text-muted-foreground truncate">{t.department.name}</span>
-                        )}
-                        <span className="text-[10px] text-muted-foreground">· {STATUS_LABEL[t.status]}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          {t.department?.name ?? "Fila geral"}
+                          {" · "}
+                          {t.assigned_user_id
+                            ? (t.assigned_user_id === profile?.id
+                                ? "Você"
+                                : (t.assignee?.full_name || t.assignee?.email || "Responsável"))
+                            : "Sem responsável"}
+                          {" · "}
+                          {STATUS_LABEL[t.status]}
+                        </span>
                         {stalledItem?.stalled && (
                           <Badge
                             variant="outline"
