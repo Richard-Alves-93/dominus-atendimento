@@ -1025,6 +1025,7 @@ const Tickets = () => {
               tickets.map((t) => {
                 const name = t.contact?.name || t.contact?.phone_number || "Sem nome";
                 const isFila = !t.department_id && !t.assigned_user_id;
+                const stalledItem = listStalledMap.get(t.id);
                 return (
                   <div
                     key={t.id}
