@@ -1455,9 +1455,27 @@ const Tickets = () => {
                           : "bg-card text-foreground shadow-card rounded-bl-md"
                       } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
                     >
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                        {m.body || <span className="italic opacity-70">[{m.msg_type}]</span>}
-                      </p>
+                      {(() => {
+                        const mediaTypes = ["image", "audio", "video", "document", "sticker"];
+                        const isMedia = mediaTypes.includes(m.msg_type);
+                        const caption = m.media_caption ?? (isMedia ? m.body : null);
+                        return (
+                          <>
+                            {isMedia && (
+                              <div className="mb-1">
+                                <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
+                              </div>
+                            )}
+                            {(isMedia ? caption : m.body) ? (
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                {isMedia ? caption : m.body}
+                              </p>
+                            ) : isMedia ? null : (
+                              <p className="text-sm italic opacity-70">[{m.msg_type}]</p>
+                            )}
+                          </>
+                        );
+                      })()}
                       {m.from_me && m.source === "whatsapp_device" && (
                         <div
                           className="text-[10px] mt-1 opacity-70 italic"
