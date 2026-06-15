@@ -14,6 +14,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
 const EVO_WEBHOOK = Deno.env.get("EVOLUTION_WEBHOOK_URL");
+const EVO_ENABLED = Boolean(EVO_URL && EVO_KEY);
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -26,35 +27,98 @@ function instanceNameFor(companyId: string) {
   return `dominus_${companyId.replace(/-/g, "").slice(0, 8)}`;
 }
 
+function evoBase() {
+  return EVO_URL!.replace(/\/$/, "");
+}
+
+function evoHeaders() {
+  return {
+    "Content-Type": "application/json",
+    apikey: EVO_KEY!,
+  };
+}
+
+function mapState(state?: string): "connected" | "pending" | "disconnected" {
+  if (state === "open") return "connected";
+  if (state === "connecting") return "pending";
+  return "disconnected";
+}
+
+function ensureDataUrl(qr?: string | null): string | null {
+  if (!qr) return null;
+  if (qr.startsWith("data:")) return qr;
+  return `data:image/png;base64,${qr}`;
+}
+
+async function evoFetchInstance(instanceName: string) {
+  const res = await fetch(`${evoBase()}/instance/fetchInstances?instanceName=${instanceName}`, {
+    headers: evoHeaders(),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const arr = Array.isArray(data) ? data : [data];
+  return arr[0] ?? null;
+}
+
 async function evoCreateInstance(instanceName: string) {
-  if (!EVO_URL || !EVO_KEY) {
-    // Mock mode — return fake QR so the UI flow can be tested before Evolution is configured.
-    return {
-      qr_code:
-        "data:image/svg+xml;utf8," +
-        encodeURIComponent(
-          `<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><rect width='100%' height='100%' fill='#fff'/><text x='50%' y='50%' text-anchor='middle' dominant-baseline='middle' font-family='monospace' font-size='12' fill='#111'>QR MOCK ${instanceName}</text></svg>`,
-        ),
-      status: "pending" as const,
-      mock: true,
+  const body: Record<string, unknown> = {
+    instanceName,
+    qrcode: true,
+    integration: "WHATSAPP-BAILEYS",
+  };
+  if (EVO_WEBHOOK) {
+    body.webhook = {
+      url: EVO_WEBHOOK,
+      byEvents: false,
+      base64: true,
+      events: [
+        "QRCODE_UPDATED",
+        "CONNECTION_UPDATE",
+        "MESSAGES_UPSERT",
+      ],
     };
   }
-  const res = await fetch(`${EVO_URL.replace(/\/$/, "")}/instance/create`, {
+  const res = await fetch(`${evoBase()}/instance/create`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-    body: JSON.stringify({
-      instanceName,
-      qrcode: true,
-      integration: "WHATSAPP-BAILEYS",
-      webhook: EVO_WEBHOOK,
-    }),
+    headers: evoHeaders(),
+    body: JSON.stringify(body),
   });
-  const data = await res.json();
-  return {
-    qr_code: data?.qrcode?.base64 ?? data?.qrcode ?? null,
-    status: "pending" as const,
-    mock: false,
-  };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // If already exists, fall back to connect
+    if (res.status === 403 || res.status === 409 || String(data?.response?.message ?? "").includes("already")) {
+      return await evoConnect(instanceName);
+    }
+    throw new Error(`Evolution create failed: ${res.status} ${JSON.stringify(data)}`);
+  }
+  const qr = data?.qrcode?.base64 ?? data?.qrcode?.code ?? null;
+  return { qr_code: ensureDataUrl(qr), status: "pending" as const };
+}
+
+async function evoConnect(instanceName: string) {
+  const res = await fetch(`${evoBase()}/instance/connect/${instanceName}`, {
+    headers: evoHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Evolution connect failed: ${res.status} ${JSON.stringify(data)}`);
+  const qr = data?.base64 ?? data?.qrcode?.base64 ?? data?.code ?? null;
+  return { qr_code: ensureDataUrl(qr), status: "pending" as const };
+}
+
+async function evoConnectionState(instanceName: string) {
+  const res = await fetch(`${evoBase()}/instance/connectionState/${instanceName}`, {
+    headers: evoHeaders(),
+  });
+  if (!res.ok) return { state: "close" };
+  const data = await res.json().catch(() => ({}));
+  return { state: data?.instance?.state ?? data?.state ?? "close" };
+}
+
+async function evoLogout(instanceName: string) {
+  await fetch(`${evoBase()}/instance/logout/${instanceName}`, {
+    method: "DELETE",
+    headers: evoHeaders(),
+  }).catch(() => undefined);
 }
 
 Deno.serve(async (req) => {
@@ -74,7 +138,6 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Authorization: master OR member of company
     const { data: profile } = await admin
       .from("profiles")
       .select("is_master, global_role")
@@ -93,11 +156,9 @@ Deno.serve(async (req) => {
       if (!membership) return json({ error: "Forbidden" }, 403);
     }
 
-    // Find or create the WhatsApp channel for this company
-    let channelId = body.channel_id;
     let channel;
-    if (channelId) {
-      const { data } = await admin.from("channels").select("*").eq("id", channelId).maybeSingle();
+    if (body.channel_id) {
+      const { data } = await admin.from("channels").select("*").eq("id", body.channel_id).maybeSingle();
       channel = data;
     } else {
       const { data } = await admin
@@ -109,8 +170,12 @@ Deno.serve(async (req) => {
       channel = data;
     }
 
+    const instance_name = instanceNameFor(body.company_id);
+
     if (body.action === "create_or_connect") {
-      const instance_name = instanceNameFor(body.company_id);
+      if (!EVO_ENABLED) {
+        return json({ error: "Evolution API não configurada. Defina EVOLUTION_API_URL e EVOLUTION_API_KEY." }, 500);
+      }
 
       if (!channel) {
         const { data: created, error } = await admin
@@ -130,7 +195,14 @@ Deno.serve(async (req) => {
         await admin.from("channels").update({ status: "pending" }).eq("id", channel.id);
       }
 
-      const evo = await evoCreateInstance(instance_name);
+      // Try connect first (works if instance already exists); otherwise create.
+      let evo: { qr_code: string | null; status: "pending" };
+      const existing = await evoFetchInstance(instance_name);
+      if (existing) {
+        evo = await evoConnect(instance_name);
+      } else {
+        evo = await evoCreateInstance(instance_name);
+      }
 
       const { data: existingInst } = await admin
         .from("whatsapp_instances")
@@ -158,20 +230,42 @@ Deno.serve(async (req) => {
         qr_code: evo.qr_code,
         instance_name,
         channel_id: channel.id,
-        mock: evo.mock,
       });
     }
 
     if (body.action === "status") {
       if (!channel) return json({ status: "disconnected" });
+
       const { data: inst } = await admin
         .from("whatsapp_instances")
         .select("status, qr_code, instance_name, phone_number")
         .eq("channel_id", channel.id)
         .maybeSingle();
+
+      let status = inst?.status ?? channel.status ?? "disconnected";
+      let qr_code = inst?.qr_code ?? null;
+
+      if (EVO_ENABLED && inst?.instance_name) {
+        try {
+          const { state } = await evoConnectionState(inst.instance_name);
+          const mapped = mapState(state);
+          if (mapped !== status) {
+            status = mapped;
+            const update: Record<string, unknown> = { status };
+            if (mapped === "connected") {
+              update.qr_code = null;
+              update.connected_at = new Date().toISOString();
+              qr_code = null;
+            }
+            await admin.from("whatsapp_instances").update(update).eq("channel_id", channel.id);
+            await admin.from("channels").update({ status }).eq("id", channel.id);
+          }
+        } catch (_) { /* ignore */ }
+      }
+
       return json({
-        status: inst?.status ?? channel.status ?? "disconnected",
-        qr_code: inst?.qr_code ?? null,
+        status,
+        qr_code,
         instance_name: inst?.instance_name ?? null,
         phone_number: inst?.phone_number ?? null,
         channel_id: channel.id,
@@ -180,6 +274,7 @@ Deno.serve(async (req) => {
 
     if (body.action === "disconnect") {
       if (channel) {
+        if (EVO_ENABLED) await evoLogout(instance_name);
         await admin.from("channels").update({ status: "disconnected" }).eq("id", channel.id);
         await admin
           .from("whatsapp_instances")
