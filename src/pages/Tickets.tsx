@@ -366,6 +366,49 @@ const Tickets = () => {
     },
   });
 
+  // Assumir atendimento: usuário superior pega ticket já atribuído a outro
+  const isAssignedToOther = !!selected?.assigned_user_id && selected.assigned_user_id !== profile?.id;
+  const canTakeOverSelected = useMemo(() => {
+    if (!selected || !profile?.id) return false;
+    if (!isAssignedToOther) return false;
+    if (selected.status === "closed") return false;
+    if (isAdmin) return true;
+    if (isManager) {
+      if (!selected.department_id) return false;
+      return myManagedDeptIds.includes(selected.department_id);
+    }
+    return false;
+  }, [selected, profile?.id, isAssignedToOther, isAdmin, isManager, myManagedDeptIds]);
+
+  const takeOverMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected || !profile?.id) throw new Error("Sem atendimento selecionado");
+      const nowIso = new Date().toISOString();
+      const { error } = await (supabase as any)
+        .from("tickets")
+        .update({
+          assigned_user_id: profile.id,
+          assigned_at: nowIso,
+          assigned_by: profile.id,
+          unread_count: 0,
+          status: "open",
+        })
+        .eq("id", selected.id)
+        .eq("company_id", activeCompanyId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Atendimento assumido" });
+      setTakeOverOpen(false);
+      qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+      qc.invalidateQueries({ queryKey: ["assignee-profiles"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Falha ao assumir", description: e.message, variant: "destructive" });
+    },
+  });
+
+
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
     enabled: !!selectedId,
