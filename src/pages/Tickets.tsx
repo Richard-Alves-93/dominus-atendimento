@@ -82,6 +82,15 @@ interface MessageRow {
   status: string | null;
   sent_at: string;
   created_at: string;
+  _optimistic?: boolean;
+}
+
+interface PendingMessage {
+  tempId: string;
+  ticketId: string;
+  body: string;
+  createdAt: string;
+  status: "sending" | "error";
 }
 
 interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean }
