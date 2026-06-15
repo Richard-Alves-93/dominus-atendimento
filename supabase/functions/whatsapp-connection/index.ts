@@ -53,8 +53,10 @@ function evoWebhookConfig() {
     url: EVO_WEBHOOK,
     enabled: true,
     webhook_by_events: false,
+    webhookByEvents: false,
     byEvents: false,
     webhook_base64: true,
+    webhookBase64: true,
     base64: true,
     events: WEBHOOK_EVENTS,
   };
@@ -87,20 +89,22 @@ async function evoSyncWebhook(instanceName: string) {
   const body = evoWebhookConfig();
   const endpoints = [`${evoBase()}/webhook/set/${instanceName}`, `${evoBase()}/webhook/${instanceName}`];
   for (const endpoint of endpoints) {
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: evoHeaders(),
-        body: JSON.stringify(body),
-      });
+    for (const payload of [body, { webhook: body }]) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: evoHeaders(),
+          body: JSON.stringify(payload),
+        });
       if (res.ok) {
         console.log("[WA_CONN] webhook_sync_ok", { instanceName, events: WEBHOOK_EVENTS });
         return;
       }
       const text = await res.text().catch(() => "");
       console.warn("[WA_CONN] webhook_sync_failed", { instanceName, status: res.status, endpoint: endpoint.replace(evoBase(), ""), body: text.slice(0, 160) });
-    } catch (e) {
-      console.warn("[WA_CONN] webhook_sync_exception", { instanceName, message: (e as Error)?.message });
+      } catch (e) {
+        console.warn("[WA_CONN] webhook_sync_exception", { instanceName, message: (e as Error)?.message });
+      }
     }
   }
 }
