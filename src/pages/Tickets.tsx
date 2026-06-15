@@ -342,7 +342,7 @@ const Tickets = () => {
       }
       return map;
     },
-    staleTime: 15_000,
+    staleTime: 0,
   });
 
   const tickets = useMemo(() => {
@@ -625,6 +625,7 @@ const Tickets = () => {
         { event: "*", schema: "public", table: "tickets", filter: `company_id=eq.${activeCompanyId}` },
         () => {
           qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+          qc.invalidateQueries({ queryKey: ["ticket-timelines", activeCompanyId] });
         },
       )
       .subscribe();
@@ -673,29 +674,55 @@ const Tickets = () => {
       setNowTs(Date.now());
       // Mantém timelines da lista frescas sem F5
       void qc.invalidateQueries({ queryKey: ["ticket-timelines", activeCompanyId] });
-    }, 30000);
+      void qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+    }, 15000);
     return () => window.clearInterval(id);
   }, [qc, activeCompanyId]);
 
-  // Mapa de "atendimento parado" para cada ticket da lista — mesma regra do painel,
-  // sem depender de unread_count. Recalcula quando nowTs/timelines/settings mudam.
+  // Mapa de "atendimento parado" para cada ticket da lista — mesma regra do painel.
+  // Usa timelines (precisas) com fallback no próprio ticket (last_message_at + unread_count)
+  // para refletir imediatamente novas mensagens chegando via realtime.
   const listStalledMap = useMemo(() => {
     const out = new Map<string, { stalled: boolean; minutes: number }>();
-    const tl = ticketTimelinesQuery.data ?? {};
     const stalledMs = (settings.stalled_minutes || 0) * 60000;
     if (stalledMs <= 0) return out;
-    for (const id of Object.keys(tl)) {
-      const { lastInboundTs, lastOutboundTs } = tl[id] || { lastInboundTs: null, lastOutboundTs: null };
+    const tl = ticketTimelinesQuery.data ?? {};
+    const list = ticketsQuery.data ?? [];
+    for (const t of list) {
+      if (t.status !== "open" || !t.assigned_user_id) continue;
+      const entry = tl[t.id];
+      let lastInboundTs = entry?.lastInboundTs ?? null;
+      const lastOutboundTs = entry?.lastOutboundTs ?? null;
+      // Fallback realtime: se ainda não temos timeline e há mensagens não lidas,
+      // assume que last_message_at é a última inbound do cliente.
+      if (lastInboundTs == null && (t.unread_count ?? 0) > 0 && t.last_message_at) {
+        lastInboundTs = new Date(t.last_message_at).getTime();
+      }
       if (lastInboundTs == null) continue;
-      const hasCustomerWaiting = lastOutboundTs == null || lastInboundTs > lastOutboundTs;
+      const hasCustomerWaiting =
+        lastOutboundTs == null ||
+        lastInboundTs > lastOutboundTs ||
+        (t.unread_count ?? 0) > 0;
       if (!hasCustomerWaiting) continue;
       const elapsedMs = nowTs - lastInboundTs;
-      if (elapsedMs >= stalledMs) {
-        out.set(id, { stalled: true, minutes: Math.floor(elapsedMs / 60000) });
+      const isStalled = elapsedMs >= stalledMs;
+      if (import.meta.env.DEV) {
+        console.debug("[STALLED_LIST_AUDIT]", {
+          ticketId: t.id,
+          nowTs,
+          lastInboundTs,
+          lastOutboundTs,
+          stalledMinutes: settings.stalled_minutes,
+          elapsedMs,
+          isStalled,
+        });
+      }
+      if (isStalled) {
+        out.set(t.id, { stalled: true, minutes: Math.floor(elapsedMs / 60000) });
       }
     }
     return out;
-  }, [ticketTimelinesQuery.data, settings.stalled_minutes, nowTs]);
+  }, [ticketsQuery.data, ticketTimelinesQuery.data, settings.stalled_minutes, nowTs]);
 
   // Refetch leve periódico para garantir frescor da timeline
   useEffect(() => {
