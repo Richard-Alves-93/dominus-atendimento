@@ -774,18 +774,20 @@ const Tickets = () => {
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
                 </div>
-              ) : (messagesQuery.data ?? []).length === 0 ? (
+              ) : visibleMessages.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8">
                   Nenhuma mensagem ainda
                 </div>
               ) : (
-                (messagesQuery.data ?? []).map((m) => (
+                visibleMessages.map((m) => (
                   <div key={m.id} className={`flex ${m.from_me ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                         m.from_me
                           ? "bg-primary text-primary-foreground rounded-br-md"
                           : "bg-card text-foreground shadow-card rounded-bl-md"
+                      } ${m._optimistic && m.status === "sending" ? "opacity-70" : ""} ${
+                        m.status === "error" ? "ring-1 ring-destructive" : ""
                       }`}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
@@ -795,16 +797,25 @@ const Tickets = () => {
                         className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/60" : "text-muted-foreground"}`}
                       >
                         <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
-                        {m.from_me &&
+                        {m.from_me && m._optimistic ? (
+                          m.status === "error" ? (
+                            <span className="text-[10px] text-destructive-foreground/90">Erro ao enviar</span>
+                          ) : (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          )
+                        ) : (
+                          m.from_me &&
                           (m.status === "read" ? (
                             <CheckCheck className="w-3.5 h-3.5" />
                           ) : (
                             <Check className="w-3.5 h-3.5" />
-                          ))}
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
                 ))
+              )}
               )}
               <div ref={endRef} />
             </div>
