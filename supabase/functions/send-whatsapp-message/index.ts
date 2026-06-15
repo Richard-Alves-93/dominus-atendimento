@@ -51,22 +51,34 @@ async function dispatchToEvolution(params: {
       return;
     }
 
+    // Evolution can return the message id in many shapes — try them all.
     const externalId =
-      evoData?.key?.id ?? evoData?.messageId ?? evoData?.message?.key?.id ?? null;
-    const nowIso = new Date().toISOString();
+      evoData?.key?.id ??
+      evoData?.message?.key?.id ??
+      evoData?.data?.key?.id ??
+      evoData?.response?.key?.id ??
+      evoData?.messageId ??
+      evoData?.id ??
+      evoData?.keyId ??
+      null;
+    console.log("[SEND_WA] evo_ok keys=", Object.keys(evoData ?? {}), "externalId=", externalId);
 
-    await Promise.all([
-      admin.from("messages").update({
-        delivery_status: "sent",
-        status: "sent",
-        external_id: externalId,
-        provider_message_id: externalId,
-        sent_at: nowIso,
-        raw: evoData,
-      }).eq("id", messageId),
-      admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId),
-    ]);
-    console.log("[SEND_WA] dispatched ms=", Math.round(performance.now() - t0));
+    const nowIso = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      delivery_status: "sent",
+      status: "sent",
+      sent_at: nowIso,
+      raw: evoData,
+    };
+    if (externalId) {
+      patch.external_id = externalId;
+      patch.provider_message_id = externalId;
+    }
+
+    const { error: updErr } = await admin.from("messages").update(patch).eq("id", messageId);
+    if (updErr) console.error("[SEND_WA] update_after_send_failed", updErr.message);
+    await admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId);
+
   } catch (e) {
     console.error("[SEND_WA] dispatch_exception", (e as Error)?.message);
     await admin.from("messages").update({
