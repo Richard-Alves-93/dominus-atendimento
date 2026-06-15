@@ -76,9 +76,23 @@ Deno.serve(async (req) => {
     const { data: company } = await admin.from("companies").select("name").eq("id", company_id).maybeSingle();
     if (!company) return fail("company", "Empresa não encontrada");
 
+    // Block duplicate email (profiles + auth.users)
+    const { data: existingProfile } = await admin
+      .from("profiles").select("id").eq("email", email).maybeSingle();
+    if (existingProfile) {
+      return fail("duplicate_email", "Este e-mail já está cadastrado. Use outro e-mail ou edite o usuário existente.");
+    }
+    {
+      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+      const existingAuth = list?.users.find((u) => (u.email ?? "").toLowerCase() === email);
+      if (existingAuth) {
+        return fail("duplicate_email", "Este e-mail já está cadastrado. Use outro e-mail ou edite o usuário existente.");
+      }
+    }
+
     const tempPassword = genPassword(10);
 
-    // Create or reuse auth user
+    // Create auth user
     let userId: string | null = null;
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email,
@@ -86,18 +100,8 @@ Deno.serve(async (req) => {
       email_confirm: true,
       user_metadata: { full_name, phone },
     });
-
-    if (createErr) {
-      // Possibly already exists - fetch
-      const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const existing = list?.users.find((u) => (u.email ?? "").toLowerCase() === email);
-      if (!existing) return fail("auth_create", createErr.message);
-      userId = existing.id;
-      // Update password so we can send it
-      await admin.auth.admin.updateUserById(existing.id, { password: tempPassword });
-    } else {
-      userId = created.user!.id;
-    }
+    if (createErr) return fail("auth_create", createErr.message);
+    userId = created.user!.id;
 
     // Upsert profile
     await admin.from("profiles").upsert({
