@@ -238,9 +238,7 @@ const Tickets = () => {
     [tickets, selectedId],
   );
 
-  useEffect(() => {
-    if (!selectedId && tickets.length > 0) setSelectedId(tickets[0].id);
-  }, [tickets, selectedId]);
+  // Não selecionar nenhum atendimento automaticamente — o usuário escolhe.
 
   // Permission to manage current selected ticket
   const canEditSelected = useMemo(() => {
