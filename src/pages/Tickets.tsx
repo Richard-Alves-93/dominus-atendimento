@@ -1984,78 +1984,116 @@ const Tickets = () => {
                   <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv" className="hidden" onChange={handleFileSelected} />
                   <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelected} />
                   <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileSelected} />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    {...({ capture: "environment" } as any)}
+                    className="hidden"
+                    onChange={handleFileSelected}
+                  />
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  {isRecording ? (
+                    <div className="flex items-center gap-2 w-full">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label="Anexar"
-                        title="Anexar"
+                        className="h-10 w-10 rounded-full flex-shrink-0 text-destructive"
+                        onClick={cancelRecording}
+                        aria-label="Cancelar gravação"
+                        title="Cancelar"
                       >
-                        <Plus className="w-5 h-5" />
+                        <Trash2 className="w-5 h-5" />
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="top" align="start" className="w-56">
-                      <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-                        <FileText className="w-4 h-4 mr-2" /> Documento
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
-                        <ImageIcon className="w-4 h-4 mr-2" /> Fotos e vídeos
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => toast({ title: "Em breve", description: "Envio pela câmera será adicionado em breve." })}
+                      <div className="flex-1 h-10 rounded-full bg-secondary px-4 flex items-center gap-3 text-sm">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
+                        <span className="text-muted-foreground">Gravando…</span>
+                        <span className="ml-auto tabular-nums font-medium">{formatRecTime(recSeconds)}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={stopAndSendRecording}
+                        size="icon"
+                        className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                        aria-label="Enviar gravação"
+                        title="Enviar"
+                        disabled={recSending}
                       >
-                        <Camera className="w-4 h-4 mr-2" /> Câmera
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
-                        <Music className="w-4 h-4 mr-2" /> Áudio
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => toast({ title: "Em breve", description: "Envio de contato será adicionado em breve." })}
-                      >
-                        <UserIcon className="w-4 h-4 mr-2" /> Contato
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <Input
-                    placeholder="Digite uma mensagem..."
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    className="flex-1 h-10 bg-secondary border-0 rounded-full px-4"
-                  />
-                  {text.trim().length === 0 ? (
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        toast({ title: "Em breve", description: "Gravação de áudio será adicionada em breve." })
-                      }
-                      size="icon"
-                      className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
-                      aria-label="Gravar áudio"
-                      title="Gravar áudio"
-                    >
-                      <Mic className="w-4 h-4" />
-                    </Button>
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
                   ) : (
-                    <Button
-                      onClick={handleSend}
-                      size="icon"
-                      className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
-                      aria-label="Enviar"
-                      title="Enviar"
-                    >
-                      <Send className="w-4 h-4" />
-                    </Button>
+                    <>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label="Anexar"
+                            title="Anexar"
+                          >
+                            <Plus className="w-5 h-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="top" align="start" className="w-56">
+                          <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
+                            <FileText className="w-4 h-4 mr-2" /> Documento
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
+                            <ImageIcon className="w-4 h-4 mr-2" /> Fotos e vídeos
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
+                            <Camera className="w-4 h-4 mr-2" /> Câmera
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
+                            <Music className="w-4 h-4 mr-2" /> Áudio
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => toast({ title: "Em breve", description: "Envio de contato será adicionado em breve." })}
+                          >
+                            <UserIcon className="w-4 h-4 mr-2" /> Contato
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <Input
+                        placeholder="Digite uma mensagem..."
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                          }
+                        }}
+                        className="flex-1 h-10 bg-secondary border-0 rounded-full px-4"
+                      />
+                      {text.trim().length === 0 ? (
+                        <Button
+                          type="button"
+                          onClick={startRecording}
+                          size="icon"
+                          className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                          aria-label="Gravar áudio"
+                          title="Gravar áudio"
+                        >
+                          <Mic className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handleSend}
+                          size="icon"
+                          className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                          aria-label="Enviar"
+                          title="Enviar"
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
