@@ -1368,9 +1368,11 @@ const Tickets = () => {
         setRecSeconds(0);
         if (wasCancelled || chunks.length === 0) { setRecSending(false); return; }
         const blob = new Blob(chunks, { type: mime });
-        const ext = mime.includes("ogg") ? "ogg" : mime.includes("mp4") ? "m4a" : "webm";
+        const normalized = normalizeMime(blob.type || mime);
+        const ext = normalized.includes("ogg") ? "ogg" : normalized.includes("mp4") ? "m4a" : "webm";
         const fileName = `audio-${Date.now()}.${ext}`;
-        const file = new File([blob], fileName, { type: blob.type });
+        const file = new File([blob], fileName, { type: normalized });
+        console.log("[AUDIO_RECORD_AUDIT]", { fileName, fileType: file.type, blobType: blob.type, fileSize: file.size });
         setRecSending(true);
         try {
           await sendMediaFileDirect(file, "audio", null);
