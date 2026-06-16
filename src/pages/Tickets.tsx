@@ -1231,7 +1231,7 @@ const Tickets = () => {
           ticket_id: ticketId,
           media_storage_path: storagePath,
           media_type: type,
-          media_mime_type: file.type,
+          media_mime_type: normalizeMime(file.type),
           media_file_name: file.name,
           media_size: file.size,
           caption,
