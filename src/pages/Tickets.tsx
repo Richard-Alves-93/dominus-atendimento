@@ -25,6 +25,7 @@ import {
   FileText,
   Download,
   Image as ImageIcon,
+  Paperclip,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -107,6 +108,14 @@ interface PendingMessage {
   body: string;
   createdAt: string;
   status: "sending" | "error";
+  media?: {
+    type: "image" | "video" | "audio" | "document";
+    fileName: string;
+    mimeType: string;
+    size: number;
+    previewUrl: string; // local blob URL
+    caption: string | null;
+  };
 }
 
 interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean; allow_stalled_takeover?: boolean }
@@ -124,6 +133,36 @@ const STATUS_LABEL: Record<TicketStatus, string> = {
   pending: "Pendente",
   closed: "Fechado",
 };
+
+// ── Envio de mídia ───────────────────────────────────────────────
+const MEDIA_LIMITS = {
+  image: 10 * 1024 * 1024,
+  audio: 16 * 1024 * 1024,
+  video: 32 * 1024 * 1024,
+  document: 25 * 1024 * 1024,
+} as const;
+const ACCEPT_TYPES =
+  "image/*,video/*,audio/*,application/pdf,application/msword," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+  "text/plain";
+const FORBIDDEN_EXT = /\.(exe|bat|cmd|sh|js|html?|php|jar|msi|scr|vbs|ps1|com|pif|reg|svg)$/i;
+
+function detectMediaType(mime: string): "image" | "video" | "audio" | "document" | null {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (
+    mime === "application/pdf" ||
+    mime === "application/msword" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/vnd.ms-excel" ||
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "text/plain" ||
+    mime === "text/csv"
+  ) return "document";
+  return null;
+}
 
 function initialsOf(name?: string | null, phone?: string | null) {
   const s = (name || phone || "?").trim();
@@ -171,6 +210,8 @@ function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | n
 
   const safeExternalUrl = useMemo(() => {
     if (!mediaUrl) return null;
+    // Optimistic local previews use blob: URLs — allow them as-is.
+    if (mediaUrl.startsWith("blob:")) return mediaUrl;
     try {
       const u = new URL(mediaUrl);
       const params = u.search.toLowerCase();
@@ -297,6 +338,12 @@ const Tickets = () => {
   const [pendingUserId, setPendingUserId] = useState<string>("");
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachType, setAttachType] = useState<"image" | "video" | "audio" | "document" | null>(null);
+  const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
+  const [attachCaption, setAttachCaption] = useState("");
+  const [attachUploading, setAttachUploading] = useState(false);
 
   // Departments of company
   const deptsQuery = useQuery({
@@ -802,10 +849,16 @@ const Tickets = () => {
       direction: "outbound",
       from_me: true,
       body: p.body,
-      msg_type: "text",
+      msg_type: p.media?.type ?? "text",
       status: p.status === "error" ? "error" : "sending",
       sent_at: p.createdAt,
       created_at: p.createdAt,
+      media_mime_type: p.media?.mimeType ?? null,
+      media_file_name: p.media?.fileName ?? null,
+      media_size: p.media?.size ?? null,
+      media_caption: p.media?.caption ?? null,
+      media_storage_path: null,
+      media_url: p.media?.previewUrl ?? null,
       _optimistic: true,
     }));
     return [...real, ...optimistic];
@@ -1064,6 +1117,115 @@ const Tickets = () => {
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
     sendMutation.mutate({ body: v, tempId, ticketId });
   };
+
+  // ── Envio de mídia ─────────────────────────────────────────────
+  const closeAttachDialog = () => {
+    if (attachPreviewUrl) URL.revokeObjectURL(attachPreviewUrl);
+    setAttachFile(null);
+    setAttachType(null);
+    setAttachPreviewUrl(null);
+    setAttachCaption("");
+    setAttachUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (FORBIDDEN_EXT.test(file.name)) {
+      toast({ title: "Arquivo não permitido", description: "Tipo de arquivo bloqueado por segurança.", variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const type = detectMediaType(file.type);
+    if (!type) {
+      toast({ title: "Tipo não suportado", description: "Selecione imagem, vídeo, áudio ou documento.", variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const limit = MEDIA_LIMITS[type];
+    if (file.size > limit) {
+      toast({ title: "Arquivo muito grande para envio.", description: `Limite para ${type}: ${formatBytes(limit)}.`, variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    setAttachFile(file);
+    setAttachType(type);
+    setAttachPreviewUrl(URL.createObjectURL(file));
+    setAttachCaption("");
+  };
+
+  const handleSendMedia = async () => {
+    if (!attachFile || !attachType || !selected || !activeCompanyId) return;
+    const file = attachFile;
+    const type = attachType;
+    const caption = attachCaption.trim() || null;
+    const ticketId = selected.id;
+    const channelId = selected.channel_id ?? "ch";
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const previewUrl = attachPreviewUrl!;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+    const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const storagePath = `${activeCompanyId}/${channelId}/${ticketId}/temp_${uuid}/${safeName}`;
+
+    setAttachUploading(true);
+    // optimistic
+    setPendingMessages((prev) => [
+      ...prev,
+      {
+        tempId, ticketId,
+        body: caption ?? "",
+        createdAt: new Date().toISOString(),
+        status: "sending",
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+      },
+    ]);
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+    try {
+      const up = await supabase.storage.from("message-media").upload(storagePath, file, {
+        contentType: file.type, upsert: false,
+      });
+      if (up.error) throw new Error(up.error.message);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) throw new Error("Sua sessão expirou. Faça login novamente.");
+
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-media", {
+        body: {
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          media_storage_path: storagePath,
+          media_type: type,
+          media_mime_type: file.type,
+          media_file_name: file.name,
+          media_size: file.size,
+          caption,
+        },
+      });
+      if (error) throw new Error(error.message || "Falha ao enviar");
+      const d = data as any;
+      if (d?.ok === false || d?.error) {
+        throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
+      }
+      // Sucesso: webhook fromMe vai atualizar/dedup; remover otimista após pequena espera.
+      setTimeout(() => {
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
+        URL.revokeObjectURL(previewUrl);
+      }, 1500);
+      closeAttachDialog();
+    } catch (e: any) {
+      setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
+      toast({
+        title: "Não foi possível enviar o arquivo.",
+        description: e?.message,
+        variant: "destructive",
+      });
+      setAttachUploading(false);
+    }
+  };
+
+
 
   const updateTicket = async (patch: Record<string, any>, successMsg: string) => {
     if (!selected) return;
@@ -1622,6 +1784,24 @@ const Tickets = () => {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPT_TYPES}
+                    className="hidden"
+                    onChange={handleFileSelected}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label="Anexar arquivo"
+                    title="Anexar arquivo"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </Button>
                   <Input
                     placeholder="Digite uma mensagem..."
                     value={text}
@@ -1770,6 +1950,71 @@ const Tickets = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Dialog: Preview e envio de mídia */}
+      <Dialog
+        open={!!attachFile}
+        onOpenChange={(open) => {
+          if (!open && !attachUploading) closeAttachDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar arquivo</DialogTitle>
+            <DialogDescription>
+              {attachType === "image" && "Imagem"}
+              {attachType === "video" && "Vídeo"}
+              {attachType === "audio" && "Áudio"}
+              {attachType === "document" && "Documento"}
+              {" · "}
+              {attachFile && formatBytes(attachFile.size)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3">
+            {attachType === "image" && attachPreviewUrl && (
+              <img src={attachPreviewUrl} alt="preview" className="max-h-64 rounded-lg object-contain mx-auto" />
+            )}
+            {attachType === "video" && attachPreviewUrl && (
+              <video src={attachPreviewUrl} controls className="max-h-64 rounded-lg w-full" />
+            )}
+            {attachType === "audio" && attachPreviewUrl && (
+              <audio src={attachPreviewUrl} controls className="w-full" />
+            )}
+            {attachType === "document" && attachFile && (
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-3">
+                <FileText className="w-8 h-8 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{attachFile.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {attachFile.type || "documento"} · {formatBytes(attachFile.size)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {attachType !== "audio" && (
+              <Input
+                placeholder="Legenda (opcional)"
+                value={attachCaption}
+                maxLength={1024}
+                onChange={(e) => setAttachCaption(e.target.value)}
+                disabled={attachUploading}
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeAttachDialog} disabled={attachUploading}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSendMedia} disabled={attachUploading}>
+              {attachUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 };
