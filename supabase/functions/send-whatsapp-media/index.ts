@@ -172,7 +172,8 @@ Deno.serve(async (req) => {
     const ticket_id: string | undefined = payload.ticket_id;
     const media_storage_path: string | undefined = payload.media_storage_path;
     const media_type: MediaType | undefined = payload.media_type;
-    const media_mime_type: string | undefined = payload.media_mime_type;
+    const media_mime_type_raw: string | undefined = payload.media_mime_type;
+    const media_mime_type: string = normalizeMime(media_mime_type_raw ?? "");
     const media_file_name: string = (payload.media_file_name ?? "arquivo").toString().slice(0, 200);
     const caption: string | null = payload.caption?.toString()?.slice(0, 1024) || null;
 
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
       return fail("media_type", "Tipo de mídia não suportado");
     }
     if (!ALLOWED_MIME[media_type].test(media_mime_type)) {
-      return fail("mime", "Tipo de arquivo não permitido");
+      return fail("mime", "Tipo de arquivo não permitido", { received: media_mime_type });
     }
     if (FORBIDDEN_NAME.test(media_file_name)) {
       return fail("filename", "Arquivo bloqueado por extensão suspeita");
