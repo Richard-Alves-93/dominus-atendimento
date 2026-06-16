@@ -31,6 +31,7 @@ import {
   User as UserIcon,
   Music,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -347,11 +348,23 @@ const Tickets = () => {
   const documentInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState<"image" | "video" | "audio" | "document" | null>(null);
   const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
   const [attachCaption, setAttachCaption] = useState("");
   const [attachUploading, setAttachUploading] = useState(false);
+
+  // Gravação de áudio
+  const [isRecording, setIsRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const [recSending, setRecSending] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recChunksRef = useRef<Blob[]>([]);
+  const recStreamRef = useRef<MediaStream | null>(null);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recCancelledRef = useRef(false);
+  const REC_MAX_SECONDS = 5 * 60;
 
   // Departments of company
   const deptsQuery = useQuery({
@@ -1132,6 +1145,7 @@ const Tickets = () => {
     if (documentInputRef.current) documentInputRef.current.value = "";
     if (mediaInputRef.current) mediaInputRef.current.value = "";
     if (audioInputRef.current) audioInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   const closeAttachDialog = () => {
@@ -1239,6 +1253,173 @@ const Tickets = () => {
       setAttachUploading(false);
     }
   };
+
+  // Envio direto (sem dialog) — usado por gravação de áudio
+  const sendMediaFileDirect = async (
+    file: File,
+    type: "image" | "video" | "audio" | "document",
+    caption: string | null,
+  ) => {
+    if (!selected || !activeCompanyId) return;
+    if (FORBIDDEN_EXT.test(file.name)) {
+      toast({ title: "Arquivo não permitido", description: "Tipo de arquivo bloqueado por segurança.", variant: "destructive" });
+      return;
+    }
+    const limit = MEDIA_LIMITS[type];
+    if (file.size > limit) {
+      toast({ title: "Arquivo muito grande para envio.", description: `Limite para ${type}: ${formatBytes(limit)}.`, variant: "destructive" });
+      return;
+    }
+    const ticketId = selected.id;
+    const channelId = selected.channel_id ?? "ch";
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const previewUrl = URL.createObjectURL(file);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+    const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const storagePath = `${activeCompanyId}/${channelId}/${ticketId}/temp_${uuid}/${safeName}`;
+
+    setPendingMessages((prev) => [
+      ...prev,
+      {
+        tempId, ticketId,
+        body: caption ?? "",
+        createdAt: new Date().toISOString(),
+        status: "sending",
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+      },
+    ]);
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+    try {
+      const up = await supabase.storage.from("message-media").upload(storagePath, file, {
+        contentType: file.type, upsert: false,
+      });
+      if (up.error) throw new Error(up.error.message);
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) throw new Error("Sua sessão expirou. Faça login novamente.");
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-media", {
+        body: {
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          media_storage_path: storagePath,
+          media_type: type,
+          media_mime_type: file.type,
+          media_file_name: file.name,
+          media_size: file.size,
+          caption,
+        },
+      });
+      if (error) throw new Error(error.message || "Falha ao enviar");
+      const d = data as any;
+      if (d?.ok === false || d?.error) {
+        throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
+      }
+      setTimeout(() => {
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
+        URL.revokeObjectURL(previewUrl);
+      }, 1500);
+    } catch (e: any) {
+      setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
+      toast({ title: "Não foi possível enviar o arquivo.", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  // ── Gravação de áudio ──
+  const stopRecorderTracks = () => {
+    try { recStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
+    recStreamRef.current = null;
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+  };
+
+  const pickAudioMime = (): string => {
+    const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    for (const m of cands) {
+      if (typeof MediaRecorder !== "undefined" && (MediaRecorder as any).isTypeSupported?.(m)) return m;
+    }
+    return "audio/webm";
+  };
+
+  const startRecording = async () => {
+    if (isRecording) return;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast({ title: "Seu navegador não suporta gravação de áudio.", variant: "destructive" });
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
+      const mime = pickAudioMime();
+      const rec = new MediaRecorder(stream, { mimeType: mime });
+      mediaRecorderRef.current = rec;
+      recChunksRef.current = [];
+      recCancelledRef.current = false;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) recChunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        const wasCancelled = recCancelledRef.current;
+        const chunks = recChunksRef.current;
+        recChunksRef.current = [];
+        stopRecorderTracks();
+        setIsRecording(false);
+        setRecSeconds(0);
+        if (wasCancelled || chunks.length === 0) { setRecSending(false); return; }
+        const blob = new Blob(chunks, { type: mime });
+        const ext = mime.includes("ogg") ? "ogg" : mime.includes("mp4") ? "m4a" : "webm";
+        const fileName = `audio-${Date.now()}.${ext}`;
+        const file = new File([blob], fileName, { type: blob.type });
+        setRecSending(true);
+        try {
+          await sendMediaFileDirect(file, "audio", null);
+        } finally {
+          setRecSending(false);
+        }
+      };
+      rec.start();
+      setIsRecording(true);
+      setRecSeconds(0);
+      recTimerRef.current = setInterval(() => {
+        setRecSeconds((s) => {
+          const n = s + 1;
+          if (n >= REC_MAX_SECONDS) {
+            try { mediaRecorderRef.current?.state === "recording" && mediaRecorderRef.current.stop(); } catch {}
+          }
+          return n;
+        });
+      }, 1000);
+    } catch (e: any) {
+      stopRecorderTracks();
+      setIsRecording(false);
+      const denied = e?.name === "NotAllowedError" || e?.name === "SecurityError";
+      toast({
+        title: denied ? "Permissão de microfone negada." : "Não foi possível iniciar a gravação.",
+        description: denied ? undefined : e?.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const cancelRecording = () => {
+    if (!isRecording) return;
+    recCancelledRef.current = true;
+    try { mediaRecorderRef.current?.state === "recording" && mediaRecorderRef.current.stop(); } catch {}
+    stopRecorderTracks();
+    setIsRecording(false);
+    setRecSeconds(0);
+  };
+
+  const stopAndSendRecording = () => {
+    if (!isRecording) return;
+    recCancelledRef.current = false;
+    try { mediaRecorderRef.current?.state === "recording" && mediaRecorderRef.current.stop(); } catch {}
+  };
+
+  useEffect(() => () => { stopRecorderTracks(); }, []);
+
+  const formatRecTime = (s: number) => {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const ss = (s % 60).toString().padStart(2, "0");
+    return `${m}:${ss}`;
+  };
+
 
 
 
@@ -1803,78 +1984,116 @@ const Tickets = () => {
                   <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv" className="hidden" onChange={handleFileSelected} />
                   <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelected} />
                   <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileSelected} />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    {...({ capture: "environment" } as any)}
+                    className="hidden"
+                    onChange={handleFileSelected}
+                  />
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  {isRecording ? (
+                    <div className="flex items-center gap-2 w-full">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label="Anexar"
-                        title="Anexar"
+                        className="h-10 w-10 rounded-full flex-shrink-0 text-destructive"
+                        onClick={cancelRecording}
+                        aria-label="Cancelar gravação"
+                        title="Cancelar"
                       >
-                        <Plus className="w-5 h-5" />
+                        <Trash2 className="w-5 h-5" />
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="top" align="start" className="w-56">
-                      <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-                        <FileText className="w-4 h-4 mr-2" /> Documento
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
-                        <ImageIcon className="w-4 h-4 mr-2" /> Fotos e vídeos
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => toast({ title: "Em breve", description: "Envio pela câmera será adicionado em breve." })}
+                      <div className="flex-1 h-10 rounded-full bg-secondary px-4 flex items-center gap-3 text-sm">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
+                        <span className="text-muted-foreground">Gravando…</span>
+                        <span className="ml-auto tabular-nums font-medium">{formatRecTime(recSeconds)}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={stopAndSendRecording}
+                        size="icon"
+                        className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                        aria-label="Enviar gravação"
+                        title="Enviar"
+                        disabled={recSending}
                       >
-                        <Camera className="w-4 h-4 mr-2" /> Câmera
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
-                        <Music className="w-4 h-4 mr-2" /> Áudio
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => toast({ title: "Em breve", description: "Envio de contato será adicionado em breve." })}
-                      >
-                        <UserIcon className="w-4 h-4 mr-2" /> Contato
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <Input
-                    placeholder="Digite uma mensagem..."
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    className="flex-1 h-10 bg-secondary border-0 rounded-full px-4"
-                  />
-                  {text.trim().length === 0 ? (
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        toast({ title: "Em breve", description: "Gravação de áudio será adicionada em breve." })
-                      }
-                      size="icon"
-                      className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
-                      aria-label="Gravar áudio"
-                      title="Gravar áudio"
-                    >
-                      <Mic className="w-4 h-4" />
-                    </Button>
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
                   ) : (
-                    <Button
-                      onClick={handleSend}
-                      size="icon"
-                      className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
-                      aria-label="Enviar"
-                      title="Enviar"
-                    >
-                      <Send className="w-4 h-4" />
-                    </Button>
+                    <>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label="Anexar"
+                            title="Anexar"
+                          >
+                            <Plus className="w-5 h-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="top" align="start" className="w-56">
+                          <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
+                            <FileText className="w-4 h-4 mr-2" /> Documento
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
+                            <ImageIcon className="w-4 h-4 mr-2" /> Fotos e vídeos
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
+                            <Camera className="w-4 h-4 mr-2" /> Câmera
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
+                            <Music className="w-4 h-4 mr-2" /> Áudio
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => toast({ title: "Em breve", description: "Envio de contato será adicionado em breve." })}
+                          >
+                            <UserIcon className="w-4 h-4 mr-2" /> Contato
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <Input
+                        placeholder="Digite uma mensagem..."
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                          }
+                        }}
+                        className="flex-1 h-10 bg-secondary border-0 rounded-full px-4"
+                      />
+                      {text.trim().length === 0 ? (
+                        <Button
+                          type="button"
+                          onClick={startRecording}
+                          size="icon"
+                          className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                          aria-label="Gravar áudio"
+                          title="Gravar áudio"
+                        >
+                          <Mic className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handleSend}
+                          size="icon"
+                          className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                          aria-label="Enviar"
+                          title="Enviar"
+                        >
+                          <Send className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
