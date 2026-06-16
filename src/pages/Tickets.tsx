@@ -154,7 +154,12 @@ const ACCEPT_TYPES =
   "text/plain";
 const FORBIDDEN_EXT = /\.(exe|bat|cmd|sh|js|html?|php|jar|msi|scr|vbs|ps1|com|pif|reg|svg)$/i;
 
-function detectMediaType(mime: string): "image" | "video" | "audio" | "document" | null {
+function normalizeMime(mimeRaw: string): string {
+  return (mimeRaw || "").split(";")[0].trim().toLowerCase();
+}
+
+function detectMediaType(mimeRaw: string): "image" | "video" | "audio" | "document" | null {
+  const mime = normalizeMime(mimeRaw);
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
@@ -1226,7 +1231,7 @@ const Tickets = () => {
           ticket_id: ticketId,
           media_storage_path: storagePath,
           media_type: type,
-          media_mime_type: file.type,
+          media_mime_type: normalizeMime(file.type),
           media_file_name: file.name,
           media_size: file.size,
           caption,
@@ -1303,7 +1308,7 @@ const Tickets = () => {
           ticket_id: ticketId,
           media_storage_path: storagePath,
           media_type: type,
-          media_mime_type: file.type,
+          media_mime_type: normalizeMime(file.type),
           media_file_name: file.name,
           media_size: file.size,
           caption,
@@ -1363,9 +1368,11 @@ const Tickets = () => {
         setRecSeconds(0);
         if (wasCancelled || chunks.length === 0) { setRecSending(false); return; }
         const blob = new Blob(chunks, { type: mime });
-        const ext = mime.includes("ogg") ? "ogg" : mime.includes("mp4") ? "m4a" : "webm";
+        const normalized = normalizeMime(blob.type || mime);
+        const ext = normalized.includes("ogg") ? "ogg" : normalized.includes("mp4") ? "m4a" : "webm";
         const fileName = `audio-${Date.now()}.${ext}`;
-        const file = new File([blob], fileName, { type: blob.type });
+        const file = new File([blob], fileName, { type: normalized });
+        console.log("[AUDIO_RECORD_AUDIT]", { fileName, fileType: file.type, blobType: blob.type, fileSize: file.size });
         setRecSending(true);
         try {
           await sendMediaFileDirect(file, "audio", null);
