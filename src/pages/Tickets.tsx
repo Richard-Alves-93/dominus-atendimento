@@ -347,11 +347,23 @@ const Tickets = () => {
   const documentInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState<"image" | "video" | "audio" | "document" | null>(null);
   const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
   const [attachCaption, setAttachCaption] = useState("");
   const [attachUploading, setAttachUploading] = useState(false);
+
+  // Gravação de áudio
+  const [isRecording, setIsRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const [recSending, setRecSending] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recChunksRef = useRef<Blob[]>([]);
+  const recStreamRef = useRef<MediaStream | null>(null);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recCancelledRef = useRef(false);
+  const REC_MAX_SECONDS = 5 * 60;
 
   // Departments of company
   const deptsQuery = useQuery({
