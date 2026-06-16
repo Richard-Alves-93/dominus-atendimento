@@ -31,6 +31,7 @@ import {
   User as UserIcon,
   Music,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
