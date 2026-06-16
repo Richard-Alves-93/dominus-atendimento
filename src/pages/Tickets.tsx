@@ -1127,6 +1127,13 @@ const Tickets = () => {
   };
 
   // ── Envio de mídia ─────────────────────────────────────────────
+  const resetAttachInputs = () => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (documentInputRef.current) documentInputRef.current.value = "";
+    if (mediaInputRef.current) mediaInputRef.current.value = "";
+    if (audioInputRef.current) audioInputRef.current.value = "";
+  };
+
   const closeAttachDialog = () => {
     if (attachPreviewUrl) URL.revokeObjectURL(attachPreviewUrl);
     setAttachFile(null);
@@ -1134,7 +1141,7 @@ const Tickets = () => {
     setAttachPreviewUrl(null);
     setAttachCaption("");
     setAttachUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    resetAttachInputs();
   };
 
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1142,19 +1149,19 @@ const Tickets = () => {
     if (!file) return;
     if (FORBIDDEN_EXT.test(file.name)) {
       toast({ title: "Arquivo não permitido", description: "Tipo de arquivo bloqueado por segurança.", variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAttachInputs();
       return;
     }
     const type = detectMediaType(file.type);
     if (!type) {
       toast({ title: "Tipo não suportado", description: "Selecione imagem, vídeo, áudio ou documento.", variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAttachInputs();
       return;
     }
     const limit = MEDIA_LIMITS[type];
     if (file.size > limit) {
       toast({ title: "Arquivo muito grande para envio.", description: `Limite para ${type}: ${formatBytes(limit)}.`, variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAttachInputs();
       return;
     }
     setAttachFile(file);
