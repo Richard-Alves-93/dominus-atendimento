@@ -1253,6 +1253,173 @@ const Tickets = () => {
     }
   };
 
+  // Envio direto (sem dialog) — usado por gravação de áudio
+  const sendMediaFileDirect = async (
+    file: File,
+    type: "image" | "video" | "audio" | "document",
+    caption: string | null,
+  ) => {
+    if (!selected || !activeCompanyId) return;
+    if (FORBIDDEN_EXT.test(file.name)) {
+      toast({ title: "Arquivo não permitido", description: "Tipo de arquivo bloqueado por segurança.", variant: "destructive" });
+      return;
+    }
+    const limit = MEDIA_LIMITS[type];
+    if (file.size > limit) {
+      toast({ title: "Arquivo muito grande para envio.", description: `Limite para ${type}: ${formatBytes(limit)}.`, variant: "destructive" });
+      return;
+    }
+    const ticketId = selected.id;
+    const channelId = selected.channel_id ?? "ch";
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const previewUrl = URL.createObjectURL(file);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+    const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const storagePath = `${activeCompanyId}/${channelId}/${ticketId}/temp_${uuid}/${safeName}`;
+
+    setPendingMessages((prev) => [
+      ...prev,
+      {
+        tempId, ticketId,
+        body: caption ?? "",
+        createdAt: new Date().toISOString(),
+        status: "sending",
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+      },
+    ]);
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+    try {
+      const up = await supabase.storage.from("message-media").upload(storagePath, file, {
+        contentType: file.type, upsert: false,
+      });
+      if (up.error) throw new Error(up.error.message);
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) throw new Error("Sua sessão expirou. Faça login novamente.");
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-media", {
+        body: {
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          media_storage_path: storagePath,
+          media_type: type,
+          media_mime_type: file.type,
+          media_file_name: file.name,
+          media_size: file.size,
+          caption,
+        },
+      });
+      if (error) throw new Error(error.message || "Falha ao enviar");
+      const d = data as any;
+      if (d?.ok === false || d?.error) {
+        throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
+      }
+      setTimeout(() => {
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
+        URL.revokeObjectURL(previewUrl);
+      }, 1500);
+    } catch (e: any) {
+      setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
+      toast({ title: "Não foi possível enviar o arquivo.", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  // ── Gravação de áudio ──
+  const stopRecorderTracks = () => {
+    try { recStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
+    recStreamRef.current = null;
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+  };
+
+  const pickAudioMime = (): string => {
+    const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    for (const m of cands) {
+      if (typeof MediaRecorder !== "undefined" && (MediaRecorder as any).isTypeSupported?.(m)) return m;
+    }
+    return "audio/webm";
+  };
+
+  const startRecording = async () => {
+    if (isRecording) return;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast({ title: "Seu navegador não suporta gravação de áudio.", variant: "destructive" });
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
+      const mime = pickAudioMime();
+      const rec = new MediaRecorder(stream, { mimeType: mime });
+      mediaRecorderRef.current = rec;
+      recChunksRef.current = [];
+      recCancelledRef.current = false;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) recChunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        const wasCancelled = recCancelledRef.current;
+        const chunks = recChunksRef.current;
+        recChunksRef.current = [];
+        stopRecorderTracks();
+        setIsRecording(false);
+        setRecSeconds(0);
+        if (wasCancelled || chunks.length === 0) { setRecSending(false); return; }
+        const blob = new Blob(chunks, { type: mime });
+        const ext = mime.includes("ogg") ? "ogg" : mime.includes("mp4") ? "m4a" : "webm";
+        const fileName = `audio-${Date.now()}.${ext}`;
+        const file = new File([blob], fileName, { type: blob.type });
+        setRecSending(true);
+        try {
+          await sendMediaFileDirect(file, "audio", null);
+        } finally {
+          setRecSending(false);
+        }
+      };
+      rec.start();
+      setIsRecording(true);
+      setRecSeconds(0);
+      recTimerRef.current = setInterval(() => {
+        setRecSeconds((s) => {
+          const n = s + 1;
+          if (n >= REC_MAX_SECONDS) {
+            try { mediaRecorderRef.current?.state === "recording" && mediaRecorderRef.current.stop(); } catch {}
+          }
+          return n;
+        });
+      }, 1000);
+    } catch (e: any) {
+      stopRecorderTracks();
+      setIsRecording(false);
+      const denied = e?.name === "NotAllowedError" || e?.name === "SecurityError";
+      toast({
+        title: denied ? "Permissão de microfone negada." : "Não foi possível iniciar a gravação.",
+        description: denied ? undefined : e?.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const cancelRecording = () => {
+    if (!isRecording) return;
+    recCancelledRef.current = true;
+    try { mediaRecorderRef.current?.state === "recording" && mediaRecorderRef.current.stop(); } catch {}
+    stopRecorderTracks();
+    setIsRecording(false);
+    setRecSeconds(0);
+  };
+
+  const stopAndSendRecording = () => {
+    if (!isRecording) return;
+    recCancelledRef.current = false;
+    try { mediaRecorderRef.current?.state === "recording" && mediaRecorderRef.current.stop(); } catch {}
+  };
+
+  useEffect(() => () => { stopRecorderTracks(); }, []);
+
+  const formatRecTime = (s: number) => {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const ss = (s % 60).toString().padStart(2, "0");
+    return `${m}:${ss}`;
+  };
+
+
 
 
   const updateTicket = async (patch: Record<string, any>, successMsg: string) => {
