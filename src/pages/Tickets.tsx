@@ -1144,6 +1144,7 @@ const Tickets = () => {
     if (documentInputRef.current) documentInputRef.current.value = "";
     if (mediaInputRef.current) mediaInputRef.current.value = "";
     if (audioInputRef.current) audioInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   const closeAttachDialog = () => {
