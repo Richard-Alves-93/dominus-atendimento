@@ -26,6 +26,11 @@ import {
   Download,
   Image as ImageIcon,
   Paperclip,
+  Mic,
+  Camera,
+  User as UserIcon,
+  Music,
+  Plus,
 } from "lucide-react";
 import {
   DropdownMenu,
