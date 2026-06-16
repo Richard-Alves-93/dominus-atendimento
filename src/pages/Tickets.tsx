@@ -848,10 +848,16 @@ const Tickets = () => {
       direction: "outbound",
       from_me: true,
       body: p.body,
-      msg_type: "text",
+      msg_type: p.media?.type ?? "text",
       status: p.status === "error" ? "error" : "sending",
       sent_at: p.createdAt,
       created_at: p.createdAt,
+      media_mime_type: p.media?.mimeType ?? null,
+      media_file_name: p.media?.fileName ?? null,
+      media_size: p.media?.size ?? null,
+      media_caption: p.media?.caption ?? null,
+      media_storage_path: null,
+      media_url: p.media?.previewUrl ?? null,
       _optimistic: true,
     }));
     return [...real, ...optimistic];
