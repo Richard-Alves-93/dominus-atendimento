@@ -26,6 +26,11 @@ import {
   Download,
   Image as ImageIcon,
   Paperclip,
+  Mic,
+  Camera,
+  User as UserIcon,
+  Music,
+  Plus,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -339,6 +344,9 @@ const Tickets = () => {
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState<"image" | "video" | "audio" | "document" | null>(null);
   const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
@@ -1119,6 +1127,13 @@ const Tickets = () => {
   };
 
   // ── Envio de mídia ─────────────────────────────────────────────
+  const resetAttachInputs = () => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (documentInputRef.current) documentInputRef.current.value = "";
+    if (mediaInputRef.current) mediaInputRef.current.value = "";
+    if (audioInputRef.current) audioInputRef.current.value = "";
+  };
+
   const closeAttachDialog = () => {
     if (attachPreviewUrl) URL.revokeObjectURL(attachPreviewUrl);
     setAttachFile(null);
@@ -1126,7 +1141,7 @@ const Tickets = () => {
     setAttachPreviewUrl(null);
     setAttachCaption("");
     setAttachUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    resetAttachInputs();
   };
 
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1134,19 +1149,19 @@ const Tickets = () => {
     if (!file) return;
     if (FORBIDDEN_EXT.test(file.name)) {
       toast({ title: "Arquivo não permitido", description: "Tipo de arquivo bloqueado por segurança.", variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAttachInputs();
       return;
     }
     const type = detectMediaType(file.type);
     if (!type) {
       toast({ title: "Tipo não suportado", description: "Selecione imagem, vídeo, áudio ou documento.", variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAttachInputs();
       return;
     }
     const limit = MEDIA_LIMITS[type];
     if (file.size > limit) {
       toast({ title: "Arquivo muito grande para envio.", description: `Limite para ${type}: ${formatBytes(limit)}.`, variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetAttachInputs();
       return;
     }
     setAttachFile(file);
@@ -1784,24 +1799,47 @@ const Tickets = () => {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={ACCEPT_TYPES}
-                    className="hidden"
-                    onChange={handleFileSelected}
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
-                    aria-label="Anexar arquivo"
-                    title="Anexar arquivo"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </Button>
+                  <input ref={fileInputRef} type="file" accept={ACCEPT_TYPES} className="hidden" onChange={handleFileSelected} />
+                  <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv" className="hidden" onChange={handleFileSelected} />
+                  <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelected} />
+                  <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileSelected} />
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
+                        aria-label="Anexar"
+                        title="Anexar"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="top" align="start" className="w-56">
+                      <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
+                        <FileText className="w-4 h-4 mr-2" /> Documento
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
+                        <ImageIcon className="w-4 h-4 mr-2" /> Fotos e vídeos
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => toast({ title: "Em breve", description: "Envio pela câmera será adicionado em breve." })}
+                      >
+                        <Camera className="w-4 h-4 mr-2" /> Câmera
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
+                        <Music className="w-4 h-4 mr-2" /> Áudio
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => toast({ title: "Em breve", description: "Envio de contato será adicionado em breve." })}
+                      >
+                        <UserIcon className="w-4 h-4 mr-2" /> Contato
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <Input
                     placeholder="Digite uma mensagem..."
                     value={text}
@@ -1814,14 +1852,30 @@ const Tickets = () => {
                     }}
                     className="flex-1 h-10 bg-secondary border-0 rounded-full px-4"
                   />
-                  <Button
-                    onClick={handleSend}
-                    disabled={!text.trim()}
-                    size="icon"
-                    className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+                  {text.trim().length === 0 ? (
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        toast({ title: "Em breve", description: "Gravação de áudio será adicionada em breve." })
+                      }
+                      size="icon"
+                      className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                      aria-label="Gravar áudio"
+                      title="Gravar áudio"
+                    >
+                      <Mic className="w-4 h-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleSend}
+                      size="icon"
+                      className="gradient-primary text-primary-foreground h-10 w-10 rounded-full flex-shrink-0"
+                      aria-label="Enviar"
+                      title="Enviar"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
