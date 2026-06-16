@@ -337,6 +337,12 @@ const Tickets = () => {
   const [pendingUserId, setPendingUserId] = useState<string>("");
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachType, setAttachType] = useState<"image" | "video" | "audio" | "document" | null>(null);
+  const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
+  const [attachCaption, setAttachCaption] = useState("");
+  const [attachUploading, setAttachUploading] = useState(false);
 
   // Departments of company
   const deptsQuery = useQuery({
