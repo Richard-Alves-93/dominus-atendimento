@@ -211,6 +211,8 @@ function MediaContent({ m, onMime }: { m: MessageRow; onMime: (mime?: string | n
 
   const safeExternalUrl = useMemo(() => {
     if (!mediaUrl) return null;
+    // Optimistic local previews use blob: URLs — allow them as-is.
+    if (mediaUrl.startsWith("blob:")) return mediaUrl;
     try {
       const u = new URL(mediaUrl);
       const params = u.search.toLowerCase();
