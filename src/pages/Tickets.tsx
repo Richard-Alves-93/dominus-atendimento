@@ -344,6 +344,9 @@ const Tickets = () => {
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState<"image" | "video" | "audio" | "document" | null>(null);
   const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
