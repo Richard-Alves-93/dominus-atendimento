@@ -34,6 +34,10 @@ const ALLOWED_MIME: Record<MediaType, RegExp> = {
 
 const FORBIDDEN_NAME = /\.(exe|bat|cmd|sh|js|html?|php|jar|msi|scr|vbs|ps1|com|pif|reg|svg)$/i;
 
+function normalizeMime(mime: string): string {
+  return (mime || "").split(";")[0].trim().toLowerCase();
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
