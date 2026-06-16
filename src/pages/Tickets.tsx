@@ -109,6 +109,14 @@ interface PendingMessage {
   body: string;
   createdAt: string;
   status: "sending" | "error";
+  media?: {
+    type: "image" | "video" | "audio" | "document";
+    fileName: string;
+    mimeType: string;
+    size: number;
+    previewUrl: string; // local blob URL
+    caption: string | null;
+  };
 }
 
 interface DeptRow { id: string; name: string; status: string; allow_general_queue?: boolean; allow_stalled_takeover?: boolean }
