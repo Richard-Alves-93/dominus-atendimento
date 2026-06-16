@@ -135,6 +135,36 @@ const STATUS_LABEL: Record<TicketStatus, string> = {
   closed: "Fechado",
 };
 
+// ── Envio de mídia ───────────────────────────────────────────────
+const MEDIA_LIMITS = {
+  image: 10 * 1024 * 1024,
+  audio: 16 * 1024 * 1024,
+  video: 32 * 1024 * 1024,
+  document: 25 * 1024 * 1024,
+} as const;
+const ACCEPT_TYPES =
+  "image/*,video/*,audio/*,application/pdf,application/msword," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+  "text/plain";
+const FORBIDDEN_EXT = /\.(exe|bat|cmd|sh|js|html?|php|jar|msi|scr|vbs|ps1|com|pif|reg|svg)$/i;
+
+function detectMediaType(mime: string): "image" | "video" | "audio" | "document" | null {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (
+    mime === "application/pdf" ||
+    mime === "application/msword" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/vnd.ms-excel" ||
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "text/plain" ||
+    mime === "text/csv"
+  ) return "document";
+  return null;
+}
+
 function initialsOf(name?: string | null, phone?: string | null) {
   const s = (name || phone || "?").trim();
   const parts = s.split(/\s+/).filter(Boolean);
