@@ -28,7 +28,7 @@ const LIMITS: Record<MediaType, number> = {
 const ALLOWED_MIME: Record<MediaType, RegExp> = {
   image: /^image\/(jpeg|png|webp|gif)$/i,
   video: /^video\/(mp4|webm|3gpp|quicktime)$/i,
-  audio: /^audio\/(ogg|mpeg|mp3|mp4|wav|webm|aac|amr|x-m4a)$/i,
+  audio: /^audio\/(ogg|mpeg|mp3|mp4|wav|x-wav|webm|aac|amr|x-m4a|3gpp|3gpp2)$/i,
   document: /^(application\/(pdf|msword|vnd\.openxmlformats-officedocument\.[a-z]+|vnd\.ms-excel|vnd\.ms-powerpoint|zip)|text\/(plain|csv))$/i,
 };
 
