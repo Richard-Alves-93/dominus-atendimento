@@ -154,7 +154,12 @@ const ACCEPT_TYPES =
   "text/plain";
 const FORBIDDEN_EXT = /\.(exe|bat|cmd|sh|js|html?|php|jar|msi|scr|vbs|ps1|com|pif|reg|svg)$/i;
 
-function detectMediaType(mime: string): "image" | "video" | "audio" | "document" | null {
+function normalizeMime(mimeRaw: string): string {
+  return (mimeRaw || "").split(";")[0].trim().toLowerCase();
+}
+
+function detectMediaType(mimeRaw: string): "image" | "video" | "audio" | "document" | null {
+  const mime = normalizeMime(mimeRaw);
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
