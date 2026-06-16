@@ -1119,6 +1119,115 @@ const Tickets = () => {
     sendMutation.mutate({ body: v, tempId, ticketId });
   };
 
+  // ── Envio de mídia ─────────────────────────────────────────────
+  const closeAttachDialog = () => {
+    if (attachPreviewUrl) URL.revokeObjectURL(attachPreviewUrl);
+    setAttachFile(null);
+    setAttachType(null);
+    setAttachPreviewUrl(null);
+    setAttachCaption("");
+    setAttachUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (FORBIDDEN_EXT.test(file.name)) {
+      toast({ title: "Arquivo não permitido", description: "Tipo de arquivo bloqueado por segurança.", variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const type = detectMediaType(file.type);
+    if (!type) {
+      toast({ title: "Tipo não suportado", description: "Selecione imagem, vídeo, áudio ou documento.", variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const limit = MEDIA_LIMITS[type];
+    if (file.size > limit) {
+      toast({ title: "Arquivo muito grande para envio.", description: `Limite para ${type}: ${formatBytes(limit)}.`, variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    setAttachFile(file);
+    setAttachType(type);
+    setAttachPreviewUrl(URL.createObjectURL(file));
+    setAttachCaption("");
+  };
+
+  const handleSendMedia = async () => {
+    if (!attachFile || !attachType || !selected || !activeCompanyId) return;
+    const file = attachFile;
+    const type = attachType;
+    const caption = attachCaption.trim() || null;
+    const ticketId = selected.id;
+    const channelId = selected.channel_id ?? "ch";
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const previewUrl = attachPreviewUrl!;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+    const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const storagePath = `${activeCompanyId}/${channelId}/${ticketId}/temp_${uuid}/${safeName}`;
+
+    setAttachUploading(true);
+    // optimistic
+    setPendingMessages((prev) => [
+      ...prev,
+      {
+        tempId, ticketId,
+        body: caption ?? "",
+        createdAt: new Date().toISOString(),
+        status: "sending",
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+      },
+    ]);
+    requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+    try {
+      const up = await supabase.storage.from("message-media").upload(storagePath, file, {
+        contentType: file.type, upsert: false,
+      });
+      if (up.error) throw new Error(up.error.message);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) throw new Error("Sua sessão expirou. Faça login novamente.");
+
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-media", {
+        body: {
+          company_id: activeCompanyId,
+          ticket_id: ticketId,
+          media_storage_path: storagePath,
+          media_type: type,
+          media_mime_type: file.type,
+          media_file_name: file.name,
+          media_size: file.size,
+          caption,
+        },
+      });
+      if (error) throw new Error(error.message || "Falha ao enviar");
+      const d = data as any;
+      if (d?.ok === false || d?.error) {
+        throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
+      }
+      // Sucesso: webhook fromMe vai atualizar/dedup; remover otimista após pequena espera.
+      setTimeout(() => {
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
+        URL.revokeObjectURL(previewUrl);
+      }, 1500);
+      closeAttachDialog();
+    } catch (e: any) {
+      setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
+      toast({
+        title: "Não foi possível enviar o arquivo.",
+        description: e?.message,
+        variant: "destructive",
+      });
+      setAttachUploading(false);
+    }
+  };
+
+
+
   const updateTicket = async (patch: Record<string, any>, successMsg: string) => {
     if (!selected) return;
     const { error } = await (supabase as any).from("tickets").update(patch).eq("id", selected.id);
