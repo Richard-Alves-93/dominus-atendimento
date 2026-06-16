@@ -26,7 +26,6 @@ import {
   Download,
   Image as ImageIcon,
   Paperclip,
-  X as XIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
