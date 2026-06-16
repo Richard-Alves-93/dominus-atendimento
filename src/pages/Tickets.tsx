@@ -1951,6 +1951,71 @@ const Tickets = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Dialog: Preview e envio de mídia */}
+      <Dialog
+        open={!!attachFile}
+        onOpenChange={(open) => {
+          if (!open && !attachUploading) closeAttachDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar arquivo</DialogTitle>
+            <DialogDescription>
+              {attachType === "image" && "Imagem"}
+              {attachType === "video" && "Vídeo"}
+              {attachType === "audio" && "Áudio"}
+              {attachType === "document" && "Documento"}
+              {" · "}
+              {attachFile && formatBytes(attachFile.size)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3">
+            {attachType === "image" && attachPreviewUrl && (
+              <img src={attachPreviewUrl} alt="preview" className="max-h-64 rounded-lg object-contain mx-auto" />
+            )}
+            {attachType === "video" && attachPreviewUrl && (
+              <video src={attachPreviewUrl} controls className="max-h-64 rounded-lg w-full" />
+            )}
+            {attachType === "audio" && attachPreviewUrl && (
+              <audio src={attachPreviewUrl} controls className="w-full" />
+            )}
+            {attachType === "document" && attachFile && (
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-3">
+                <FileText className="w-8 h-8 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{attachFile.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {attachFile.type || "documento"} · {formatBytes(attachFile.size)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {attachType !== "audio" && (
+              <Input
+                placeholder="Legenda (opcional)"
+                value={attachCaption}
+                maxLength={1024}
+                onChange={(e) => setAttachCaption(e.target.value)}
+                disabled={attachUploading}
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeAttachDialog} disabled={attachUploading}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSendMedia} disabled={attachUploading}>
+              {attachUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 };
