@@ -320,11 +320,17 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
               </div>
             </div>
           )}
+
+          {hasConflict && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 text-destructive text-xs p-2">
+              Este responsável já possui um agendamento nesse horário.
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
+          <Button onClick={handleSubmit} disabled={submitting || hasConflict}>
             {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Criar evento
           </Button>
