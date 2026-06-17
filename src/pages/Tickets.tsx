@@ -1924,6 +1924,32 @@ const Tickets = () => {
 
                         })()}
                       </div>
+                      {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
+                        <div className="mt-1 flex items-center justify-end gap-2">
+                          {m.failure_reason ? (
+                            <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
+                              {m.failure_reason}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="text-[11px] underline text-destructive hover:opacity-80"
+                            onClick={async () => {
+                              try {
+                                const { error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                  body: { message_id: m.id },
+                                });
+                                if (error) throw error;
+                                toast({ title: "Reenfileirado para envio" });
+                              } catch (e: any) {
+                                toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
+                              }
+                            }}
+                          >
+                            Tentar novamente
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   );
