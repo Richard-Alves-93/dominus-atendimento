@@ -59,7 +59,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
     if (!open) return;
     setTitle("");
     setDescription("");
-    setDate("");
+    setDate(defaultDate ?? "");
     setStartTime("");
     setEndTime("");
     setLocation("");
@@ -70,7 +70,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
     setReminder5m(true);
     setContactId("");
     setChannelId("");
-  }, [open]);
+  }, [open, defaultDate]);
 
   // standalone: load contacts of company
   const contactsQuery = useQuery({
