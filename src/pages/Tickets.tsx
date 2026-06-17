@@ -1867,6 +1867,22 @@ const Tickets = () => {
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     <span>{selected.contact?.phone_number || "—"}</span>
+                    {selected.protocol_number && (
+                      <>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          className="font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                          title="Copiar protocolo"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(selected.protocol_number!).catch(() => {});
+                            toast({ title: "Protocolo copiado", description: selected.protocol_number! });
+                          }}
+                        >
+                          Protocolo: {selected.protocol_number}
+                        </button>
+                      </>
+                    )}
                     <span>·</span>
                     <span>Setor: {selected.department?.name ?? "Fila geral"}</span>
                     <span>·</span>
