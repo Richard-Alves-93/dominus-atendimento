@@ -2241,17 +2241,30 @@ const Tickets = () => {
                         }
                       />
 
-                      <Input
+                      <Textarea
                         placeholder="Digite uma mensagem..."
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
+                          // Enter envia; Shift+Enter quebra linha.
+                          // No mobile (sem teclado físico) Enter sempre quebra linha.
+                          const isTouch =
+                            typeof window !== "undefined" &&
+                            window.matchMedia?.("(pointer: coarse)").matches;
+                          if (
+                            e.key === "Enter" &&
+                            !e.shiftKey &&
+                            !e.nativeEvent.isComposing &&
+                            !isTouch
+                          ) {
                             e.preventDefault();
+                            if (sendMutation.isPending) return;
+                            if (text.trim().length === 0) return;
                             handleSend();
                           }
                         }}
-                        className="flex-1 h-10 bg-secondary border-0 rounded-full px-4"
+                        rows={1}
+                        className="flex-1 min-h-10 max-h-40 bg-secondary border-0 rounded-2xl px-4 py-2 resize-none"
                       />
                       {text.trim().length === 0 ? (
                         <Button
