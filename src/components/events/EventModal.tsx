@@ -27,12 +27,13 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   context: EventModalContext;
   onCreated?: () => void;
+  defaultDate?: string; // yyyy-mm-dd
 }
 
 type ContactOpt = { id: string; name: string | null; phone_number: string | null };
 type ChannelOpt = { id: string; name: string; channel_type: string; status: string };
 
-export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
+export function EventModal({ open, onOpenChange, context, onCreated, defaultDate }: Props) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const isTicketMode = context.mode === "ticket";
@@ -58,7 +59,7 @@ export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
     if (!open) return;
     setTitle("");
     setDescription("");
-    setDate("");
+    setDate(defaultDate ?? "");
     setStartTime("");
     setEndTime("");
     setLocation("");
@@ -69,7 +70,7 @@ export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
     setReminder5m(true);
     setContactId("");
     setChannelId("");
-  }, [open]);
+  }, [open, defaultDate]);
 
   // standalone: load contacts of company
   const contactsQuery = useQuery({
@@ -109,6 +110,35 @@ export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
     return ch?.channel_type ?? null;
   }, [isTicketMode, channelId, channelsQuery.data, context.channel_type]);
 
+  // Live conflict check
+  const startIsoMemo = useMemo(() => {
+    if (!date || !startTime) return null;
+    const d = new Date(`${date}T${startTime}:00`);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }, [date, startTime]);
+  const endIsoMemo = useMemo(() => {
+    if (!date || !endTime) return null;
+    const d = new Date(`${date}T${endTime}:00`);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }, [date, endTime]);
+
+  const conflictQuery = useQuery({
+    queryKey: ["event-conflict", activeCompanyId, user?.id, startIsoMemo, endIsoMemo],
+    enabled: open && !!activeCompanyId && !!user?.id && !!startIsoMemo,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("has_schedule_conflict", {
+        p_company_id: activeCompanyId!,
+        p_assigned_user_id: user!.id,
+        p_start_at: startIsoMemo!,
+        p_end_at: endIsoMemo,
+        p_ignore_event_id: null,
+      });
+      if (error) return false;
+      return !!data;
+    },
+  });
+  const hasConflict = conflictQuery.data === true;
+
   async function handleSubmit() {
     if (!activeCompanyId) return;
     if (!title.trim() || !date || !startTime) {
@@ -146,7 +176,22 @@ export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
           reminder_5m_enabled: canSendMessages && reminder5m,
         },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError carries the response; try to extract structured body
+        const ctx = (error as any)?.context;
+        if (ctx && typeof ctx.json === "function") {
+          try {
+            const body = await ctx.json();
+            if (body?.code === "SCHEDULE_CONFLICT" || body?.error?.includes?.("agendamento nesse horário")) {
+              throw new Error(body.error);
+            }
+            if (body?.error) throw new Error(body.error);
+          } catch (parseErr: any) {
+            if (parseErr?.message) throw parseErr;
+          }
+        }
+        throw error;
+      }
       if (data?.ok === false) throw new Error(data.error ?? "Falha ao criar evento");
       toast({ title: "Evento criado", description: title.trim() });
       onCreated?.();
@@ -275,11 +320,17 @@ export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
               </div>
             </div>
           )}
+
+          {hasConflict && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 text-destructive text-xs p-2">
+              Este responsável já possui um agendamento nesse horário.
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
+          <Button onClick={handleSubmit} disabled={submitting || hasConflict}>
             {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Criar evento
           </Button>

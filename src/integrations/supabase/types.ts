@@ -992,6 +992,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_schedule_conflict: {
+        Args: {
+          p_assigned_user_id: string
+          p_company_id: string
+          p_end_at: string
+          p_ignore_event_id?: string
+          p_start_at: string
+        }
+        Returns: boolean
+      }
       is_master: { Args: { _user_id: string }; Returns: boolean }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }

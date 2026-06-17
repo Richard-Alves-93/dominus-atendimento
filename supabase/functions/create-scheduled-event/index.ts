@@ -130,7 +130,17 @@ Deno.serve(async (req) => {
       })
       .select("*")
       .single();
-    if (evErr) return json({ ok: false, error: evErr.message }, 400);
+    if (evErr) {
+      const msg = evErr.message ?? "";
+      if (msg.includes("SCHEDULE_CONFLICT")) {
+        return json({
+          ok: false,
+          code: "SCHEDULE_CONFLICT",
+          error: "Este responsável já possui um agendamento nesse horário. Escolha outro horário ou outro responsável.",
+        }, 409);
+      }
+      return json({ ok: false, error: msg }, 400);
+    }
 
     // System message in ticket history (if event was created from a ticket)
     if (ticket_id && contact_id) {
