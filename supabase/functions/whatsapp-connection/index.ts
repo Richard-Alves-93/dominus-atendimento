@@ -185,10 +185,19 @@ async function evoConnectionState(instanceName: string) {
 }
 
 async function evoLogout(instanceName: string) {
-  await fetch(`${evoBase()}/instance/logout/${instanceName}`, {
+  // Evolution v2.3.x: DELETE /instance/logout/{instance}
+  const res = await fetch(`${evoBase()}/instance/logout/${instanceName}`, {
     method: "DELETE",
     headers: evoHeaders(),
-  }).catch(() => undefined);
+  }).catch((e) => ({ ok: false, status: 0, text: async () => String((e as Error)?.message ?? e) } as any));
+  const text = await (res as Response).text().catch(() => "");
+  console.log("[EVOLUTION_DISCONNECT_RESPONSE]", {
+    status: (res as Response).status,
+    ok: (res as Response).ok,
+    body_raw_truncated: text.slice(0, 240),
+    endpoint_path: `/instance/logout/${instanceName}`,
+  });
+  return { ok: (res as Response).ok, status: (res as Response).status, body: text };
 }
 
 Deno.serve(async (req) => {
@@ -365,23 +374,84 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "disconnect") {
-      if (channel) {
-        if (EVO_ENABLED) await evoLogout(instance_name);
+      if (!channel) return json({ status: "disconnected" });
+
+      const { data: inst } = await admin
+        .from("whatsapp_instances")
+        .select("instance_name, status")
+        .eq("channel_id", channel.id)
+        .maybeSingle();
+
+      const target = inst?.instance_name ?? instance_name;
+      const local_status_before = inst?.status ?? channel.status ?? "unknown";
+
+      console.log("[EVOLUTION_DISCONNECT_AUDIT_START]", {
+        company_id: body.company_id,
+        channel_id: channel.id,
+        instance_name: target,
+        local_status_before,
+        endpoint_path: `/instance/logout/${target}`,
+      });
+
+      if (!EVO_ENABLED) {
+        return json({ error: "Evolution API não configurada.", status: local_status_before }, 200);
+      }
+
+      const logout = await evoLogout(target);
+
+      // Verify real state on Evolution
+      let evoState = "unknown";
+      try {
+        const { state } = await evoConnectionState(target);
+        evoState = state ?? "unknown";
+      } catch (_) { /* ignore */ }
+
+      const mapped = mapState(evoState);
+      const reallyDisconnected = mapped === "disconnected";
+
+      console.log("[EVOLUTION_DISCONNECT_STATE_CHECK]", {
+        instance_name: target,
+        evolution_state_after: evoState,
+        decision: reallyDisconnected ? "update_db_disconnected" : "keep_db_state",
+      });
+
+      if (reallyDisconnected) {
         await admin.from("channels").update({ status: "disconnected" }).eq("id", channel.id);
         await admin
           .from("whatsapp_instances")
           .update({ status: "disconnected", qr_code: null, disconnected_at: new Date().toISOString() })
           .eq("channel_id", channel.id);
+
+        console.log("[EVOLUTION_DISCONNECT_AUDIT_END]", {
+          local_status_after: "disconnected",
+          success: true,
+          failure_reason: null,
+        });
+        return json({ status: "disconnected", instance_name: target });
       }
-      return json({ status: "disconnected" });
+
+      const failure_reason = logout.ok
+        ? `Evolution ainda reporta estado "${evoState}" após logout.`
+        : `Logout falhou (HTTP ${logout.status}): ${logout.body.slice(0, 160)}`;
+
+      console.log("[EVOLUTION_DISCONNECT_AUDIT_END]", {
+        local_status_after: local_status_before,
+        success: false,
+        failure_reason,
+      });
+
+      return json({
+        error: "Não foi possível desconectar o WhatsApp na Evolution. Tente novamente ou verifique a instância no painel Evolution.",
+        evolution_state: evoState,
+        status: mapped,
+        instance_name: target,
+      }, 200);
     }
 
     return json({ error: "Unknown action" }, 400);
   } catch (e) {
     const message = (e as Error)?.message ?? String(e);
     console.error("[EVOLUTION_API_ERROR]", { message: message.slice(0, 300) });
-    // Return 200 with structured error so the frontend surfaces a clear message
-    // instead of "Edge Function returned a non-2xx status code".
     return json({ error: message, status: "error" }, 200);
   }
 });

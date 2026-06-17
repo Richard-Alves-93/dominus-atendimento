@@ -97,6 +97,10 @@ export default function Conexoes() {
       toast.error(error.message);
       return null;
     }
+    if (data && (data as { error?: string }).error) {
+      toast.error((data as { error: string }).error);
+      return data as { status: string; qr_code?: string | null; instance_name?: string | null };
+    }
     return data as { status: string; qr_code?: string | null; instance_name?: string | null };
   };
 
@@ -141,12 +145,15 @@ export default function Conexoes() {
     setLoading(true);
     const res = await callFn("disconnect");
     setLoading(false);
-    if (res) {
-      setStatus("disconnected");
+    if (!res) return;
+    // Only flip UI if the backend confirmed Evolution actually disconnected.
+    setStatus(res.status);
+    if (res.status === "disconnected") {
       setQr(null);
       stopPolling();
-      await loadChannels();
+      toast.success("WhatsApp desconectado.");
     }
+    await loadChannels();
   };
 
   const reapplySettings = async (channelId: string) => {
