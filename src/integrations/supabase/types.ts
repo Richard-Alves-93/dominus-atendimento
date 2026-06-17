@@ -214,6 +214,9 @@ export type Database = {
           company_id: string
           created_at: string
           notify_customer_on_department_transfer: boolean
+          protocol_enabled: boolean
+          protocol_format: string
+          protocol_prefix: string | null
           same_department_only: boolean
           stalled_minutes: number
           updated_at: string
@@ -223,6 +226,9 @@ export type Database = {
           company_id: string
           created_at?: string
           notify_customer_on_department_transfer?: boolean
+          protocol_enabled?: boolean
+          protocol_format?: string
+          protocol_prefix?: string | null
           same_department_only?: boolean
           stalled_minutes?: number
           updated_at?: string
@@ -232,6 +238,9 @@ export type Database = {
           company_id?: string
           created_at?: string
           notify_customer_on_department_transfer?: boolean
+          protocol_enabled?: boolean
+          protocol_format?: string
+          protocol_prefix?: string | null
           same_department_only?: boolean
           stalled_minutes?: number
           updated_at?: string
@@ -847,6 +856,35 @@ export type Database = {
           },
         ]
       }
+      ticket_protocol_sequences: {
+        Row: {
+          company_id: string
+          current_value: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          company_id: string
+          current_value?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          company_id?: string
+          current_value?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_protocol_sequences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           assigned_at: string | null
@@ -860,6 +898,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           metadata: Json
+          protocol_number: string | null
           status: Database["public"]["Enums"]["ticket_status"]
           subject: string | null
           unread_count: number
@@ -877,6 +916,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           metadata?: Json
+          protocol_number?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           subject?: string | null
           unread_count?: number
@@ -894,6 +934,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           metadata?: Json
+          protocol_number?: string | null
           status?: Database["public"]["Enums"]["ticket_status"]
           subject?: string | null
           unread_count?: number
@@ -1004,6 +1045,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_ticket_protocol: {
+        Args: { _company_id: string }
+        Returns: string
+      }
       has_schedule_conflict: {
         Args: {
           p_assigned_user_id: string
