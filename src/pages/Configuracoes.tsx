@@ -57,6 +57,9 @@ export default function Configuracoes() {
         setStalledMinutes(s.stalled_minutes);
         setSameDeptOnly(s.same_department_only);
         setNotifyCustomerOnTransfer(Boolean(s.notify_customer_on_department_transfer));
+        setProtocolEnabled(Boolean(s.protocol_enabled));
+        setProtocolPrefix(s.protocol_prefix ?? "");
+        setProtocolFormat(s.protocol_format ?? "{PREFIX}-{YYYY}-{SEQUENCE_6}");
       }
       setLoading(false);
     })();
@@ -65,33 +68,30 @@ export default function Configuracoes() {
   const handleSave = async () => {
     if (!activeCompanyId || !canManage) return;
     const minutes = Math.max(1, Math.min(1440, Math.floor(stalledMinutes || 15)));
+    const prefix = protocolPrefix.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null;
+    const format = protocolFormat.trim() || "{PREFIX}-{YYYY}-{SEQUENCE_6}";
     setSaving(true);
-    const { error } = await (supabase as any)
-      .from("company_settings")
-      .upsert(
-        {
-          company_id: activeCompanyId,
-          allow_stalled_takeover: allowTakeover,
-          stalled_minutes: minutes,
-          same_department_only: sameDeptOnly,
-          notify_customer_on_department_transfer: notifyCustomerOnTransfer,
-        },
-        { onConflict: "company_id" },
-      );
-    setSaving(false);
-    if (error) {
-      toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
-      return;
-    }
-    qc.setQueryData(["company-settings", activeCompanyId], {
+    const payload = {
       company_id: activeCompanyId,
       allow_stalled_takeover: allowTakeover,
       stalled_minutes: minutes,
       same_department_only: sameDeptOnly,
       notify_customer_on_department_transfer: notifyCustomerOnTransfer,
-    });
+      protocol_enabled: protocolEnabled,
+      protocol_prefix: prefix,
+      protocol_format: format,
+    };
+    const { error } = await (supabase as any)
+      .from("company_settings")
+      .upsert(payload, { onConflict: "company_id" });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    qc.setQueryData(["company-settings", activeCompanyId], payload);
     qc.invalidateQueries({ queryKey: ["company-settings", activeCompanyId] });
-    toast({ title: "Regras de atendimento salvas" });
+    toast({ title: "Configurações salvas" });
   };
 
   return (
