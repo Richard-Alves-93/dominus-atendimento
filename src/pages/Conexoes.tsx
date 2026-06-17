@@ -63,10 +63,15 @@ export default function Conexoes() {
 
   const loadChannels = async () => {
     if (!activeCompanyId) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("channels")
       .select("id, channel_type, status, name")
       .eq("company_id", activeCompanyId);
+    if (error) {
+      console.error("[Conexoes] loadChannels error", error);
+      toast.error(`Não foi possível carregar os canais: ${error.message}`);
+      return;
+    }
     setChannels((data as ChannelRow[] | null) ?? []);
   };
 
