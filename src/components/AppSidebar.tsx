@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   MessageSquare,
+  MessageSquareText,
   Users,
   Send,
   Settings,
@@ -33,6 +34,7 @@ const mainItems = [
   { title: "Painel", url: "/app/dashboard", icon: LayoutDashboard },
   { title: "Atendimentos", url: "/app/tickets", icon: MessageSquare },
   { title: "Contatos", url: "/app/contatos", icon: Users },
+  { title: "Mensagens Rápidas", url: "/app/mensagens-rapidas", icon: MessageSquareText },
   { title: "Campanhas", url: "/app/campanhas", icon: Send, adminOnly: true },
   { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays, adminOnly: true },
 ];

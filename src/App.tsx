@@ -21,6 +21,7 @@ import TrocarSenha from "./pages/TrocarSenha";
 import Placeholder from "./pages/Placeholder";
 import Configuracoes from "./pages/Configuracoes";
 import Agendamentos from "./pages/Agendamentos";
+import MensagensRapidas from "./pages/MensagensRapidas";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/app/contatos" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
               <Route path="/app/campanhas" element={<ProtectedRoute><Placeholder title="Campanhas" description="Disparos em massa e prospecção." /></ProtectedRoute>} />
               <Route path="/app/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
+              <Route path="/app/mensagens-rapidas" element={<ProtectedRoute><MensagensRapidas /></ProtectedRoute>} />
               <Route path="/app/conexoes" element={<ProtectedRoute><Conexoes /></ProtectedRoute>} />
               <Route path="/app/setores" element={<ProtectedRoute><Setores /></ProtectedRoute>} />
               <Route path="/app/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />

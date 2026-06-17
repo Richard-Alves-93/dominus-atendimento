@@ -1,0 +1,377 @@
+import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Pencil, Trash2, Search, Power, Info } from "lucide-react";
+import { AppLayout } from "@/components/AppLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { toast } from "@/hooks/use-toast";
+
+interface QuickReply {
+  id: string;
+  title: string;
+  shortcut: string | null;
+  body: string;
+  category: string | null;
+  is_active: boolean;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FormState {
+  id?: string;
+  title: string;
+  shortcut: string;
+  category: string;
+  body: string;
+  is_active: boolean;
+}
+
+const EMPTY_FORM: FormState = {
+  title: "",
+  shortcut: "",
+  category: "",
+  body: "",
+  is_active: true,
+};
+
+const SHORTCUT_RE = /^[a-zA-Z0-9_-]*$/;
+
+function normalizeShortcut(s: string) {
+  return s.trim().replace(/\s+/g, "").replace(/^\/+/, "");
+}
+
+export default function MensagensRapidas() {
+  const { profile } = useAuth();
+  const { activeCompanyId } = useCompany();
+  const qc = useQueryClient();
+  const [q, setQ] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["quick-replies", "manage", activeCompanyId, profile?.id],
+    enabled: !!activeCompanyId && !!profile?.id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("quick_replies")
+        .select("*")
+        .eq("company_id", activeCompanyId)
+        .eq("user_id", profile!.id)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as QuickReply[];
+    },
+  });
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return items;
+    return items.filter(
+      (i) =>
+        i.title.toLowerCase().includes(s) ||
+        (i.shortcut ?? "").toLowerCase().includes(s) ||
+        (i.category ?? "").toLowerCase().includes(s) ||
+        i.body.toLowerCase().includes(s),
+    );
+  }, [items, q]);
+
+  const upsert = useMutation({
+    mutationFn: async (f: FormState) => {
+      if (!activeCompanyId || !profile?.id) throw new Error("Sessão inválida");
+      const title = f.title.trim();
+      const body = f.body.trim();
+      const shortcut = normalizeShortcut(f.shortcut);
+      const category = f.category.trim() || null;
+      if (!title) throw new Error("Informe um título");
+      if (!body) throw new Error("Informe a mensagem");
+      if (shortcut && !SHORTCUT_RE.test(shortcut))
+        throw new Error("Atalho aceita apenas letras, números, hífen e underscore");
+
+      const payload: Record<string, any> = {
+        company_id: activeCompanyId,
+        user_id: profile.id,
+        title,
+        body,
+        shortcut: shortcut || null,
+        category,
+        is_active: f.is_active,
+      };
+      if (f.id) {
+        const { error } = await (supabase as any)
+          .from("quick_replies")
+          .update(payload)
+          .eq("id", f.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("quick_replies")
+          .insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Mensagem rápida salva" });
+      setDialogOpen(false);
+      setForm(EMPTY_FORM);
+      qc.invalidateQueries({ queryKey: ["quick-replies"] });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Falha ao salvar", description: e.message, variant: "destructive" }),
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async (row: QuickReply) => {
+      const { error } = await (supabase as any)
+        .from("quick_replies")
+        .update({ is_active: !row.is_active })
+        .eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quick-replies"] }),
+    onError: (e: Error) =>
+      toast({ title: "Falha", description: e.message, variant: "destructive" }),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("quick_replies").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Mensagem rápida excluída" });
+      setDeleteId(null);
+      qc.invalidateQueries({ queryKey: ["quick-replies"] });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Falha", description: e.message, variant: "destructive" }),
+  });
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setDialogOpen(true);
+  };
+  const openEdit = (r: QuickReply) => {
+    setForm({
+      id: r.id,
+      title: r.title,
+      shortcut: r.shortcut ?? "",
+      category: r.category ?? "",
+      body: r.body,
+      is_active: r.is_active,
+    });
+    setDialogOpen(true);
+  };
+
+  return (
+    <AppLayout>
+      <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl md:text-2xl font-semibold">Mensagens Rápidas</h1>
+            <p className="text-sm text-muted-foreground">
+              Atalhos pessoais para inserir mensagens no atendimento.
+            </p>
+          </div>
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4 mr-2" /> Nova
+          </Button>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por título, atalho, categoria ou conteúdo..."
+            className="pl-9"
+          />
+        </div>
+
+        <div className="rounded-lg border bg-card">
+          {isLoading ? (
+            <div className="p-6 text-sm text-muted-foreground">Carregando...</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              {items.length === 0
+                ? "Nenhuma mensagem rápida cadastrada. Clique em Nova para começar."
+                : "Nenhum resultado."}
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {filtered.map((r) => (
+                <li key={r.id} className="p-4 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium truncate">{r.title}</span>
+                      {r.shortcut && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          /{r.shortcut}
+                        </Badge>
+                      )}
+                      {r.category && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {r.category}
+                        </Badge>
+                      )}
+                      {!r.is_active && (
+                        <Badge variant="outline" className="text-[10px]">
+                          Inativo
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2 whitespace-pre-wrap">
+                      {r.body}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => toggleActive.mutate(r)}
+                      title={r.is_active ? "Inativar" : "Ativar"}
+                    >
+                      <Power
+                        className={`w-4 h-4 ${r.is_active ? "text-primary" : "text-muted-foreground"}`}
+                      />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => openEdit(r)} title="Editar">
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setDeleteId(r.id)}
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{form.id ? "Editar mensagem rápida" : "Nova mensagem rápida"}</DialogTitle>
+            <DialogDescription>Crie atalhos pessoais para acelerar respostas.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Título</Label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                maxLength={120}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Atalho (opcional)</Label>
+                <Input
+                  value={form.shortcut}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, shortcut: normalizeShortcut(e.target.value) }))
+                  }
+                  placeholder="ex.: saudacao"
+                  maxLength={40}
+                />
+              </div>
+              <div>
+                <Label>Categoria (opcional)</Label>
+                <Input
+                  value={form.category}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  maxLength={60}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Mensagem</Label>
+              <Textarea
+                value={form.body}
+                onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+                rows={6}
+                maxLength={4000}
+              />
+              <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1">
+                <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <span>
+                  Variáveis: <code>{"{{nome_contato}}"}</code>, <code>{"{{nome_atendente}}"}</code>,{" "}
+                  <code>{"{{empresa}}"}</code>, <code>{"{{data}}"}</code>, <code>{"{{hora}}"}</code>,{" "}
+                  <code>{"{{protocolo}}"}</code>.
+                </span>
+              </p>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label className="text-sm">Ativa</Label>
+                <p className="text-xs text-muted-foreground">Mensagens inativas não aparecem no atendimento.</p>
+              </div>
+              <Switch
+                checked={form.is_active}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => upsert.mutate(form)} disabled={upsert.isPending}>
+              {form.id ? "Salvar" : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir mensagem rápida?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && remove.mutate(deleteId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </AppLayout>
+  );
+}

@@ -641,6 +641,63 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_replies: {
+        Row: {
+          body: string
+          category: string | null
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          shortcut: string | null
+          title: string
+          updated_at: string
+          usage_count: number
+          user_id: string
+        }
+        Insert: {
+          body: string
+          category?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          shortcut?: string | null
+          title: string
+          updated_at?: string
+          usage_count?: number
+          user_id: string
+        }
+        Update: {
+          body?: string
+          category?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          shortcut?: string | null
+          title?: string
+          updated_at?: string
+          usage_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_replies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quick_replies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_events: {
         Row: {
           assigned_user_id: string

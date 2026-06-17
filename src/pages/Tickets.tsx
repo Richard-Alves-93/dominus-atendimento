@@ -68,6 +68,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { EventModal } from "@/components/events/EventModal";
+import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 
 type TicketStatus = "open" | "pending" | "closed";
 type ListFilter = "todos" | "fila" | "meus" | "open" | "pending" | "closed";
@@ -2228,6 +2229,17 @@ const Tickets = () => {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+
+                      <QuickRepliesPopover
+                        disabled={!selected}
+                        contactName={selected?.contact?.name ?? null}
+                        protocol={(selected as any)?.protocol_number ?? null}
+                        onInsert={(snippet) =>
+                          setText((prev) =>
+                            prev.trim().length === 0 ? snippet : `${prev}\n${snippet}`,
+                          )
+                        }
+                      />
 
                       <Input
                         placeholder="Digite uma mensagem..."
