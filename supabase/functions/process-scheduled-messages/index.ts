@@ -115,15 +115,13 @@ Deno.serve(async (req) => {
     let ok = 0, failed = 0;
     for (const msg of msgs ?? []) {
       try {
-        console.log("[SCHEDULED_MESSAGE_WORKER_AUDIT]", {
+        console.log("[SCHEDULED_MESSAGE_TIMING_AUDIT]", {
           scheduled_message_id: msg.id,
-          company_id: msg.company_id,
           event_id: msg.event_id,
-          ticket_id: msg.ticket_id,
-          contact_id: msg.contact_id,
-          channel_id: msg.channel_id,
-          channel_type: msg.channel_type,
           type: msg.type,
+          scheduled_for: msg.scheduled_for,
+          now: new Date().toISOString(),
+          should_send_now: new Date(msg.scheduled_for).getTime() <= Date.now(),
           status_before: "processing",
         });
         let result: { ok: boolean; reason?: string };
