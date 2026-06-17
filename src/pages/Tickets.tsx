@@ -81,6 +81,7 @@ interface TicketRow {
   unread_count: number;
   last_message_at: string | null;
   subject: string | null;
+  protocol_number: string | null;
   department_id: string | null;
   assigned_user_id: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
@@ -484,7 +485,7 @@ const Tickets = () => {
       let q = (supabase as any)
         .from("tickets")
         .select(
-          "id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url), department:departments(id, name)",
+          "id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, protocol_number, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url), department:departments(id, name)",
         )
         .eq("company_id", activeCompanyId!)
         .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -1866,6 +1867,22 @@ const Tickets = () => {
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     <span>{selected.contact?.phone_number || "—"}</span>
+                    {selected.protocol_number && (
+                      <>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          className="font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                          title="Copiar protocolo"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(selected.protocol_number!).catch(() => {});
+                            toast({ title: "Protocolo copiado", description: selected.protocol_number! });
+                          }}
+                        >
+                          Protocolo: {selected.protocol_number}
+                        </button>
+                      </>
+                    )}
                     <span>·</span>
                     <span>Setor: {selected.department?.name ?? "Fila geral"}</span>
                     <span>·</span>

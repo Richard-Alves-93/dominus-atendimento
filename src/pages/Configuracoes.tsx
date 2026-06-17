@@ -18,6 +18,9 @@ interface CompanySettings {
   stalled_minutes: number;
   same_department_only: boolean;
   notify_customer_on_department_transfer: boolean;
+  protocol_enabled: boolean;
+  protocol_prefix: string | null;
+  protocol_format: string | null;
 }
 
 export default function Configuracoes() {
@@ -35,6 +38,9 @@ export default function Configuracoes() {
   const [stalledMinutes, setStalledMinutes] = useState(15);
   const [sameDeptOnly, setSameDeptOnly] = useState(true);
   const [notifyCustomerOnTransfer, setNotifyCustomerOnTransfer] = useState(false);
+  const [protocolEnabled, setProtocolEnabled] = useState(false);
+  const [protocolPrefix, setProtocolPrefix] = useState("");
+  const [protocolFormat, setProtocolFormat] = useState("{PREFIX}-{YYYY}-{SEQUENCE_6}");
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -51,6 +57,9 @@ export default function Configuracoes() {
         setStalledMinutes(s.stalled_minutes);
         setSameDeptOnly(s.same_department_only);
         setNotifyCustomerOnTransfer(Boolean(s.notify_customer_on_department_transfer));
+        setProtocolEnabled(Boolean(s.protocol_enabled));
+        setProtocolPrefix(s.protocol_prefix ?? "");
+        setProtocolFormat(s.protocol_format ?? "{PREFIX}-{YYYY}-{SEQUENCE_6}");
       }
       setLoading(false);
     })();
@@ -59,33 +68,30 @@ export default function Configuracoes() {
   const handleSave = async () => {
     if (!activeCompanyId || !canManage) return;
     const minutes = Math.max(1, Math.min(1440, Math.floor(stalledMinutes || 15)));
+    const prefix = protocolPrefix.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10) || null;
+    const format = protocolFormat.trim() || "{PREFIX}-{YYYY}-{SEQUENCE_6}";
     setSaving(true);
-    const { error } = await (supabase as any)
-      .from("company_settings")
-      .upsert(
-        {
-          company_id: activeCompanyId,
-          allow_stalled_takeover: allowTakeover,
-          stalled_minutes: minutes,
-          same_department_only: sameDeptOnly,
-          notify_customer_on_department_transfer: notifyCustomerOnTransfer,
-        },
-        { onConflict: "company_id" },
-      );
-    setSaving(false);
-    if (error) {
-      toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
-      return;
-    }
-    qc.setQueryData(["company-settings", activeCompanyId], {
+    const payload = {
       company_id: activeCompanyId,
       allow_stalled_takeover: allowTakeover,
       stalled_minutes: minutes,
       same_department_only: sameDeptOnly,
       notify_customer_on_department_transfer: notifyCustomerOnTransfer,
-    });
+      protocol_enabled: protocolEnabled,
+      protocol_prefix: prefix,
+      protocol_format: format,
+    };
+    const { error } = await (supabase as any)
+      .from("company_settings")
+      .upsert(payload, { onConflict: "company_id" });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    qc.setQueryData(["company-settings", activeCompanyId], payload);
     qc.invalidateQueries({ queryKey: ["company-settings", activeCompanyId] });
-    toast({ title: "Regras de atendimento salvas" });
+    toast({ title: "Configurações salvas" });
   };
 
   return (
@@ -179,6 +185,63 @@ export default function Configuracoes() {
                   disabled={!canManage}
                 />
               </div>
+
+              <div className="border-t pt-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Protocolo de atendimento</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Gera um número de protocolo único para cada novo atendimento desta empresa.
+                    Quando desativado, nenhum protocolo é gerado e atendimentos antigos não são alterados.
+                  </p>
+                </div>
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm">Ativar protocolo de atendimento</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Disponibiliza a variável {"{{protocolo}}"} nas mensagens rápidas.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={protocolEnabled}
+                    onCheckedChange={setProtocolEnabled}
+                    disabled={!canManage}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl">
+                  <div className="space-y-2">
+                    <Label className="text-sm" htmlFor="protocol-prefix">Prefixo</Label>
+                    <Input
+                      id="protocol-prefix"
+                      placeholder="Ex.: DOM, ATD, RIV"
+                      value={protocolPrefix}
+                      onChange={(e) => setProtocolPrefix(e.target.value)}
+                      disabled={!canManage || !protocolEnabled}
+                      maxLength={10}
+                    />
+                    <p className="text-xs text-muted-foreground">Apenas letras e números. Vazio usa "ATD".</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm" htmlFor="protocol-format">Formato</Label>
+                    <Input
+                      id="protocol-format"
+                      value={protocolFormat}
+                      onChange={(e) => setProtocolFormat(e.target.value)}
+                      disabled={!canManage || !protocolEnabled}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Placeholders: {"{PREFIX}"}, {"{YYYY}"}, {"{SEQUENCE_6}"}.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Exemplo: <span className="font-mono">{(protocolPrefix.trim().toUpperCase() || "ATD")}-{new Date().getFullYear()}-000001</span>
+                </p>
+              </div>
+
+
 
 
               <div className="pt-2">
