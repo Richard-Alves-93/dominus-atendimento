@@ -58,17 +58,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setLoading(true);
+      const prevUid = user?.id ?? null;
+      const nextUid = newSession?.user?.id ?? null;
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        setTimeout(() => {
-          void loadUserData(newSession.user.id).finally(() => setLoading(false));
-        }, 0);
-      } else {
+      if (!newSession?.user) {
         setProfile(null);
         setMemberships([]);
         setLoading(false);
+        return;
+      }
+      // Only flip global loading (which unmounts protected routes) on a real
+      // user change. Token refresh / window-focus events keep the same uid and
+      // must NOT unmount the page — that's what was closing the open ticket.
+      if (prevUid !== nextUid) {
+        setLoading(true);
+        setTimeout(() => {
+          void loadUserData(newSession.user.id).finally(() => setLoading(false));
+        }, 0);
       }
     });
 
