@@ -1947,7 +1947,12 @@ const Tickets = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-secondary/30 scrollbar-thin">
+            <div className="flex-1 relative">
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="absolute inset-0 overflow-y-auto p-4 space-y-3 bg-secondary/30 scrollbar-thin"
+            >
               {messagesQuery.isLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
