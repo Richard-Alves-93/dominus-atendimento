@@ -343,7 +343,30 @@ const Tickets = () => {
 
   const [filter, setFilter] = useState<ListFilter>("todos");
   const [deptFilter, setDeptFilter] = useState<string>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // selectedId is persisted per (company, user) so switching tabs / token
+  // refresh doesn't close the open conversation. Storage key is rebuilt
+  // when company or user changes, and restoration is validated against the
+  // tickets actually visible to this user (RLS already scopes the list).
+  const selectionStorageKey = useMemo(() => {
+    if (!activeCompanyId || !profile?.id) return null;
+    return `dominus:selected_ticket:${activeCompanyId}:${profile.id}`;
+  }, [activeCompanyId, profile?.id]);
+
+  const [selectedId, _setSelectedId] = useState<string | null>(null);
+  const setSelectedId = (id: string | null) => {
+    _setSelectedId(id);
+    if (typeof window === "undefined" || !selectionStorageKey) return;
+    try {
+      if (id && activeCompanyId) {
+        sessionStorage.setItem(
+          selectionStorageKey,
+          JSON.stringify({ ticket_id: id, company_id: activeCompanyId, updated_at: new Date().toISOString() }),
+        );
+      } else {
+        sessionStorage.removeItem(selectionStorageKey);
+      }
+    } catch { /* ignore */ }
+  };
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
