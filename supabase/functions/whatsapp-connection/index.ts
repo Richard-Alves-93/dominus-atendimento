@@ -185,10 +185,19 @@ async function evoConnectionState(instanceName: string) {
 }
 
 async function evoLogout(instanceName: string) {
-  await fetch(`${evoBase()}/instance/logout/${instanceName}`, {
+  // Evolution v2.3.x: DELETE /instance/logout/{instance}
+  const res = await fetch(`${evoBase()}/instance/logout/${instanceName}`, {
     method: "DELETE",
     headers: evoHeaders(),
-  }).catch(() => undefined);
+  }).catch((e) => ({ ok: false, status: 0, text: async () => String((e as Error)?.message ?? e) } as any));
+  const text = await (res as Response).text().catch(() => "");
+  console.log("[EVOLUTION_DISCONNECT_RESPONSE]", {
+    status: (res as Response).status,
+    ok: (res as Response).ok,
+    body_raw_truncated: text.slice(0, 240),
+    endpoint_path: `/instance/logout/${instanceName}`,
+  });
+  return { ok: (res as Response).ok, status: (res as Response).status, body: text };
 }
 
 Deno.serve(async (req) => {
