@@ -81,6 +81,7 @@ interface TicketRow {
   unread_count: number;
   last_message_at: string | null;
   subject: string | null;
+  protocol_number: string | null;
   department_id: string | null;
   assigned_user_id: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
