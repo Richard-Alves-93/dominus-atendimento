@@ -2069,6 +2069,17 @@ const Tickets = () => {
               )}
               <div ref={endRef} />
             </div>
+            {!isNearBottom && (
+              <button
+                type="button"
+                onClick={() => scrollToBottom("smooth")}
+                aria-label="Ir para o fim da conversa"
+                className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur text-slate-500 dark:text-slate-300 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100 flex items-center justify-center transition-colors"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            )}
+            </div>
 
             <div className="p-3 border-t bg-card">
               {selected.status === "closed" ? (
