@@ -40,8 +40,35 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function instanceNameFor(companyId: string) {
+function companySlug(name?: string | null): string {
+  const raw = (name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40)
+    .replace(/^_+|_+$/g, "");
+  return slug || "empresa";
+}
+
+function instanceNameFor(companyId: string, companyName?: string | null) {
+  const suffix = companyId.replace(/-/g, "").slice(0, 8);
+  return `dominus_${companySlug(companyName)}_${suffix}`;
+}
+
+function legacyInstanceNameFor(companyId: string) {
   return `dominus_${companyId.replace(/-/g, "").slice(0, 8)}`;
+}
+
+async function resolveNewInstanceName(baseName: string): Promise<string> {
+  // Try base, then _v2, _v3... until evolution has no instance with that name
+  for (let i = 0; i < 20; i++) {
+    const candidate = i === 0 ? baseName : `${baseName}_v${i + 1}`;
+    const existing = await evoFetchInstance(candidate);
+    if (!existing) return candidate;
+  }
+  return `${baseName}_v${Date.now()}`;
 }
 
 function evoBase() {
@@ -249,7 +276,14 @@ Deno.serve(async (req) => {
       channel = data;
     }
 
-    const instance_name = instanceNameFor(body.company_id);
+    // Load company name to build the slug-based instance name
+    const { data: companyRow } = await admin
+      .from("companies")
+      .select("name")
+      .eq("id", body.company_id)
+      .maybeSingle();
+    const desiredBaseName = instanceNameFor(body.company_id, companyRow?.name);
+    const legacyName = legacyInstanceNameFor(body.company_id);
 
     if (body.action === "create_or_connect") {
       if (!EVO_ENABLED) {
@@ -274,6 +308,35 @@ Deno.serve(async (req) => {
         await admin.from("channels").update({ status: "pending" }).eq("id", channel.id);
       }
 
+      // Reuse stored instance_name if it still exists on Evolution (stability rule).
+      const { data: existingInst } = await admin
+        .from("whatsapp_instances")
+        .select("id, instance_name")
+        .eq("channel_id", channel.id)
+        .maybeSingle();
+
+      let instance_name: string;
+      const storedName = existingInst?.instance_name ?? null;
+
+      if (storedName && (await evoFetchInstance(storedName))) {
+        // Keep existing connected/active instance — do NOT rename.
+        instance_name = storedName;
+      } else if (storedName === legacyName && (await evoFetchInstance(legacyName))) {
+        instance_name = legacyName;
+      } else {
+        // No live Evolution instance — generate a fresh name with the new pattern,
+        // resolving collisions via _v2, _v3, ...
+        instance_name = await resolveNewInstanceName(desiredBaseName);
+      }
+
+      console.log("[EVOLUTION_INSTANCE_NAME_RESOLVED]", {
+        company_id: body.company_id,
+        company_name: companyRow?.name ?? null,
+        desired_base: desiredBaseName,
+        stored: storedName,
+        chosen: instance_name,
+      });
+
       // Try connect first (works if instance already exists); otherwise create.
       let evo: { qr_code: string | null; status: "pending" };
       const existing = await evoFetchInstance(instance_name);
@@ -291,12 +354,6 @@ Deno.serve(async (req) => {
       } catch (e) {
         webhookErr = (e as Error)?.message ?? "unknown";
       }
-
-      const { data: existingInst } = await admin
-        .from("whatsapp_instances")
-        .select("id")
-        .eq("channel_id", channel.id)
-        .maybeSingle();
 
       const syncFields = webhookOk
         ? {
@@ -382,7 +439,7 @@ Deno.serve(async (req) => {
         .eq("channel_id", channel.id)
         .maybeSingle();
 
-      const target = inst?.instance_name ?? instance_name;
+      const target = inst?.instance_name ?? desiredBaseName;
       const local_status_before = inst?.status ?? channel.status ?? "unknown";
 
       console.log("[EVOLUTION_DISCONNECT_AUDIT_START]", {
