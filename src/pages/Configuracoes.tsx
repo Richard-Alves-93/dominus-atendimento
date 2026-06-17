@@ -186,6 +186,63 @@ export default function Configuracoes() {
                 />
               </div>
 
+              <div className="border-t pt-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Protocolo de atendimento</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Gera um número de protocolo único para cada novo atendimento desta empresa.
+                    Quando desativado, nenhum protocolo é gerado e atendimentos antigos não são alterados.
+                  </p>
+                </div>
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm">Ativar protocolo de atendimento</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Disponibiliza a variável {"{{protocolo}}"} nas mensagens rápidas.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={protocolEnabled}
+                    onCheckedChange={setProtocolEnabled}
+                    disabled={!canManage}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl">
+                  <div className="space-y-2">
+                    <Label className="text-sm" htmlFor="protocol-prefix">Prefixo</Label>
+                    <Input
+                      id="protocol-prefix"
+                      placeholder="Ex.: DOM, ATD, RIV"
+                      value={protocolPrefix}
+                      onChange={(e) => setProtocolPrefix(e.target.value)}
+                      disabled={!canManage || !protocolEnabled}
+                      maxLength={10}
+                    />
+                    <p className="text-xs text-muted-foreground">Apenas letras e números. Vazio usa "ATD".</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm" htmlFor="protocol-format">Formato</Label>
+                    <Input
+                      id="protocol-format"
+                      value={protocolFormat}
+                      onChange={(e) => setProtocolFormat(e.target.value)}
+                      disabled={!canManage || !protocolEnabled}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Placeholders: {"{PREFIX}"}, {"{YYYY}"}, {"{SEQUENCE_6}"}.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Exemplo: <span className="font-mono">{(protocolPrefix.trim().toUpperCase() || "ATD")}-{new Date().getFullYear()}-000001</span>
+                </p>
+              </div>
+
+
+
 
               <div className="pt-2">
                 <Button
