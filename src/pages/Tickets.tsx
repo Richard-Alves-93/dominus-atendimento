@@ -34,6 +34,7 @@ import {
   Trash2,
   CalendarPlus,
   BarChart3,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
