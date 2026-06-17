@@ -27,12 +27,13 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   context: EventModalContext;
   onCreated?: () => void;
+  defaultDate?: string; // yyyy-mm-dd
 }
 
 type ContactOpt = { id: string; name: string | null; phone_number: string | null };
 type ChannelOpt = { id: string; name: string; channel_type: string; status: string };
 
-export function EventModal({ open, onOpenChange, context, onCreated }: Props) {
+export function EventModal({ open, onOpenChange, context, onCreated, defaultDate }: Props) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const isTicketMode = context.mode === "ticket";
