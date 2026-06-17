@@ -109,26 +109,36 @@ async function evoSyncWebhook(instanceName: string) {
 }
 
 async function evoCreateInstance(instanceName: string) {
+  // Evolution v2.3.7: do NOT embed `webhook` in /instance/create — it rejects the body shape.
+  // We sync the webhook afterwards via /webhook/set.
   const body: Record<string, unknown> = {
     instanceName,
     qrcode: true,
     integration: "WHATSAPP-BAILEYS",
   };
-  if (EVO_WEBHOOK) {
-    body.webhook = evoWebhookConfig();
-  }
   const res = await fetch(`${evoBase()}/instance/create`, {
     method: "POST",
     headers: evoHeaders(),
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
+  console.log("[EVOLUTION_QR_AUDIT]", {
+    action: "create",
+    instance_name: instanceName,
+    endpoint_path: "/instance/create",
+    evolution_status: res.status,
+    evolution_response_truncated: text.slice(0, 300),
+  });
   if (!res.ok) {
-    // If already exists, fall back to connect
-    if (res.status === 403 || res.status === 409 || String(data?.response?.message ?? "").includes("already")) {
+    const msg = String(data?.response?.message ?? data?.message ?? "");
+    if (res.status === 403 || res.status === 409 || msg.includes("already")) {
       return await evoConnect(instanceName);
     }
-    throw new Error(`Evolution create failed: ${res.status} ${JSON.stringify(data)}`);
+    const nested = data?.response?.message ?? data?.message ?? data?.error ?? text;
+    const detail = (typeof nested === "string" ? nested : JSON.stringify(nested)).slice(0, 240);
+    throw new Error(`Evolution ${res.status}: ${detail}`);
   }
   const qr = data?.qrcode?.base64 ?? data?.qrcode?.code ?? null;
   return { qr_code: ensureDataUrl(qr), status: "pending" as const };
