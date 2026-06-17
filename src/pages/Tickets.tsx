@@ -948,9 +948,63 @@ const Tickets = () => {
     return [...real, ...optimistic];
   }, [messagesQuery.data, pendingForSelected]);
 
+  // ─── Smart scroll ──────────────────────────────────────────────────
+  // • Abrir conversa → rola direto pro fim (instant) assim que mensagens
+  //   chegarem; usa requestAnimationFrame pra esperar o layout estabilizar.
+  // • Nova mensagem → só rola se o usuário JÁ estava perto do fim.
+  // • Botão flutuante "voltar ao fim" aparece quando usuário sobe o scroll.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const lastScrolledTicketRef = useRef<string | null>(null);
+  const lastMessageCountRef = useRef(0);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    // Fallback pro endRef caso o container ainda esteja calculando layout.
+    requestAnimationFrame(() => {
+      const c = scrollContainerRef.current;
+      if (c) c.scrollTop = c.scrollHeight;
+      endRef.current?.scrollIntoView({ behavior, block: "end" });
+    });
+  };
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setIsNearBottom(near);
+  };
+
+  // Scroll inicial ao abrir conversa: espera mensagens carregarem.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [visibleMessages.length, selectedId]);
+    if (!selectedId) return;
+    if (messagesQuery.isLoading) return;
+    if (lastScrolledTicketRef.current === selectedId) return;
+    lastScrolledTicketRef.current = selectedId;
+    lastMessageCountRef.current = visibleMessages.length;
+    // Dois rAFs pra garantir que mídias/labels já reservaram altura.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToBottom("auto");
+        setIsNearBottom(true);
+      });
+    });
+  }, [selectedId, messagesQuery.isLoading, visibleMessages.length]);
+
+  // Nova mensagem chegando: só rola se o usuário estava no fim.
+  useEffect(() => {
+    if (!selectedId) return;
+    if (lastScrolledTicketRef.current !== selectedId) return;
+    const prev = lastMessageCountRef.current;
+    const next = visibleMessages.length;
+    lastMessageCountRef.current = next;
+    if (next > prev && isNearBottom) {
+      requestAnimationFrame(() => scrollToBottom("smooth"));
+    }
+  }, [visibleMessages.length, selectedId, isNearBottom]);
+
 
   // ─── Atendimento parado ────────────────────────────────────────────
   // Considerado parado quando:
