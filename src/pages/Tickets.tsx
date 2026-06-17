@@ -485,7 +485,7 @@ const Tickets = () => {
       let q = (supabase as any)
         .from("tickets")
         .select(
-          "id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url), department:departments(id, name)",
+          "id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, protocol_number, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url), department:departments(id, name)",
         )
         .eq("company_id", activeCompanyId!)
         .order("last_message_at", { ascending: false, nullsFirst: false })
