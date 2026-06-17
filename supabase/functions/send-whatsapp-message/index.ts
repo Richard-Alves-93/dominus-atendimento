@@ -32,6 +32,12 @@ function evoBase() {
   return EVO_URL!.replace(/\/$/, "");
 }
 
+function maskPhone(p: string) {
+  if (!p) return "";
+  if (p.length <= 4) return "***" + p;
+  return p.slice(0, 4) + "***" + p.slice(-2);
+}
+
 async function syncEvolutionWebhook(instanceName: string) {
   if (!EVO_WEBHOOK) return;
   const body = {
