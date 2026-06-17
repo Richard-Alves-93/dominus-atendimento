@@ -639,34 +639,11 @@ const Tickets = () => {
 
   const [eventModalOpen, setEventModalOpen] = useState(false);
 
-  // Zera unread_count ao abrir a conversa (banco + cache + selected).
-  useEffect(() => {
-    if (!selectedId || !activeCompanyId) return;
-    const t = tickets.find((x) => x.id === selectedId);
-    if (!t || (t.unread_count ?? 0) <= 0) return;
-
-    // Atualiza cache local imediatamente (todas as queries de tickets desta empresa).
-    qc.setQueriesData<TicketRow[]>(
-      { queryKey: ["tickets", activeCompanyId] },
-      (old) =>
-        Array.isArray(old)
-          ? old.map((x) => (x.id === selectedId ? { ...x, unread_count: 0 } : x))
-          : old,
-    );
-
-    // Persiste no banco com filtro por empresa.
-    (async () => {
-      const { error } = await (supabase as any)
-        .from("tickets")
-        .update({ unread_count: 0 })
-        .eq("id", selectedId)
-        .eq("company_id", activeCompanyId);
-      if (error) {
-        // Em caso de erro, recarrega para refletir estado real.
-        qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
-      }
-    })();
-  }, [selectedId, activeCompanyId, tickets, qc]);
+  // Importante: NÃO zerar unread_count apenas por visualizar.
+  // O ticket pendente deve permanecer em Pendentes até que o usuário
+  // clique explicitamente em "Aceitar atendimento". O zeramento de
+  // unread_count e a atribuição (assigned_user_id) acontecem somente
+  // no acceptMutation/takeOverMutation.
 
   // Não selecionar nenhum atendimento automaticamente — o usuário escolhe.
 
