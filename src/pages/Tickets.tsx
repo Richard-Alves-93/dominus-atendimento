@@ -68,6 +68,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { EventModal } from "@/components/events/EventModal";
+import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 
 type TicketStatus = "open" | "pending" | "closed";
 type ListFilter = "todos" | "fila" | "meus" | "open" | "pending" | "closed";
