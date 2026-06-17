@@ -165,7 +165,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
         p_assigned_user_id: user!.id,
         p_start_at: startIsoMemo!,
         p_end_at: endIsoMemo,
-        p_ignore_event_id: null,
+        p_ignore_event_id: reschedule?.id ?? null,
       });
       if (error) return false;
       return !!data;
