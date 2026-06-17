@@ -583,6 +583,8 @@ const Tickets = () => {
     [tickets, selectedId],
   );
 
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+
   // Zera unread_count ao abrir a conversa (banco + cache + selected).
   useEffect(() => {
     if (!selectedId || !activeCompanyId) return;
@@ -2065,6 +2067,21 @@ const Tickets = () => {
                             onClick={() => toast({ title: "Em breve", description: "Envio de contato será adicionado em breve." })}
                           >
                             <UserIcon className="w-4 h-4 mr-2" /> Contato
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => toast({ title: "Em breve", description: "Envio de enquete será adicionado em breve." })}
+                          >
+                            <BarChart3 className="w-4 h-4 mr-2" /> Enquete
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!selected) return;
+                              setEventModalOpen(true);
+                            }}
+                            disabled={!selected}
+                          >
+                            <CalendarPlus className="w-4 h-4 mr-2" /> Evento
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
