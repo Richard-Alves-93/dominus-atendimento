@@ -67,7 +67,8 @@ async function syncEvolutionWebhook(instanceName: string) {
   }
 }
 
-// Background: ship the message to Evolution and patch the row with the final status.
+// Foreground: ship the message to Evolution and patch the row with the final status.
+// Returns a structured result so the HTTP response reflects the real outcome.
 async function dispatchToEvolution(params: {
   admin: ReturnType<typeof createClient>;
   messageId: string;
@@ -76,9 +77,8 @@ async function dispatchToEvolution(params: {
   instanceName: string;
   phone: string;
   finalText: string;
-}) {
+}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string }> {
   const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText } = params;
-  const t0 = performance.now();
   try {
     await syncEvolutionWebhook(instanceName);
     const evoRes = await fetch(endpoint, {
@@ -91,7 +91,6 @@ async function dispatchToEvolution(params: {
     try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
 
     if (!evoRes.ok) {
-      // Evolution v2.3.7 nests the real validation error under response.message (often an array of arrays).
       const nested =
         evoData?.response?.message ??
         evoData?.response?.error ??
@@ -99,9 +98,13 @@ async function dispatchToEvolution(params: {
         evoData?.error ??
         null;
       const detail = (typeof nested === "string" ? nested : JSON.stringify(nested ?? evoData)).slice(0, 400);
+      const failureReason = `evolution_${evoRes.status}: ${detail}`;
       console.error("[EVOLUTION_SEND_RESPONSE]", {
+        message_id: messageId,
         status: evoRes.status,
-        body_raw: evoText.slice(0, 600),
+        ok: false,
+        body_raw_truncated: evoText.slice(0, 600),
+        error_message_truncated: detail.slice(0, 300),
         payload_shape: "number+text",
         number_len: phone.length,
         text_len: finalText.length,
@@ -110,13 +113,12 @@ async function dispatchToEvolution(params: {
         delivery_status: "failed",
         status: "failed",
         failed_at: new Date().toISOString(),
-        failure_reason: `Evolution ${evoRes.status}: ${detail}`,
+        failure_reason: failureReason,
         raw: evoData,
       }).eq("id", messageId);
-      return;
+      return { ok: false, status: evoRes.status, failureReason, bodyRaw: evoText.slice(0, 300) };
     }
 
-    // Evolution can return the message id in many shapes — try them all.
     const externalId =
       evoData?.key?.id ??
       evoData?.message?.key?.id ??
@@ -126,7 +128,13 @@ async function dispatchToEvolution(params: {
       evoData?.id ??
       evoData?.keyId ??
       null;
-    console.log("[SEND_WA] evo_ok keys=", Object.keys(evoData ?? {}), "externalId=", externalId);
+    console.log("[EVOLUTION_SEND_RESPONSE]", {
+      message_id: messageId,
+      status: evoRes.status,
+      ok: true,
+      external_id: externalId,
+      keys: Object.keys(evoData ?? {}),
+    });
 
     const nowIso = new Date().toISOString();
     const patch: Record<string, unknown> = {
@@ -144,14 +152,17 @@ async function dispatchToEvolution(params: {
     if (updErr) console.error("[SEND_WA] update_after_send_failed", updErr.message);
     await admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId);
 
+    return { ok: true, status: evoRes.status, externalId };
   } catch (e) {
-    console.error("[SEND_WA] dispatch_exception", (e as Error)?.message);
+    const failureReason = String((e as Error)?.message ?? e).slice(0, 300);
+    console.error("[EVOLUTION_SEND_RESPONSE]", { message_id: messageId, ok: false, exception: failureReason });
     await admin.from("messages").update({
       delivery_status: "failed",
       status: "failed",
       failed_at: new Date().toISOString(),
-      failure_reason: String((e as Error)?.message ?? e),
+      failure_reason: `exception: ${failureReason}`,
     }).eq("id", messageId);
+    return { ok: false, failureReason: `exception: ${failureReason}` };
   }
 }
 
