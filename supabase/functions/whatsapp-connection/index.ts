@@ -148,8 +148,21 @@ async function evoConnect(instanceName: string) {
   const res = await fetch(`${evoBase()}/instance/connect/${instanceName}`, {
     headers: evoHeaders(),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Evolution connect failed: ${res.status} ${JSON.stringify(data)}`);
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
+  console.log("[EVOLUTION_QR_AUDIT]", {
+    action: "connect",
+    instance_name: instanceName,
+    endpoint_path: "/instance/connect",
+    evolution_status: res.status,
+    evolution_response_truncated: text.slice(0, 300),
+  });
+  if (!res.ok) {
+    const nested = data?.response?.message ?? data?.message ?? data?.error ?? text;
+    const detail = (typeof nested === "string" ? nested : JSON.stringify(nested)).slice(0, 240);
+    throw new Error(`Evolution ${res.status}: ${detail}`);
+  }
   const qr = data?.base64 ?? data?.qrcode?.base64 ?? data?.code ?? null;
   return { qr_code: ensureDataUrl(qr), status: "pending" as const };
 }
