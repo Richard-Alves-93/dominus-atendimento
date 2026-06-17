@@ -188,6 +188,49 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
 
     setSubmitting(true);
     try {
+      if (isEdit && reschedule) {
+        const { error } = await supabase
+          .from("scheduled_events")
+          .update({
+            title: title.trim(),
+            description: description.trim() || null,
+            start_at: startIso,
+            end_at: endIso,
+            location: location.trim() || null,
+            meeting_enabled: meetingEnabled,
+            meeting_url: meetingEnabled ? (meetingUrl.trim() || null) : null,
+          })
+          .eq("id", reschedule.id);
+        if (error) {
+          if ((error as any)?.message?.includes("SCHEDULE_CONFLICT")) {
+            throw new Error("Este responsável já possui um agendamento nesse horário.");
+          }
+          throw error;
+        }
+        // Internal note in ticket history, best-effort
+        if (reschedule.ticket_id && reschedule.contact_id) {
+          const when = `${date.split("-").reverse().join("/")} às ${startTime}`;
+          await supabase.from("messages").insert({
+            company_id: activeCompanyId,
+            ticket_id: reschedule.ticket_id,
+            contact_id: reschedule.contact_id,
+            channel_id: reschedule.channel_id,
+            direction: "outbound" as any,
+            msg_type: "text" as any,
+            body: `Evento "${title.trim()}" reagendado para ${when}.`,
+            from_me: true,
+            status: "system",
+            delivery_status: "system",
+            source: "system",
+            raw: {},
+            sent_at: new Date().toISOString(),
+          } as any);
+        }
+        toast({ title: "Evento reagendado", description: title.trim() });
+        onCreated?.();
+        onOpenChange(false);
+        return;
+      }
       const { data: session } = await supabase.auth.getSession();
       const token = session.session?.access_token;
       if (!token) throw new Error("Sessão expirada");
@@ -211,7 +254,6 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
         },
       });
       if (error) {
-        // FunctionsHttpError carries the response; try to extract structured body
         const ctx = (error as any)?.context;
         if (ctx && typeof ctx.json === "function") {
           try {
