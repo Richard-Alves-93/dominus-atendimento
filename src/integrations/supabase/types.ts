@@ -635,6 +635,7 @@ export type Database = {
       scheduled_events: {
         Row: {
           assigned_user_id: string
+          cancel_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           channel_id: string | null
@@ -643,6 +644,9 @@ export type Database = {
           contact_id: string | null
           created_at: string
           created_by: string
+          delete_reason: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           description: string | null
           end_at: string | null
           id: string
@@ -660,6 +664,7 @@ export type Database = {
         }
         Insert: {
           assigned_user_id?: string
+          cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           channel_id?: string | null
@@ -668,6 +673,9 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           created_by?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           end_at?: string | null
           id?: string
@@ -685,6 +693,7 @@ export type Database = {
         }
         Update: {
           assigned_user_id?: string
+          cancel_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           channel_id?: string | null
@@ -693,6 +702,9 @@ export type Database = {
           contact_id?: string | null
           created_at?: string
           created_by?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           end_at?: string | null
           id?: string

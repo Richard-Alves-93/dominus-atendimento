@@ -22,21 +22,39 @@ export interface EventModalContext {
   contactLabel?: string;
 }
 
+export interface RescheduleTarget {
+  id: string;
+  title: string;
+  description: string | null;
+  start_at: string;
+  end_at: string | null;
+  location: string | null;
+  meeting_enabled: boolean;
+  meeting_url: string | null;
+  ticket_id: string | null;
+  contact_id: string | null;
+  channel_id: string | null;
+  channel_type: string | null;
+  assigned_user_id: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   context: EventModalContext;
   onCreated?: () => void;
   defaultDate?: string; // yyyy-mm-dd
+  reschedule?: RescheduleTarget | null;
 }
 
 type ContactOpt = { id: string; name: string | null; phone_number: string | null };
 type ChannelOpt = { id: string; name: string; channel_type: string; status: string };
 
-export function EventModal({ open, onOpenChange, context, onCreated, defaultDate }: Props) {
+export function EventModal({ open, onOpenChange, context, onCreated, defaultDate, reschedule }: Props) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const isTicketMode = context.mode === "ticket";
+  const isEdit = !!reschedule;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -57,6 +75,22 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
 
   useEffect(() => {
     if (!open) return;
+    if (reschedule) {
+      const s = new Date(reschedule.start_at);
+      const e = reschedule.end_at ? new Date(reschedule.end_at) : null;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setTitle(reschedule.title);
+      setDescription(reschedule.description ?? "");
+      setDate(`${s.getFullYear()}-${pad(s.getMonth() + 1)}-${pad(s.getDate())}`);
+      setStartTime(`${pad(s.getHours())}:${pad(s.getMinutes())}`);
+      setEndTime(e ? `${pad(e.getHours())}:${pad(e.getMinutes())}` : "");
+      setLocation(reschedule.location ?? "");
+      setMeetingEnabled(reschedule.meeting_enabled);
+      setMeetingUrl(reschedule.meeting_url ?? "");
+      setContactId(reschedule.contact_id ?? "");
+      setChannelId(reschedule.channel_id ?? "");
+      return;
+    }
     setTitle("");
     setDescription("");
     setDate(defaultDate ?? "");
@@ -70,7 +104,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
     setReminder5m(true);
     setContactId("");
     setChannelId("");
-  }, [open, defaultDate]);
+  }, [open, defaultDate, reschedule]);
 
   // standalone: load contacts of company
   const contactsQuery = useQuery({
@@ -131,7 +165,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
         p_assigned_user_id: user!.id,
         p_start_at: startIsoMemo!,
         p_end_at: endIsoMemo,
-        p_ignore_event_id: null,
+        p_ignore_event_id: reschedule?.id ?? null,
       });
       if (error) return false;
       return !!data;
@@ -154,6 +188,49 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
 
     setSubmitting(true);
     try {
+      if (isEdit && reschedule) {
+        const { error } = await supabase
+          .from("scheduled_events")
+          .update({
+            title: title.trim(),
+            description: description.trim() || null,
+            start_at: startIso,
+            end_at: endIso,
+            location: location.trim() || null,
+            meeting_enabled: meetingEnabled,
+            meeting_url: meetingEnabled ? (meetingUrl.trim() || null) : null,
+          })
+          .eq("id", reschedule.id);
+        if (error) {
+          if ((error as any)?.message?.includes("SCHEDULE_CONFLICT")) {
+            throw new Error("Este responsável já possui um agendamento nesse horário.");
+          }
+          throw error;
+        }
+        // Internal note in ticket history, best-effort
+        if (reschedule.ticket_id && reschedule.contact_id) {
+          const when = `${date.split("-").reverse().join("/")} às ${startTime}`;
+          await supabase.from("messages").insert({
+            company_id: activeCompanyId,
+            ticket_id: reschedule.ticket_id,
+            contact_id: reschedule.contact_id,
+            channel_id: reschedule.channel_id,
+            direction: "outbound" as any,
+            msg_type: "text" as any,
+            body: `Evento "${title.trim()}" reagendado para ${when}.`,
+            from_me: true,
+            status: "system",
+            delivery_status: "system",
+            source: "system",
+            raw: {},
+            sent_at: new Date().toISOString(),
+          } as any);
+        }
+        toast({ title: "Evento reagendado", description: title.trim() });
+        onCreated?.();
+        onOpenChange(false);
+        return;
+      }
       const { data: session } = await supabase.auth.getSession();
       const token = session.session?.access_token;
       if (!token) throw new Error("Sessão expirada");
@@ -177,7 +254,6 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
         },
       });
       if (error) {
-        // FunctionsHttpError carries the response; try to extract structured body
         const ctx = (error as any)?.context;
         if (ctx && typeof ctx.json === "function") {
           try {
@@ -197,7 +273,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
       onCreated?.();
       onOpenChange(false);
     } catch (e: any) {
-      toast({ title: "Não foi possível criar o evento", description: e?.message ?? "Erro desconhecido", variant: "destructive" });
+      toast({ title: isEdit ? "Não foi possível reagendar" : "Não foi possível criar o evento", description: e?.message ?? "Erro desconhecido", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -208,10 +284,12 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarPlus className="w-5 h-5 text-primary" /> Novo evento
+            <CalendarPlus className="w-5 h-5 text-primary" /> {isEdit ? "Reagendar evento" : "Novo evento"}
           </DialogTitle>
           <DialogDescription>
-            {isTicketMode
+            {isEdit
+              ? "Atualize os dados do agendamento."
+              : isTicketMode
               ? `Evento vinculado ao atendimento${context.contactLabel ? ` com ${context.contactLabel}` : ""}.`
               : "Crie um evento pessoal ou vinculado a um contato."}
           </DialogDescription>
@@ -332,7 +410,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={submitting || hasConflict}>
             {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Criar evento
+            {isEdit ? "Salvar alterações" : "Criar evento"}
           </Button>
         </DialogFooter>
       </DialogContent>

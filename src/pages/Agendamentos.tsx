@@ -6,13 +6,21 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Plus, Calendar as CalendarIcon, Video, MapPin, Loader2, XCircle,
-  User2, ChevronLeft, ChevronRight,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Plus, Calendar as CalendarIcon, Video, MapPin, Loader2,
+  User2, ChevronLeft, ChevronRight, MoreVertical, Info, CalendarClock, Ban, Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { EventModal } from "@/components/events/EventModal";
+import { EventModal, RescheduleTarget } from "@/components/events/EventModal";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +40,11 @@ interface EventRow {
   contact_id: string | null;
   channel_id: string | null;
   channel_type: string | null;
+  send_confirmation: boolean | null;
+  reminder_1h_enabled: boolean | null;
+  reminder_5m_enabled: boolean | null;
+  cancel_reason: string | null;
+  cancelled_at: string | null;
 }
 
 type ScopeFilter = "mine" | "team" | "all";
@@ -52,6 +65,9 @@ const MONTHS = [
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 function ymd(d: Date) {
   const y = d.getFullYear();
@@ -75,16 +91,23 @@ export default function Agendamentos() {
   const [cursor, setCursor] = useState<Date>(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string>(ymd(today));
 
+  const [infoEvent, setInfoEvent] = useState<EventRow | null>(null);
+  const [cancelEvent, setCancelEvent] = useState<EventRow | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [deleteEvent, setDeleteEvent] = useState<EventRow | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [rescheduleEvent, setRescheduleEvent] = useState<RescheduleTarget | null>(null);
+
   const role = activeMembership?.role ?? "agent";
   const isMaster = profile?.is_master === true;
   const isAdmin = isMaster || ["owner", "admin"].includes(role);
   const isManager = role === "manager";
 
-  // Range for the visible calendar grid (6 weeks)
   const grid = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const start = new Date(first);
-    start.setDate(first.getDate() - first.getDay()); // back to Sunday
+    start.setDate(first.getDate() - first.getDay());
     const days: Date[] = [];
     for (let i = 0; i < 42; i++) {
       const d = new Date(start);
@@ -106,8 +129,9 @@ export default function Agendamentos() {
       const rangeEnd = new Date(grid.end); rangeEnd.setHours(23, 59, 59, 999);
       let q = supabase
         .from("scheduled_events")
-        .select("id, title, description, start_at, end_at, location, meeting_enabled, meeting_url, status, assigned_user_id, created_by, ticket_id, contact_id, channel_id, channel_type")
+        .select("id, title, description, start_at, end_at, location, meeting_enabled, meeting_url, status, assigned_user_id, created_by, ticket_id, contact_id, channel_id, channel_type, send_confirmation, reminder_1h_enabled, reminder_5m_enabled, cancel_reason, cancelled_at")
         .eq("company_id", activeCompanyId!)
+        .is("deleted_at", null)
         .gte("start_at", rangeStart.toISOString())
         .lte("start_at", rangeEnd.toISOString())
         .order("start_at", { ascending: true });
@@ -118,6 +142,59 @@ export default function Agendamentos() {
       return (data ?? []) as EventRow[];
     },
   });
+
+  // Lookup contacts for shown events
+  const contactIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of eventsQuery.data ?? []) if (e.contact_id) s.add(e.contact_id);
+    return Array.from(s);
+  }, [eventsQuery.data]);
+
+  const contactsQuery = useQuery({
+    queryKey: ["events-contacts", activeCompanyId, contactIds.join(",")],
+    enabled: !!activeCompanyId && contactIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("contacts")
+        .select("id, name, phone_number")
+        .eq("company_id", activeCompanyId!)
+        .in("id", contactIds);
+      const map = new Map<string, { name: string | null; phone: string | null }>();
+      (data ?? []).forEach((c: any) => map.set(c.id, { name: c.name, phone: c.phone_number }));
+      return map;
+    },
+  });
+
+  const userIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of eventsQuery.data ?? []) {
+      if (e.assigned_user_id) s.add(e.assigned_user_id);
+      if (e.created_by) s.add(e.created_by);
+    }
+    return Array.from(s);
+  }, [eventsQuery.data]);
+
+  const usersQuery = useQuery({
+    queryKey: ["events-users", userIds.join(",")],
+    enabled: userIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("id, full_name, email").in("id", userIds);
+      const map = new Map<string, string>();
+      (data ?? []).forEach((p: any) => map.set(p.id, p.full_name ?? p.email ?? "Usuário"));
+      return map;
+    },
+  });
+
+  const contactLabel = (ev: EventRow) => {
+    if (!ev.contact_id) return null;
+    const c = contactsQuery.data?.get(ev.contact_id);
+    return c?.name ?? c?.phone ?? "Contato";
+  };
+  const userLabel = (id: string | null) => {
+    if (!id) return "—";
+    if (id === user?.id) return "Você";
+    return usersQuery.data?.get(id) ?? "Outro";
+  };
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, EventRow[]>();
@@ -138,17 +215,105 @@ export default function Agendamentos() {
     return opts;
   }, [isAdmin, isManager]);
 
-  async function cancelEvent(id: string) {
-    const { error } = await supabase
-      .from("scheduled_events")
-      .update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancelled_by: user?.id ?? null })
-      .eq("id", id);
-    if (error) {
-      toast({ title: "Não foi possível cancelar", description: error.message, variant: "destructive" });
+  function canEdit(ev: EventRow) {
+    if (isAdmin) return true;
+    return ev.assigned_user_id === user?.id || ev.created_by === user?.id;
+  }
+
+  async function postInternalTicketNote(ev: EventRow, text: string) {
+    if (!ev.ticket_id || !ev.contact_id || !activeCompanyId) return;
+    await supabase.from("messages").insert({
+      company_id: activeCompanyId,
+      ticket_id: ev.ticket_id,
+      contact_id: ev.contact_id,
+      channel_id: ev.channel_id,
+      direction: "outbound" as any,
+      msg_type: "text" as any,
+      body: text,
+      from_me: true,
+      status: "system",
+      delivery_status: "system",
+      source: "system",
+      raw: {},
+      sent_at: new Date().toISOString(),
+    } as any);
+  }
+
+  async function confirmCancel() {
+    if (!cancelEvent) return;
+    if (!cancelReason.trim()) {
+      toast({ title: "Motivo obrigatório", description: "Informe o motivo do cancelamento.", variant: "destructive" });
       return;
     }
-    toast({ title: "Evento cancelado", description: "Mensagens pendentes vinculadas foram canceladas." });
-    qc.invalidateQueries({ queryKey: ["scheduled-events"] });
+    setCancelSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("scheduled_events")
+        .update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancelled_by: user?.id ?? null,
+          cancel_reason: cancelReason.trim(),
+        } as any)
+        .eq("id", cancelEvent.id);
+      if (error) throw error;
+      // Audit log (best-effort)
+      await supabase.from("audit_logs").insert({
+        company_id: activeCompanyId!,
+        event_type: "scheduled_event_cancelled",
+        ticket_id: cancelEvent.ticket_id,
+        changed_by: user?.id ?? null,
+        reason: cancelReason.trim(),
+        metadata: { event_id: cancelEvent.id, cancelled_at: new Date().toISOString() } as any,
+      } as any);
+      await postInternalTicketNote(
+        cancelEvent,
+        `${profile?.full_name ?? "Usuário"} cancelou o evento "${cancelEvent.title}". Motivo: ${cancelReason.trim()}.`,
+      );
+      toast({ title: "Evento cancelado", description: "Mensagens pendentes vinculadas foram canceladas." });
+      setCancelEvent(null);
+      setCancelReason("");
+      qc.invalidateQueries({ queryKey: ["scheduled-events"] });
+    } catch (e: any) {
+      toast({ title: "Não foi possível cancelar", description: e?.message ?? "Erro", variant: "destructive" });
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteEvent) return;
+    setDeleteSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("scheduled_events")
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: user?.id ?? null,
+        } as any)
+        .eq("id", deleteEvent.id);
+      if (error) throw error;
+      // Cancel pending scheduled messages
+      await supabase
+        .from("scheduled_messages")
+        .update({ status: "cancelled" } as any)
+        .eq("event_id", deleteEvent.id)
+        .in("status", ["pending", "processing"]);
+      await supabase.from("audit_logs").insert({
+        company_id: activeCompanyId!,
+        event_type: "scheduled_event_deleted",
+        ticket_id: deleteEvent.ticket_id,
+        changed_by: user?.id ?? null,
+        metadata: { event_id: deleteEvent.id, deleted_at: new Date().toISOString() } as any,
+      } as any);
+      toast({ title: "Evento excluído" });
+      setDeleteEvent(null);
+      qc.invalidateQueries({ queryKey: ["scheduled-events"] });
+    } catch (e: any) {
+      toast({ title: "Não foi possível excluir", description: e?.message ?? "Erro", variant: "destructive" });
+    } finally {
+      setDeleteSubmitting(false);
+    }
   }
 
   function goMonth(delta: number) {
@@ -239,10 +404,7 @@ export default function Agendamentos() {
                       isToday && !isSelected && "bg-accent/40",
                     )}
                   >
-                    <span className={cn(
-                      "text-xs font-medium",
-                      isToday && "text-primary",
-                    )}>
+                    <span className={cn("text-xs font-medium", isToday && "text-primary")}>
                       {d.getDate()}
                     </span>
                     {list.length > 0 && (
@@ -275,53 +437,111 @@ export default function Agendamentos() {
               </Card>
             ) : (
               <div className="space-y-2">
-                {selectedDayEvents.map((ev) => (
-                  <Card key={ev.id} className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {fmtTime(ev.start_at)}{ev.end_at ? `–${fmtTime(ev.end_at)}` : ""}
-                          </span>
-                          <h4 className="font-medium truncate">{ev.title}</h4>
+                {selectedDayEvents.map((ev) => {
+                  const cName = contactLabel(ev);
+                  const editable = canEdit(ev);
+                  return (
+                    <Card key={ev.id} className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {fmtTime(ev.start_at)}{ev.end_at ? `–${fmtTime(ev.end_at)}` : ""}
+                            </span>
+                            <h4 className="font-medium truncate">{ev.title}</h4>
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground">
+                            <Badge
+                              variant={ev.status === "scheduled" ? "default" : ev.status === "cancelled" ? "destructive" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {STATUS_LABEL[ev.status] ?? ev.status}
+                            </Badge>
+                            {ev.channel_type && <Badge variant="outline" className="capitalize text-[10px]">{ev.channel_type}</Badge>}
+                            {ev.meeting_enabled
+                              ? <Badge variant="outline" className="text-[10px]"><Video className="w-3 h-3 mr-1" /> Online</Badge>
+                              : <Badge variant="outline" className="text-[10px]"><MapPin className="w-3 h-3 mr-1" /> Presencial</Badge>}
+                          </div>
+                          <div className="mt-1.5 space-y-0.5 text-xs">
+                            <div className="flex items-center gap-1.5 text-foreground/80">
+                              <User2 className="w-3 h-3 text-muted-foreground" />
+                              <span className="text-muted-foreground">Contato:</span>{" "}
+                              <span className="font-medium">{cName ?? "Evento interno"}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-foreground/80">
+                              <User2 className="w-3 h-3 text-muted-foreground" />
+                              <span className="text-muted-foreground">Responsável:</span>{" "}
+                              <span className="font-medium">{userLabel(ev.assigned_user_id)}</span>
+                            </div>
+                            {ev.location && (
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <MapPin className="w-3 h-3" /> <span className="truncate">{ev.location}</span>
+                              </div>
+                            )}
+                            {ev.meeting_url && (
+                              <a
+                                href={ev.meeting_url} target="_blank" rel="noopener noreferrer"
+                                className="text-primary hover:underline inline-block break-all"
+                              >
+                                {ev.meeting_url}
+                              </a>
+                            )}
+                          </div>
                         </div>
-                        <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
-                          <Badge
-                            variant={ev.status === "scheduled" ? "default" : ev.status === "cancelled" ? "destructive" : "secondary"}
-                            className="text-[10px]"
-                          >
-                            {STATUS_LABEL[ev.status] ?? ev.status}
-                          </Badge>
-                          {ev.channel_type && <Badge variant="outline" className="capitalize text-[10px]">{ev.channel_type}</Badge>}
-                          {ev.meeting_enabled && <Badge variant="outline" className="text-[10px]"><Video className="w-3 h-3 mr-1" /> Online</Badge>}
-                          {ev.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {ev.location}</span>}
-                          <span className="flex items-center gap-1">
-                            <User2 className="w-3 h-3" /> {ev.assigned_user_id === user?.id ? "Você" : "Outro"}
-                          </span>
-                        </div>
-                        {ev.meeting_url && (
-                          <a
-                            href={ev.meeting_url} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline mt-1 inline-block break-all"
-                          >
-                            {ev.meeting_url}
-                          </a>
-                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" aria-label="Ações do evento">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => setInfoEvent(ev)}>
+                              <Info className="w-4 h-4 mr-2" /> Informações
+                            </DropdownMenuItem>
+                            {ev.status === "scheduled" && editable && (
+                              <DropdownMenuItem
+                                onClick={() => setRescheduleEvent({
+                                  id: ev.id, title: ev.title, description: ev.description,
+                                  start_at: ev.start_at, end_at: ev.end_at, location: ev.location,
+                                  meeting_enabled: ev.meeting_enabled, meeting_url: ev.meeting_url,
+                                  ticket_id: ev.ticket_id, contact_id: ev.contact_id,
+                                  channel_id: ev.channel_id, channel_type: ev.channel_type,
+                                  assigned_user_id: ev.assigned_user_id,
+                                })}
+                              >
+                                <CalendarClock className="w-4 h-4 mr-2" /> Reagendar
+                              </DropdownMenuItem>
+                            )}
+                            {ev.status === "scheduled" && editable && (
+                              <DropdownMenuItem onClick={() => { setCancelEvent(ev); setCancelReason(""); }}>
+                                <Ban className="w-4 h-4 mr-2" /> Cancelar
+                              </DropdownMenuItem>
+                            )}
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeleteEvent(ev)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                      {ev.status === "scheduled" && (
-                        <Button variant="ghost" size="icon" onClick={() => cancelEvent(ev.id)} aria-label="Cancelar evento">
-                          <XCircle className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* Create new event */}
       <EventModal
         open={open}
         onOpenChange={setOpen}
@@ -329,6 +549,158 @@ export default function Agendamentos() {
         defaultDate={selectedDate}
         onCreated={() => qc.invalidateQueries({ queryKey: ["scheduled-events"] })}
       />
+
+      {/* Reschedule */}
+      <EventModal
+        open={!!rescheduleEvent}
+        onOpenChange={(v) => { if (!v) setRescheduleEvent(null); }}
+        context={{
+          mode: rescheduleEvent?.ticket_id ? "ticket" : "standalone",
+          ticket_id: rescheduleEvent?.ticket_id ?? undefined,
+          contact_id: rescheduleEvent?.contact_id ?? undefined,
+          channel_id: rescheduleEvent?.channel_id ?? undefined,
+          channel_type: rescheduleEvent?.channel_type ?? undefined,
+        }}
+        reschedule={rescheduleEvent}
+        onCreated={() => qc.invalidateQueries({ queryKey: ["scheduled-events"] })}
+      />
+
+      {/* Info dialog */}
+      <Dialog open={!!infoEvent} onOpenChange={(v) => { if (!v) setInfoEvent(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{infoEvent?.title}</DialogTitle>
+            <DialogDescription>Informações do evento</DialogDescription>
+          </DialogHeader>
+          {infoEvent && (
+            <div className="space-y-2 text-sm">
+              {infoEvent.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Descrição</p>
+                  <p className="whitespace-pre-wrap">{infoEvent.description}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Início</p>
+                  <p>{fmtDateTime(infoEvent.start_at)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Término</p>
+                  <p>{infoEvent.end_at ? fmtDateTime(infoEvent.end_at) : "—"}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Tipo</p>
+                <p>{infoEvent.meeting_enabled ? "Online" : "Presencial"}</p>
+              </div>
+              {infoEvent.location && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Local</p>
+                  <p>{infoEvent.location}</p>
+                </div>
+              )}
+              {infoEvent.meeting_url && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Link da reunião</p>
+                  <a href={infoEvent.meeting_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
+                    {infoEvent.meeting_url}
+                  </a>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Contato</p>
+                  <p>{contactLabel(infoEvent) ?? "Evento interno"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Canal</p>
+                  <p className="capitalize">{infoEvent.channel_type ?? "—"}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Responsável</p>
+                  <p>{userLabel(infoEvent.assigned_user_id)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Criado por</p>
+                  <p>{userLabel(infoEvent.created_by)}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Status</p>
+                <Badge variant={infoEvent.status === "scheduled" ? "default" : infoEvent.status === "cancelled" ? "destructive" : "secondary"}>
+                  {STATUS_LABEL[infoEvent.status] ?? infoEvent.status}
+                </Badge>
+              </div>
+              <div className="border-t pt-2 text-xs text-muted-foreground space-y-0.5">
+                <p>Confirmação ao cliente: {infoEvent.send_confirmation ? "habilitada" : "desabilitada"}</p>
+                <p>Lembrete 1h: {infoEvent.reminder_1h_enabled ? "habilitado" : "desabilitado"}</p>
+                <p>Lembrete 5min: {infoEvent.reminder_5m_enabled ? "habilitado" : "desabilitado"}</p>
+              </div>
+              {infoEvent.status === "cancelled" && infoEvent.cancel_reason && (
+                <div className="border-t pt-2">
+                  <p className="text-xs text-muted-foreground">Motivo do cancelamento</p>
+                  <p>{infoEvent.cancel_reason}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInfoEvent(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel dialog */}
+      <Dialog open={!!cancelEvent} onOpenChange={(v) => { if (!v && !cancelSubmitting) { setCancelEvent(null); setCancelReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancelar evento</DialogTitle>
+            <DialogDescription>
+              Informe o motivo do cancelamento. Lembretes pendentes serão cancelados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Motivo *</Label>
+            <Textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              placeholder="Ex.: cliente solicitou remarcar."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setCancelEvent(null); setCancelReason(""); }} disabled={cancelSubmitting}>
+              Voltar
+            </Button>
+            <Button variant="destructive" onClick={confirmCancel} disabled={cancelSubmitting || !cancelReason.trim()}>
+              {cancelSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Confirmar cancelamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete dialog */}
+      <Dialog open={!!deleteEvent} onOpenChange={(v) => { if (!v && !deleteSubmitting) setDeleteEvent(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir evento</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir este evento? Esta ação é permanente e deve ser usada apenas em casos administrativos.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteEvent(null)} disabled={deleteSubmitting}>Voltar</Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleteSubmitting}>
+              {deleteSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Excluir definitivamente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
