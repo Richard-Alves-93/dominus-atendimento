@@ -439,7 +439,7 @@ Deno.serve(async (req) => {
         .eq("channel_id", channel.id)
         .maybeSingle();
 
-      const target = inst?.instance_name ?? instance_name;
+      const target = inst?.instance_name ?? desiredBaseName;
       const local_status_before = inst?.status ?? channel.status ?? "unknown";
 
       console.log("[EVOLUTION_DISCONNECT_AUDIT_START]", {
