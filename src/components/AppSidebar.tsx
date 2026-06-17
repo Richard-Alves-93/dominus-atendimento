@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   MessageSquare,
+  MessageSquareText,
   Users,
   Send,
   Settings,
