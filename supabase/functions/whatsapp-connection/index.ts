@@ -378,6 +378,10 @@ Deno.serve(async (req) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (e) {
-    return json({ error: (e as Error).message }, 500);
+    const message = (e as Error)?.message ?? String(e);
+    console.error("[EVOLUTION_API_ERROR]", { message: message.slice(0, 300) });
+    // Return 200 with structured error so the frontend surfaces a clear message
+    // instead of "Edge Function returned a non-2xx status code".
+    return json({ error: message, status: "error" }, 200);
   }
 });
