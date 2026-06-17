@@ -273,7 +273,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
       onCreated?.();
       onOpenChange(false);
     } catch (e: any) {
-      toast({ title: "Não foi possível criar o evento", description: e?.message ?? "Erro desconhecido", variant: "destructive" });
+      toast({ title: isEdit ? "Não foi possível reagendar" : "Não foi possível criar o evento", description: e?.message ?? "Erro desconhecido", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
