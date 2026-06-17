@@ -41,15 +41,19 @@ async function sendWhatsapp(
   if (!phone) return { ok: false, reason: "contact_without_phone" };
 
   const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
+  const payload = { number: phone, text: msg.body, linkPreview: false };
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-    body: JSON.stringify({ number: phone, text: msg.body }),
+    body: JSON.stringify(payload),
   });
   const text = await res.text();
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
-  if (!res.ok) return { ok: false, reason: `evolution_${res.status}: ${data?.message ?? data?.error ?? "unknown"}` };
+  if (!res.ok) {
+    const detail = (data?.message ?? data?.error ?? data?.raw ?? "unknown").toString().slice(0, 200);
+    return { ok: false, reason: `evolution_${res.status}: ${detail}` };
+  }
 
   const externalId =
     data?.key?.id ?? data?.message?.key?.id ?? data?.data?.key?.id ??
