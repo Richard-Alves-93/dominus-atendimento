@@ -608,6 +608,34 @@ const Tickets = () => {
     [tickets, selectedId],
   );
 
+  // Restaura o ticket selecionado quando a lista carrega. Só restaura se o
+  // ticket existir na lista visível ao usuário (RLS + filtro do setor já
+  // garantem que ele tem permissão). Caso contrário, limpa o storage.
+  const restoredKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectionStorageKey || ticketsQuery.isLoading) return;
+    if (restoredKeyRef.current === selectionStorageKey) return;
+    restoredKeyRef.current = selectionStorageKey;
+    if (selectedId) return;
+    try {
+      const raw = sessionStorage.getItem(selectionStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { ticket_id?: string; company_id?: string };
+      if (!parsed?.ticket_id || parsed.company_id !== activeCompanyId) {
+        sessionStorage.removeItem(selectionStorageKey);
+        return;
+      }
+      const stillVisible = (ticketsQuery.data ?? []).some((t) => t.id === parsed.ticket_id);
+      if (stillVisible) {
+        _setSelectedId(parsed.ticket_id);
+      } else {
+        sessionStorage.removeItem(selectionStorageKey);
+      }
+    } catch {
+      try { sessionStorage.removeItem(selectionStorageKey); } catch { /* ignore */ }
+    }
+  }, [selectionStorageKey, ticketsQuery.isLoading, ticketsQuery.data, activeCompanyId, selectedId]);
+
   const [eventModalOpen, setEventModalOpen] = useState(false);
 
   // Zera unread_count ao abrir a conversa (banco + cache + selected).
