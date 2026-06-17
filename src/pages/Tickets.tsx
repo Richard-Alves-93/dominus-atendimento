@@ -32,6 +32,8 @@ import {
   Music,
   Plus,
   Trash2,
+  CalendarPlus,
+  BarChart3,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -64,6 +66,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { EventModal } from "@/components/events/EventModal";
 
 type TicketStatus = "open" | "pending" | "closed";
 type ListFilter = "todos" | "fila" | "meus" | "open" | "pending" | "closed";
@@ -579,6 +582,8 @@ const Tickets = () => {
     () => tickets.find((t) => t.id === selectedId) ?? null,
     [tickets, selectedId],
   );
+
+  const [eventModalOpen, setEventModalOpen] = useState(false);
 
   // Zera unread_count ao abrir a conversa (banco + cache + selected).
   useEffect(() => {
@@ -2063,6 +2068,21 @@ const Tickets = () => {
                           >
                             <UserIcon className="w-4 h-4 mr-2" /> Contato
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => toast({ title: "Em breve", description: "Envio de enquete será adicionado em breve." })}
+                          >
+                            <BarChart3 className="w-4 h-4 mr-2" /> Enquete
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!selected) return;
+                              setEventModalOpen(true);
+                            }}
+                            disabled={!selected}
+                          >
+                            <CalendarPlus className="w-4 h-4 mr-2" /> Evento
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
 
@@ -2295,6 +2315,22 @@ const Tickets = () => {
         </DialogContent>
       </Dialog>
 
+      {selected && (
+        <EventModal
+          open={eventModalOpen}
+          onOpenChange={setEventModalOpen}
+          context={{
+            mode: "ticket",
+            ticket_id: selected.id,
+            contact_id: selected.contact_id,
+            channel_id: selected.channel_id ?? undefined,
+            contactLabel: selected.contact?.name ?? selected.contact?.phone_number ?? undefined,
+          }}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ["messages", selected.id] });
+          }}
+        />
+      )}
     </AppLayout>
   );
 };
