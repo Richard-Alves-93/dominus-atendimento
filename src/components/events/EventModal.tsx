@@ -22,12 +22,29 @@ export interface EventModalContext {
   contactLabel?: string;
 }
 
+export interface RescheduleTarget {
+  id: string;
+  title: string;
+  description: string | null;
+  start_at: string;
+  end_at: string | null;
+  location: string | null;
+  meeting_enabled: boolean;
+  meeting_url: string | null;
+  ticket_id: string | null;
+  contact_id: string | null;
+  channel_id: string | null;
+  channel_type: string | null;
+  assigned_user_id: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   context: EventModalContext;
   onCreated?: () => void;
   defaultDate?: string; // yyyy-mm-dd
+  reschedule?: RescheduleTarget | null;
 }
 
 type ContactOpt = { id: string; name: string | null; phone_number: string | null };
