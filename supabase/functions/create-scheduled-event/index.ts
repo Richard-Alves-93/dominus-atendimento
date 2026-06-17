@@ -213,11 +213,9 @@ Deno.serve(async (req) => {
     // Audit
     await admin.from("audit_logs").insert({
       company_id,
-      actor_user_id: userId,
-      action: "scheduled_event.create",
-      entity_type: "scheduled_event",
-      entity_id: event.id,
-      metadata: { title: event.title, start_at: event.start_at, has_channel: !!channel_id },
+      event_type: "scheduled_event.create",
+      changed_by: userId,
+      metadata: { event_id: event.id, title: event.title, start_at: event.start_at, has_channel: !!channel_id },
     }).then(() => {}, () => {});
 
     return json({ ok: true, event });
