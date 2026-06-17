@@ -38,6 +38,9 @@ export default function Configuracoes() {
   const [stalledMinutes, setStalledMinutes] = useState(15);
   const [sameDeptOnly, setSameDeptOnly] = useState(true);
   const [notifyCustomerOnTransfer, setNotifyCustomerOnTransfer] = useState(false);
+  const [protocolEnabled, setProtocolEnabled] = useState(false);
+  const [protocolPrefix, setProtocolPrefix] = useState("");
+  const [protocolFormat, setProtocolFormat] = useState("{PREFIX}-{YYYY}-{SEQUENCE_6}");
 
   useEffect(() => {
     if (!activeCompanyId) return;
