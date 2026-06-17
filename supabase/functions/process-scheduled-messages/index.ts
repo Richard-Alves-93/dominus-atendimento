@@ -41,15 +41,19 @@ async function sendWhatsapp(
   if (!phone) return { ok: false, reason: "contact_without_phone" };
 
   const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
+  const payload = { number: phone, text: msg.body, linkPreview: false };
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-    body: JSON.stringify({ number: phone, text: msg.body }),
+    body: JSON.stringify(payload),
   });
   const text = await res.text();
   let data: any = {};
   try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
-  if (!res.ok) return { ok: false, reason: `evolution_${res.status}: ${data?.message ?? data?.error ?? "unknown"}` };
+  if (!res.ok) {
+    const detail = (data?.message ?? data?.error ?? data?.raw ?? "unknown").toString().slice(0, 200);
+    return { ok: false, reason: `evolution_${res.status}: ${detail}` };
+  }
 
   const externalId =
     data?.key?.id ?? data?.message?.key?.id ?? data?.data?.key?.id ??
@@ -111,15 +115,13 @@ Deno.serve(async (req) => {
     let ok = 0, failed = 0;
     for (const msg of msgs ?? []) {
       try {
-        console.log("[SCHEDULED_MESSAGE_WORKER_AUDIT]", {
+        console.log("[SCHEDULED_MESSAGE_TIMING_AUDIT]", {
           scheduled_message_id: msg.id,
-          company_id: msg.company_id,
           event_id: msg.event_id,
-          ticket_id: msg.ticket_id,
-          contact_id: msg.contact_id,
-          channel_id: msg.channel_id,
-          channel_type: msg.channel_type,
           type: msg.type,
+          scheduled_for: msg.scheduled_for,
+          now: new Date().toISOString(),
+          should_send_now: new Date(msg.scheduled_for).getTime() <= Date.now(),
           status_before: "processing",
         });
         let result: { ok: boolean; reason?: string };
