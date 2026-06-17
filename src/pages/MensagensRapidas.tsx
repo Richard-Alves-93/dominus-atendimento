@@ -281,8 +281,8 @@ export default function MensagensRapidas() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg p-0 gap-0 max-h-[85vh] flex flex-col">
-          <DialogHeader className="px-5 pt-5 pb-3 border-b">
+        <DialogContent className="max-w-xl p-0 gap-0 max-h-[92vh] flex flex-col">
+          <DialogHeader className="px-5 pt-4 pb-2 border-b space-y-0.5">
             <DialogTitle className="text-base">
               {form.id ? "Editar mensagem rápida" : "Nova mensagem rápida"}
             </DialogTitle>
@@ -290,8 +290,8 @@ export default function MensagensRapidas() {
               Crie atalhos pessoais para acelerar respostas.
             </DialogDescription>
           </DialogHeader>
-          <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
-            <div className="space-y-1.5">
+          <div className="px-5 py-3 space-y-2.5 overflow-y-auto min-h-0">
+            <div className="space-y-1">
               <Label className="text-xs">Título</Label>
               <Input
                 value={form.title}
@@ -301,7 +301,7 @@ export default function MensagensRapidas() {
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs">Atalho (opcional)</Label>
                 <Input
                   value={form.shortcut}
@@ -313,7 +313,7 @@ export default function MensagensRapidas() {
                   className="h-9"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs">Categoria (opcional)</Label>
                 <Input
                   value={form.category}
@@ -323,14 +323,14 @@ export default function MensagensRapidas() {
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-xs">Mensagem</Label>
               <Textarea
                 value={form.body}
                 onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                rows={4}
+                rows={3}
                 maxLength={4000}
-                className="resize-none"
+                className="resize-none min-h-[80px]"
               />
               <p className="text-[11px] text-muted-foreground leading-snug flex items-start gap-1">
                 <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
@@ -341,8 +341,8 @@ export default function MensagensRapidas() {
                 </span>
               </p>
             </div>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div>
+            <div className="flex items-center justify-between rounded-md border px-3 py-1.5">
+              <div className="leading-tight">
                 <Label className="text-xs">Ativa</Label>
                 <p className="text-[11px] text-muted-foreground">
                   Inativas não aparecem no atendimento.
@@ -354,7 +354,7 @@ export default function MensagensRapidas() {
               />
             </div>
           </div>
-          <DialogFooter className="px-5 py-3 border-t bg-background">
+          <DialogFooter className="px-5 py-2.5 border-t bg-background">
             <Button variant="ghost" size="sm" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
