@@ -16,6 +16,14 @@ const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
 const EVO_WEBHOOK = Deno.env.get("EVOLUTION_WEBHOOK_URL");
 const EVO_ENABLED = Boolean(EVO_URL && EVO_KEY);
 
+console.log("[EVOLUTION_ENV_AUDIT]", {
+  has_evolution_api_url: !!EVO_URL,
+  has_evolution_api_key: !!EVO_KEY,
+  has_webhook_url: !!EVO_WEBHOOK,
+  has_app_public_url: !!Deno.env.get("APP_PUBLIC_URL"),
+  api_url_host: EVO_URL?.split("//")?.[1]?.split("/")?.[0],
+});
+
 const WEBHOOK_EVENTS = [
   "QRCODE_UPDATED",
   "CONNECTION_UPDATE",
