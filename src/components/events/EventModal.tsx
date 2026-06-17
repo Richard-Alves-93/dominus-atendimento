@@ -110,6 +110,35 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
     return ch?.channel_type ?? null;
   }, [isTicketMode, channelId, channelsQuery.data, context.channel_type]);
 
+  // Live conflict check
+  const startIsoMemo = useMemo(() => {
+    if (!date || !startTime) return null;
+    const d = new Date(`${date}T${startTime}:00`);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }, [date, startTime]);
+  const endIsoMemo = useMemo(() => {
+    if (!date || !endTime) return null;
+    const d = new Date(`${date}T${endTime}:00`);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }, [date, endTime]);
+
+  const conflictQuery = useQuery({
+    queryKey: ["event-conflict", activeCompanyId, user?.id, startIsoMemo, endIsoMemo],
+    enabled: open && !!activeCompanyId && !!user?.id && !!startIsoMemo,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("has_schedule_conflict", {
+        p_company_id: activeCompanyId!,
+        p_assigned_user_id: user!.id,
+        p_start_at: startIsoMemo!,
+        p_end_at: endIsoMemo,
+        p_ignore_event_id: null,
+      });
+      if (error) return false;
+      return !!data;
+    },
+  });
+  const hasConflict = conflictQuery.data === true;
+
   async function handleSubmit() {
     if (!activeCompanyId) return;
     if (!title.trim() || !date || !startTime) {
