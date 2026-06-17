@@ -40,8 +40,35 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function instanceNameFor(companyId: string) {
+function companySlug(name?: string | null): string {
+  const raw = (name ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40)
+    .replace(/^_+|_+$/g, "");
+  return slug || "empresa";
+}
+
+function instanceNameFor(companyId: string, companyName?: string | null) {
+  const suffix = companyId.replace(/-/g, "").slice(0, 8);
+  return `dominus_${companySlug(companyName)}_${suffix}`;
+}
+
+function legacyInstanceNameFor(companyId: string) {
   return `dominus_${companyId.replace(/-/g, "").slice(0, 8)}`;
+}
+
+async function resolveNewInstanceName(baseName: string): Promise<string> {
+  // Try base, then _v2, _v3... until evolution has no instance with that name
+  for (let i = 0; i < 20; i++) {
+    const candidate = i === 0 ? baseName : `${baseName}_v${i + 1}`;
+    const existing = await evoFetchInstance(candidate);
+    if (!existing) return candidate;
+  }
+  return `${baseName}_v${Date.now()}`;
 }
 
 function evoBase() {
