@@ -281,7 +281,7 @@ export default function MensagensRapidas() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[480px] p-0 gap-0 max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-[480px] p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden rounded-lg">
           <DialogHeader className="px-4 pt-2.5 pb-1.5 border-b space-y-0">
             <DialogTitle className="text-sm font-semibold">
               {form.id ? "Editar mensagem rápida" : "Nova mensagem rápida"}
