@@ -176,7 +176,22 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
           reminder_5m_enabled: canSendMessages && reminder5m,
         },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError carries the response; try to extract structured body
+        const ctx = (error as any)?.context;
+        if (ctx && typeof ctx.json === "function") {
+          try {
+            const body = await ctx.json();
+            if (body?.code === "SCHEDULE_CONFLICT" || body?.error?.includes?.("agendamento nesse horário")) {
+              throw new Error(body.error);
+            }
+            if (body?.error) throw new Error(body.error);
+          } catch (parseErr: any) {
+            if (parseErr?.message) throw parseErr;
+          }
+        }
+        throw error;
+      }
       if (data?.ok === false) throw new Error(data.error ?? "Falha ao criar evento");
       toast({ title: "Evento criado", description: title.trim() });
       onCreated?.();
