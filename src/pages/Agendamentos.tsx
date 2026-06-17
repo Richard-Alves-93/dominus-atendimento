@@ -220,24 +220,6 @@ export default function Agendamentos() {
     return ev.assigned_user_id === user?.id || ev.created_by === user?.id;
   }
 
-  async function postInternalTicketNote(ev: EventRow, text: string) {
-    if (!ev.ticket_id || !ev.contact_id || !activeCompanyId) return;
-    await supabase.from("messages").insert({
-      company_id: activeCompanyId,
-      ticket_id: ev.ticket_id,
-      contact_id: ev.contact_id,
-      channel_id: ev.channel_id,
-      direction: "outbound" as any,
-      msg_type: "text" as any,
-      body: text,
-      from_me: true,
-      status: "system",
-      delivery_status: "system",
-      source: "system",
-      raw: {},
-      sent_at: new Date().toISOString(),
-    } as any);
-  }
 
   async function confirmCancel() {
     if (!cancelEvent) return;
