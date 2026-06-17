@@ -57,25 +57,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    const lastUidRef = { current: null as string | null };
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setLoading(true);
+      const nextUid = newSession?.user?.id ?? null;
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        setTimeout(() => {
-          void loadUserData(newSession.user.id).finally(() => setLoading(false));
-        }, 0);
-      } else {
+      if (!newSession?.user) {
+        lastUidRef.current = null;
         setProfile(null);
         setMemberships([]);
         setLoading(false);
+        return;
+      }
+      // Only flip global loading (which unmounts protected routes) when the
+      // user actually changes. Token-refresh / window-focus events keep the
+      // same uid and must NOT unmount the page — that was closing the open
+      // ticket whenever the user switched browser tabs.
+      if (lastUidRef.current !== nextUid) {
+        lastUidRef.current = nextUid;
+        setLoading(true);
+        setTimeout(() => {
+          void loadUserData(newSession.user.id).finally(() => setLoading(false));
+        }, 0);
       }
     });
 
     supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
-      if (data.session?.user) await loadUserData(data.session.user.id);
+      if (data.session?.user) {
+        lastUidRef.current = data.session.user.id;
+        await loadUserData(data.session.user.id);
+      }
       setLoading(false);
     });
 

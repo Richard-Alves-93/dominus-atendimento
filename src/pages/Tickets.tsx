@@ -34,6 +34,7 @@ import {
   Trash2,
   CalendarPlus,
   BarChart3,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -342,7 +343,30 @@ const Tickets = () => {
 
   const [filter, setFilter] = useState<ListFilter>("todos");
   const [deptFilter, setDeptFilter] = useState<string>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // selectedId is persisted per (company, user) so switching tabs / token
+  // refresh doesn't close the open conversation. Storage key is rebuilt
+  // when company or user changes, and restoration is validated against the
+  // tickets actually visible to this user (RLS already scopes the list).
+  const selectionStorageKey = useMemo(() => {
+    if (!activeCompanyId || !profile?.id) return null;
+    return `dominus:selected_ticket:${activeCompanyId}:${profile.id}`;
+  }, [activeCompanyId, profile?.id]);
+
+  const [selectedId, _setSelectedId] = useState<string | null>(null);
+  const setSelectedId = (id: string | null) => {
+    _setSelectedId(id);
+    if (typeof window === "undefined" || !selectionStorageKey) return;
+    try {
+      if (id && activeCompanyId) {
+        sessionStorage.setItem(
+          selectionStorageKey,
+          JSON.stringify({ ticket_id: id, company_id: activeCompanyId, updated_at: new Date().toISOString() }),
+        );
+      } else {
+        sessionStorage.removeItem(selectionStorageKey);
+      }
+    } catch { /* ignore */ }
+  };
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
@@ -583,6 +607,34 @@ const Tickets = () => {
     () => tickets.find((t) => t.id === selectedId) ?? null,
     [tickets, selectedId],
   );
+
+  // Restaura o ticket selecionado quando a lista carrega. Só restaura se o
+  // ticket existir na lista visível ao usuário (RLS + filtro do setor já
+  // garantem que ele tem permissão). Caso contrário, limpa o storage.
+  const restoredKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectionStorageKey || ticketsQuery.isLoading) return;
+    if (restoredKeyRef.current === selectionStorageKey) return;
+    restoredKeyRef.current = selectionStorageKey;
+    if (selectedId) return;
+    try {
+      const raw = sessionStorage.getItem(selectionStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { ticket_id?: string; company_id?: string };
+      if (!parsed?.ticket_id || parsed.company_id !== activeCompanyId) {
+        sessionStorage.removeItem(selectionStorageKey);
+        return;
+      }
+      const stillVisible = (ticketsQuery.data ?? []).some((t) => t.id === parsed.ticket_id);
+      if (stillVisible) {
+        _setSelectedId(parsed.ticket_id);
+      } else {
+        sessionStorage.removeItem(selectionStorageKey);
+      }
+    } catch {
+      try { sessionStorage.removeItem(selectionStorageKey); } catch { /* ignore */ }
+    }
+  }, [selectionStorageKey, ticketsQuery.isLoading, ticketsQuery.data, activeCompanyId, selectedId]);
 
   const [eventModalOpen, setEventModalOpen] = useState(false);
 
@@ -896,9 +948,63 @@ const Tickets = () => {
     return [...real, ...optimistic];
   }, [messagesQuery.data, pendingForSelected]);
 
+  // ─── Smart scroll ──────────────────────────────────────────────────
+  // • Abrir conversa → rola direto pro fim (instant) assim que mensagens
+  //   chegarem; usa requestAnimationFrame pra esperar o layout estabilizar.
+  // • Nova mensagem → só rola se o usuário JÁ estava perto do fim.
+  // • Botão flutuante "voltar ao fim" aparece quando usuário sobe o scroll.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const lastScrolledTicketRef = useRef<string | null>(null);
+  const lastMessageCountRef = useRef(0);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    // Fallback pro endRef caso o container ainda esteja calculando layout.
+    requestAnimationFrame(() => {
+      const c = scrollContainerRef.current;
+      if (c) c.scrollTop = c.scrollHeight;
+      endRef.current?.scrollIntoView({ behavior, block: "end" });
+    });
+  };
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setIsNearBottom(near);
+  };
+
+  // Scroll inicial ao abrir conversa: espera mensagens carregarem.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [visibleMessages.length, selectedId]);
+    if (!selectedId) return;
+    if (messagesQuery.isLoading) return;
+    if (lastScrolledTicketRef.current === selectedId) return;
+    lastScrolledTicketRef.current = selectedId;
+    lastMessageCountRef.current = visibleMessages.length;
+    // Dois rAFs pra garantir que mídias/labels já reservaram altura.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToBottom("auto");
+        setIsNearBottom(true);
+      });
+    });
+  }, [selectedId, messagesQuery.isLoading, visibleMessages.length]);
+
+  // Nova mensagem chegando: só rola se o usuário estava no fim.
+  useEffect(() => {
+    if (!selectedId) return;
+    if (lastScrolledTicketRef.current !== selectedId) return;
+    const prev = lastMessageCountRef.current;
+    const next = visibleMessages.length;
+    lastMessageCountRef.current = next;
+    if (next > prev && isNearBottom) {
+      requestAnimationFrame(() => scrollToBottom("smooth"));
+    }
+  }, [visibleMessages.length, selectedId, isNearBottom]);
+
 
   // ─── Atendimento parado ────────────────────────────────────────────
   // Considerado parado quando:
@@ -1841,7 +1947,12 @@ const Tickets = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-secondary/30 scrollbar-thin">
+            <div className="flex-1 relative">
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="absolute inset-0 overflow-y-auto p-4 space-y-3 bg-secondary/30 scrollbar-thin"
+            >
               {messagesQuery.isLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -1957,6 +2068,17 @@ const Tickets = () => {
 
               )}
               <div ref={endRef} />
+            </div>
+            {!isNearBottom && (
+              <button
+                type="button"
+                onClick={() => scrollToBottom("smooth")}
+                aria-label="Ir para o fim da conversa"
+                className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur text-slate-500 dark:text-slate-300 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100 flex items-center justify-center transition-colors"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            )}
             </div>
 
             <div className="p-3 border-t bg-card">
