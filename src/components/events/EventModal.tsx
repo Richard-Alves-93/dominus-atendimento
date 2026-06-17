@@ -50,10 +50,11 @@ interface Props {
 type ContactOpt = { id: string; name: string | null; phone_number: string | null };
 type ChannelOpt = { id: string; name: string; channel_type: string; status: string };
 
-export function EventModal({ open, onOpenChange, context, onCreated, defaultDate }: Props) {
+export function EventModal({ open, onOpenChange, context, onCreated, defaultDate, reschedule }: Props) {
   const { activeCompanyId } = useCompany();
   const { user } = useAuth();
   const isTicketMode = context.mode === "ticket";
+  const isEdit = !!reschedule;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,6 +75,22 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
 
   useEffect(() => {
     if (!open) return;
+    if (reschedule) {
+      const s = new Date(reschedule.start_at);
+      const e = reschedule.end_at ? new Date(reschedule.end_at) : null;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setTitle(reschedule.title);
+      setDescription(reschedule.description ?? "");
+      setDate(`${s.getFullYear()}-${pad(s.getMonth() + 1)}-${pad(s.getDate())}`);
+      setStartTime(`${pad(s.getHours())}:${pad(s.getMinutes())}`);
+      setEndTime(e ? `${pad(e.getHours())}:${pad(e.getMinutes())}` : "");
+      setLocation(reschedule.location ?? "");
+      setMeetingEnabled(reschedule.meeting_enabled);
+      setMeetingUrl(reschedule.meeting_url ?? "");
+      setContactId(reschedule.contact_id ?? "");
+      setChannelId(reschedule.channel_id ?? "");
+      return;
+    }
     setTitle("");
     setDescription("");
     setDate(defaultDate ?? "");
@@ -87,7 +104,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
     setReminder5m(true);
     setContactId("");
     setChannelId("");
-  }, [open, defaultDate]);
+  }, [open, defaultDate, reschedule]);
 
   // standalone: load contacts of company
   const contactsQuery = useQuery({
