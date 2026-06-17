@@ -18,6 +18,9 @@ interface CompanySettings {
   stalled_minutes: number;
   same_department_only: boolean;
   notify_customer_on_department_transfer: boolean;
+  protocol_enabled: boolean;
+  protocol_prefix: string | null;
+  protocol_format: string | null;
 }
 
 export default function Configuracoes() {
