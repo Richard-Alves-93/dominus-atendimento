@@ -632,6 +632,209 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_events: {
+        Row: {
+          assigned_user_id: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          channel_id: string | null
+          channel_type: Database["public"]["Enums"]["channel_type"] | null
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          end_at: string | null
+          id: string
+          location: string | null
+          meeting_enabled: boolean
+          meeting_url: string | null
+          reminder_1h_enabled: boolean
+          reminder_5m_enabled: boolean
+          send_confirmation: boolean
+          start_at: string
+          status: string
+          ticket_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          channel_id?: string | null
+          channel_type?: Database["public"]["Enums"]["channel_type"] | null
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          location?: string | null
+          meeting_enabled?: boolean
+          meeting_url?: string | null
+          reminder_1h_enabled?: boolean
+          reminder_5m_enabled?: boolean
+          send_confirmation?: boolean
+          start_at: string
+          status?: string
+          ticket_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          channel_id?: string | null
+          channel_type?: Database["public"]["Enums"]["channel_type"] | null
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          location?: string | null
+          meeting_enabled?: boolean
+          meeting_url?: string | null
+          reminder_1h_enabled?: boolean
+          reminder_5m_enabled?: boolean
+          send_confirmation?: boolean
+          start_at?: string
+          status?: string
+          ticket_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_events_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_events_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_messages: {
+        Row: {
+          body: string
+          channel_id: string | null
+          channel_type: Database["public"]["Enums"]["channel_type"] | null
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          event_id: string | null
+          failed_at: string | null
+          failure_reason: string | null
+          id: string
+          scheduled_for: string
+          sent_at: string | null
+          status: string
+          ticket_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          channel_id?: string | null
+          channel_type?: Database["public"]["Enums"]["channel_type"] | null
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_id?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          scheduled_for: string
+          sent_at?: string | null
+          status?: string
+          ticket_id?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          channel_id?: string | null
+          channel_type?: Database["public"]["Enums"]["channel_type"] | null
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_id?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          scheduled_for?: string
+          sent_at?: string | null
+          status?: string
+          ticket_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           assigned_at: string | null
@@ -794,6 +997,15 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      user_can_view_event: {
+        Args: {
+          _assigned_user_id: string
+          _company_id: string
+          _created_by: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       user_company_role: {
         Args: { _company_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["company_user_role"]
@@ -826,6 +1038,7 @@ export type Database = {
         | "location"
         | "contact"
         | "other"
+        | "system"
       ticket_status: "open" | "pending" | "closed"
     }
     CompositeTypes: {
@@ -981,6 +1194,7 @@ export const Constants = {
         "location",
         "contact",
         "other",
+        "system",
       ],
       ticket_status: ["open", "pending", "closed"],
     },
