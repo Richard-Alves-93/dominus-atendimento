@@ -2315,6 +2315,22 @@ const Tickets = () => {
         </DialogContent>
       </Dialog>
 
+      {selected && (
+        <EventModal
+          open={eventModalOpen}
+          onOpenChange={setEventModalOpen}
+          context={{
+            mode: "ticket",
+            ticket_id: selected.id,
+            contact_id: selected.contact_id,
+            channel_id: selected.channel_id ?? undefined,
+            contactLabel: selected.contact?.name ?? selected.contact?.phone_number ?? undefined,
+          }}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ["messages", selected.id] });
+          }}
+        />
+      )}
     </AppLayout>
   );
 };
