@@ -90,8 +90,16 @@ Deno.serve(async (req) => {
       // Trigger cancel_event_scheduled_messages will mark pending->cancelled.
       // Now (after that) insert the cancellation external message so it stays pending.
       if (hasExternalChannel) {
-        const cancelBody = `Olá! Seu agendamento "${event.title}" foi cancelado.\nMotivo: ${reason}`;
-        await admin.from("scheduled_messages").insert({
+        // Cancel any still-pending confirmation/reminders for this event
+        await admin
+          .from("scheduled_messages")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("event_id", event.id)
+          .in("status", ["pending", "processing"])
+          .in("type", ["event_confirmation", "event_reminder_1h", "event_reminder_5m", "event_rescheduled", "event_updated"]);
+
+        const cancelBody = `Olá! Nosso compromisso "${event.title}" marcado para ${fmtBR(event.start_at).date} às ${fmtBR(event.start_at).time} foi cancelado.${reason ? `\nMotivo: ${reason}` : ""}\nSe precisar, podemos reagendar um novo horário.`;
+        const { data: insMsg, error: insErr } = await admin.from("scheduled_messages").insert({
           company_id: event.company_id,
           ticket_id: event.ticket_id,
           contact_id: event.contact_id,
@@ -103,8 +111,20 @@ Deno.serve(async (req) => {
           body: cancelBody,
           scheduled_for: new Date().toISOString(),
           status: "pending",
+        }).select("id").maybeSingle();
+        if (insErr) console.error("[EVENT_CANCEL_NOTIFY_AUDIT] insert_failed", insErr.message);
+        console.log("[EVENT_CANCEL_NOTIFY_AUDIT]", {
+          event_id: event.id,
+          company_id: event.company_id,
+          ticket_id: event.ticket_id,
+          contact_id: event.contact_id,
+          channel_id: event.channel_id,
+          cancel_reason_present: !!reason,
+          created_scheduled_message_id: insMsg?.id ?? null,
+          send_mode: "scheduled_immediate",
         });
       }
+
 
       // Internal note in ticket
       if (event.ticket_id && event.contact_id) {
@@ -182,12 +202,13 @@ Deno.serve(async (req) => {
 
     if (dateTimeChanged) {
       // Cancel old pending reminders + previous immediate notifications still pending
+      // (include event_confirmation that may still be pending)
       await admin
         .from("scheduled_messages")
         .update({ status: "cancelled", updated_at: new Date().toISOString() })
         .eq("event_id", event.id)
         .in("status", ["pending", "processing"])
-        .in("type", ["event_reminder_1h", "event_reminder_5m", "event_rescheduled", "event_updated"]);
+        .in("type", ["event_confirmation", "event_reminder_1h", "event_reminder_5m", "event_rescheduled", "event_updated"]);
 
       // Recreate reminders (skip past-due)
       const startMs = new Date(newStartIso).getTime();
@@ -216,16 +237,15 @@ Deno.serve(async (req) => {
         }
         // Immediate reschedule notification
         const isMeet = !!meeting_enabled && !!newMeetUrl;
+        const locationLine = !isMeet && location?.trim() ? `\nLocal: ${location.trim()}` : "";
         queue.push({
           type: "event_rescheduled",
-          body: isMeet
-            ? `Olá! Sua reunião foi reagendada para ${date} às ${time}.${meetLine}`
-            : `Olá! Seu agendamento foi reagendado para ${date} às ${time}.`,
+          body: `Olá! Nosso compromisso "${title.trim()}" foi reagendado para ${date} às ${time}.${meetLine}${locationLine}\nSe precisar ajustar novamente, nos avise.`,
           scheduled_for: new Date().toISOString(),
         });
 
         if (queue.length) {
-          await admin.from("scheduled_messages").insert(
+          const { data: insRows, error: insErr } = await admin.from("scheduled_messages").insert(
             queue.map((q) => ({
               company_id: event.company_id,
               ticket_id: event.ticket_id,
@@ -239,9 +259,24 @@ Deno.serve(async (req) => {
               scheduled_for: q.scheduled_for,
               status: "pending",
             })),
-          );
+          ).select("id, type");
+          if (insErr) console.error("[EVENT_RESCHEDULE_NOTIFY_AUDIT] insert_failed", insErr.message);
+          const rescheduledRow = (insRows ?? []).find((r: any) => r.type === "event_rescheduled");
+          console.log("[EVENT_RESCHEDULE_NOTIFY_AUDIT]", {
+            event_id: event.id,
+            company_id: event.company_id,
+            ticket_id: event.ticket_id,
+            contact_id: event.contact_id,
+            channel_id: event.channel_id,
+            old_start_at: event.start_at,
+            new_start_at: newStartIso,
+            created_scheduled_message_id: rescheduledRow?.id ?? null,
+            queued_count: insRows?.length ?? 0,
+            send_mode: "scheduled_immediate",
+          });
         }
       }
+
 
       if (event.ticket_id && event.contact_id) {
         const note = `${senderName} reagendou o evento "${title.trim()}" para ${date} às ${time}.`;
