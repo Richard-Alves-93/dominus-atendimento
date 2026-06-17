@@ -284,10 +284,12 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarPlus className="w-5 h-5 text-primary" /> Novo evento
+            <CalendarPlus className="w-5 h-5 text-primary" /> {isEdit ? "Reagendar evento" : "Novo evento"}
           </DialogTitle>
           <DialogDescription>
-            {isTicketMode
+            {isEdit
+              ? "Atualize os dados do agendamento."
+              : isTicketMode
               ? `Evento vinculado ao atendimento${context.contactLabel ? ` com ${context.contactLabel}` : ""}.`
               : "Crie um evento pessoal ou vinculado a um contato."}
           </DialogDescription>
