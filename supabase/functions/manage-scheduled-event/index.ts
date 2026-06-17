@@ -90,8 +90,16 @@ Deno.serve(async (req) => {
       // Trigger cancel_event_scheduled_messages will mark pending->cancelled.
       // Now (after that) insert the cancellation external message so it stays pending.
       if (hasExternalChannel) {
-        const cancelBody = `Olá! Seu agendamento "${event.title}" foi cancelado.\nMotivo: ${reason}`;
-        await admin.from("scheduled_messages").insert({
+        // Cancel any still-pending confirmation/reminders for this event
+        await admin
+          .from("scheduled_messages")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("event_id", event.id)
+          .in("status", ["pending", "processing"])
+          .in("type", ["event_confirmation", "event_reminder_1h", "event_reminder_5m", "event_rescheduled", "event_updated"]);
+
+        const cancelBody = `Olá! Nosso compromisso "${event.title}" marcado para ${fmtBR(event.start_at).date} às ${fmtBR(event.start_at).time} foi cancelado.${reason ? `\nMotivo: ${reason}` : ""}\nSe precisar, podemos reagendar um novo horário.`;
+        const { data: insMsg, error: insErr } = await admin.from("scheduled_messages").insert({
           company_id: event.company_id,
           ticket_id: event.ticket_id,
           contact_id: event.contact_id,
@@ -103,8 +111,20 @@ Deno.serve(async (req) => {
           body: cancelBody,
           scheduled_for: new Date().toISOString(),
           status: "pending",
+        }).select("id").maybeSingle();
+        if (insErr) console.error("[EVENT_CANCEL_NOTIFY_AUDIT] insert_failed", insErr.message);
+        console.log("[EVENT_CANCEL_NOTIFY_AUDIT]", {
+          event_id: event.id,
+          company_id: event.company_id,
+          ticket_id: event.ticket_id,
+          contact_id: event.contact_id,
+          channel_id: event.channel_id,
+          cancel_reason_present: !!reason,
+          created_scheduled_message_id: insMsg?.id ?? null,
+          send_mode: "scheduled_immediate",
         });
       }
+
 
       // Internal note in ticket
       if (event.ticket_id && event.contact_id) {
