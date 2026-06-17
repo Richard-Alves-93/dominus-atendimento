@@ -111,12 +111,31 @@ Deno.serve(async (req) => {
     let ok = 0, failed = 0;
     for (const msg of msgs ?? []) {
       try {
+        console.log("[SCHEDULED_MESSAGE_WORKER_AUDIT]", {
+          scheduled_message_id: msg.id,
+          company_id: msg.company_id,
+          event_id: msg.event_id,
+          ticket_id: msg.ticket_id,
+          contact_id: msg.contact_id,
+          channel_id: msg.channel_id,
+          channel_type: msg.channel_type,
+          type: msg.type,
+          status_before: "processing",
+        });
         let result: { ok: boolean; reason?: string };
         if (msg.channel_type === "whatsapp") {
           result = await sendWhatsapp(admin, msg);
         } else {
           result = { ok: false, reason: `channel_not_implemented:${msg.channel_type ?? "unknown"}` };
         }
+        console.log("[SCHEDULED_MESSAGE_WHATSAPP_SEND_AUDIT]", {
+          scheduled_message_id: msg.id,
+          ticket_id: msg.ticket_id,
+          contact_id: msg.contact_id,
+          channel_id: msg.channel_id,
+          send_success: result.ok,
+          error: result.ok ? null : result.reason,
+        });
         if (result.ok) {
           ok++;
           await admin.from("scheduled_messages").update({
@@ -132,6 +151,25 @@ Deno.serve(async (req) => {
             failure_reason: result.reason ?? "unknown",
             updated_at: new Date().toISOString(),
           }).eq("id", msg.id);
+          // Visibility in the ticket history when there was a real attempt to send
+          if (msg.ticket_id && msg.contact_id) {
+            await admin.from("messages").insert({
+              company_id: msg.company_id,
+              ticket_id: msg.ticket_id,
+              contact_id: msg.contact_id,
+              channel_id: msg.channel_id,
+              direction: "outbound",
+              from_me: true,
+              msg_type: "text",
+              body: msg.body,
+              raw_body: msg.body,
+              source: "automation",
+              status: "failed",
+              delivery_status: "failed",
+              failure_reason: result.reason ?? "unknown",
+              failed_at: new Date().toISOString(),
+            }).then(() => {}, () => {});
+          }
         }
       } catch (e) {
         failed++;

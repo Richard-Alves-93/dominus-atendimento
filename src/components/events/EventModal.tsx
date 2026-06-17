@@ -207,9 +207,20 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
           }
           throw error;
         }
+        const when = `${date.split("-").reverse().join("/")} às ${startTime}`;
+        const dateTimeChanged =
+          new Date(reschedule.start_at).toISOString() !== startIso ||
+          (reschedule.end_at ?? null) !== (endIso ?? null);
+        const meetingChanged =
+          reschedule.meeting_enabled !== meetingEnabled ||
+          (reschedule.meeting_url ?? "") !== (meetingUrl.trim() || "");
+        const meetLine = meetingEnabled && meetingUrl.trim() ? `\nLink da reunião: ${meetingUrl.trim()}` : "";
+
         // Internal note in ticket history, best-effort
         if (reschedule.ticket_id && reschedule.contact_id) {
-          const when = `${date.split("-").reverse().join("/")} às ${startTime}`;
+          const noteBody = dateTimeChanged
+            ? `Evento "${title.trim()}" reagendado para ${when}.`
+            : `Evento "${title.trim()}" atualizado.`;
           await supabase.from("messages").insert({
             company_id: activeCompanyId,
             ticket_id: reschedule.ticket_id,
@@ -217,13 +228,44 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
             channel_id: reschedule.channel_id,
             direction: "outbound" as any,
             msg_type: "text" as any,
-            body: `Evento "${title.trim()}" reagendado para ${when}.`,
+            body: noteBody,
             from_me: true,
             status: "system",
             delivery_status: "system",
             source: "system",
             raw: {},
             sent_at: new Date().toISOString(),
+          } as any);
+        }
+
+        // External notification to the contact (queued for the worker)
+        if (
+          reschedule.ticket_id &&
+          reschedule.contact_id &&
+          reschedule.channel_id &&
+          (reschedule.channel_type ?? null) === "whatsapp" &&
+          (dateTimeChanged || meetingChanged)
+        ) {
+          const isMeet = meetingEnabled && !!meetingUrl.trim();
+          const body = dateTimeChanged
+            ? (isMeet
+                ? `Olá! Sua reunião foi reagendada para ${when}.${meetLine}`
+                : `Olá! Seu agendamento foi reagendado para ${when}.`)
+            : (isMeet
+                ? `Olá! Seu agendamento foi atualizado.${meetLine}`
+                : `Olá! Seu agendamento foi atualizado para ${when}.`);
+          await supabase.from("scheduled_messages").insert({
+            company_id: activeCompanyId,
+            ticket_id: reschedule.ticket_id,
+            contact_id: reschedule.contact_id,
+            channel_id: reschedule.channel_id,
+            channel_type: reschedule.channel_type,
+            event_id: reschedule.id,
+            created_by: user?.id ?? null,
+            type: "event_rescheduled",
+            body,
+            scheduled_for: new Date().toISOString(),
+            status: "pending",
           } as any);
         }
         toast({ title: "Evento reagendado", description: title.trim() });

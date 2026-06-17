@@ -270,6 +270,27 @@ export default function Agendamentos() {
         cancelEvent,
         `${profile?.full_name ?? "Usuário"} cancelou o evento "${cancelEvent.title}". Motivo: ${cancelReason.trim()}.`,
       );
+      // External notification to the contact (queued for the worker)
+      if (
+        cancelEvent.ticket_id &&
+        cancelEvent.contact_id &&
+        cancelEvent.channel_id &&
+        (cancelEvent.channel_type ?? null) === "whatsapp"
+      ) {
+        await supabase.from("scheduled_messages").insert({
+          company_id: activeCompanyId!,
+          ticket_id: cancelEvent.ticket_id,
+          contact_id: cancelEvent.contact_id,
+          channel_id: cancelEvent.channel_id,
+          channel_type: cancelEvent.channel_type,
+          event_id: cancelEvent.id,
+          created_by: user?.id ?? null,
+          type: "event_cancellation",
+          body: `Olá! Seu agendamento "${cancelEvent.title}" foi cancelado.\nMotivo: ${cancelReason.trim()}`,
+          scheduled_for: new Date().toISOString(),
+          status: "pending",
+        } as any);
+      }
       toast({ title: "Evento cancelado", description: "Mensagens pendentes vinculadas foram canceladas." });
       setCancelEvent(null);
       setCancelReason("");
