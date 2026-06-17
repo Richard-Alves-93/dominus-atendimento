@@ -281,23 +281,28 @@ export default function MensagensRapidas() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{form.id ? "Editar mensagem rápida" : "Nova mensagem rápida"}</DialogTitle>
-            <DialogDescription>Crie atalhos pessoais para acelerar respostas.</DialogDescription>
+        <DialogContent className="max-w-lg p-0 gap-0 max-h-[85vh] flex flex-col">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b">
+            <DialogTitle className="text-base">
+              {form.id ? "Editar mensagem rápida" : "Nova mensagem rápida"}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Crie atalhos pessoais para acelerar respostas.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Título</Label>
+          <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Título</Label>
               <Input
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 maxLength={120}
+                className="h-9"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Atalho (opcional)</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Atalho (opcional)</Label>
                 <Input
                   value={form.shortcut}
                   onChange={(e) =>
@@ -305,38 +310,43 @@ export default function MensagensRapidas() {
                   }
                   placeholder="ex.: saudacao"
                   maxLength={40}
+                  className="h-9"
                 />
               </div>
-              <div>
-                <Label>Categoria (opcional)</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Categoria (opcional)</Label>
                 <Input
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                   maxLength={60}
+                  className="h-9"
                 />
               </div>
             </div>
-            <div>
-              <Label>Mensagem</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Mensagem</Label>
               <Textarea
                 value={form.body}
                 onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                rows={6}
+                rows={4}
                 maxLength={4000}
+                className="resize-none"
               />
-              <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1">
+              <p className="text-[11px] text-muted-foreground leading-snug flex items-start gap-1">
                 <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <span>
                   Variáveis: <code>{"{{nome_contato}}"}</code>, <code>{"{{nome_atendente}}"}</code>,{" "}
                   <code>{"{{empresa}}"}</code>, <code>{"{{data}}"}</code>, <code>{"{{hora}}"}</code>,{" "}
-                  <code>{"{{protocolo}}"}</code>.
+                  <code>{"{{protocolo}}"}</code>
                 </span>
               </p>
             </div>
-            <div className="flex items-center justify-between rounded-md border p-3">
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
               <div>
-                <Label className="text-sm">Ativa</Label>
-                <p className="text-xs text-muted-foreground">Mensagens inativas não aparecem no atendimento.</p>
+                <Label className="text-xs">Ativa</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Inativas não aparecem no atendimento.
+                </p>
               </div>
               <Switch
                 checked={form.is_active}
@@ -344,11 +354,11 @@ export default function MensagensRapidas() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+          <DialogFooter className="px-5 py-3 border-t bg-background">
+            <Button variant="ghost" size="sm" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={() => upsert.mutate(form)} disabled={upsert.isPending}>
+            <Button size="sm" onClick={() => upsert.mutate(form)} disabled={upsert.isPending}>
               {form.id ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
