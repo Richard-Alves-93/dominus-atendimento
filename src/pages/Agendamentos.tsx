@@ -247,51 +247,12 @@ export default function Agendamentos() {
     }
     setCancelSubmitting(true);
     try {
-      const { error } = await supabase
-        .from("scheduled_events")
-        .update({
-          status: "cancelled",
-          cancelled_at: new Date().toISOString(),
-          cancelled_by: user?.id ?? null,
-          cancel_reason: cancelReason.trim(),
-        } as any)
-        .eq("id", cancelEvent.id);
+      const { data, error } = await supabase.functions.invoke("manage-scheduled-event", {
+        body: { action: "cancel", event_id: cancelEvent.id, cancel_reason: cancelReason.trim() },
+      });
       if (error) throw error;
-      // Audit log (best-effort)
-      await supabase.from("audit_logs").insert({
-        company_id: activeCompanyId!,
-        event_type: "scheduled_event_cancelled",
-        ticket_id: cancelEvent.ticket_id,
-        changed_by: user?.id ?? null,
-        reason: cancelReason.trim(),
-        metadata: { event_id: cancelEvent.id, cancelled_at: new Date().toISOString() } as any,
-      } as any);
-      await postInternalTicketNote(
-        cancelEvent,
-        `${profile?.full_name ?? "Usuário"} cancelou o evento "${cancelEvent.title}". Motivo: ${cancelReason.trim()}.`,
-      );
-      // External notification to the contact (queued for the worker)
-      if (
-        cancelEvent.ticket_id &&
-        cancelEvent.contact_id &&
-        cancelEvent.channel_id &&
-        (cancelEvent.channel_type ?? null) === "whatsapp"
-      ) {
-        await supabase.from("scheduled_messages").insert({
-          company_id: activeCompanyId!,
-          ticket_id: cancelEvent.ticket_id,
-          contact_id: cancelEvent.contact_id,
-          channel_id: cancelEvent.channel_id,
-          channel_type: cancelEvent.channel_type,
-          event_id: cancelEvent.id,
-          created_by: user?.id ?? null,
-          type: "event_cancellation",
-          body: `Olá! Seu agendamento "${cancelEvent.title}" foi cancelado.\nMotivo: ${cancelReason.trim()}`,
-          scheduled_for: new Date().toISOString(),
-          status: "pending",
-        } as any);
-      }
-      toast({ title: "Evento cancelado", description: "Mensagens pendentes vinculadas foram canceladas." });
+      if (data?.ok === false) throw new Error(data.error ?? "Falha ao cancelar");
+      toast({ title: "Evento cancelado", description: "Lembretes pendentes foram cancelados." });
       setCancelEvent(null);
       setCancelReason("");
       qc.invalidateQueries({ queryKey: ["scheduled-events"] });
