@@ -91,12 +91,26 @@ async function dispatchToEvolution(params: {
     try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
 
     if (!evoRes.ok) {
-      console.error("[SEND_WA] evolution_fail", evoRes.status, evoData?.message ?? evoData?.error);
+      // Evolution v2.3.7 nests the real validation error under response.message (often an array of arrays).
+      const nested =
+        evoData?.response?.message ??
+        evoData?.response?.error ??
+        evoData?.message ??
+        evoData?.error ??
+        null;
+      const detail = (typeof nested === "string" ? nested : JSON.stringify(nested ?? evoData)).slice(0, 400);
+      console.error("[EVOLUTION_SEND_RESPONSE]", {
+        status: evoRes.status,
+        body_raw: evoText.slice(0, 600),
+        payload_shape: "number+text",
+        number_len: phone.length,
+        text_len: finalText.length,
+      });
       await admin.from("messages").update({
         delivery_status: "failed",
         status: "failed",
         failed_at: new Date().toISOString(),
-        failure_reason: `Evolution ${evoRes.status}: ${evoData?.message ?? evoData?.error ?? "unknown"}`,
+        failure_reason: `Evolution ${evoRes.status}: ${detail}`,
         raw: evoData,
       }).eq("id", messageId);
       return;

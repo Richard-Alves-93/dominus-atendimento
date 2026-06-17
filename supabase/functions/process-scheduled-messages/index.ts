@@ -97,8 +97,23 @@ async function sendWhatsapp(
   try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
 
   if (!res.ok) {
-    const detail = (data?.message ?? data?.error ?? data?.raw ?? "unknown").toString().slice(0, 160);
+    const nested =
+      data?.response?.message ??
+      data?.response?.error ??
+      data?.message ??
+      data?.error ??
+      data?.raw ??
+      "unknown";
+    const detail = (typeof nested === "string" ? nested : JSON.stringify(nested)).slice(0, 400);
     const reason = `evolution_${res.status}: ${detail}`;
+    console.error("[EVOLUTION_SEND_RESPONSE]", {
+      scheduled_message_id: msg.id,
+      status: res.status,
+      body_raw: text.slice(0, 600),
+      payload_shape: "number+text",
+      number_len: phone.length,
+      text_len: (msg.body ?? "").length,
+    });
     if (historyId) {
       await admin.from("messages").update({
         status: "failed", delivery_status: "failed",
