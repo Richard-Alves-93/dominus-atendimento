@@ -96,6 +96,7 @@ interface MessageRow {
   msg_type: string;
   status: string | null;
   delivery_status?: string | null;
+  failure_reason?: string | null;
   sent_at: string;
   created_at: string;
   source?: string | null;
