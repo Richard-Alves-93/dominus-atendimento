@@ -14,16 +14,19 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-
-function evoBase() {
-  return EVO_URL!.replace(/\/$/, "");
+function evoBase() { return EVO_URL!.replace(/\/$/, ""); }
+function maskPhone(p: string) {
+  if (!p) return "";
+  if (p.length <= 4) return "***" + p;
+  return p.slice(0, 4) + "***" + p.slice(-2);
 }
 
 async function sendWhatsapp(
   admin: ReturnType<typeof createClient>,
   msg: any,
-): Promise<{ ok: boolean; reason?: string; externalId?: string | null }> {
+): Promise<{ ok: boolean; reason?: string; externalId?: string | null; messageId?: string }> {
   if (!EVO_URL || !EVO_KEY) return { ok: false, reason: "evolution_not_configured" };
+
   const { data: instance } = await admin
     .from("whatsapp_instances")
     .select("instance_name, status")
@@ -33,35 +36,14 @@ async function sendWhatsapp(
   if (!instance?.instance_name) return { ok: false, reason: "no_connected_instance" };
 
   const { data: contact } = await admin
-    .from("contacts")
-    .select("phone_number")
-    .eq("id", msg.contact_id)
-    .maybeSingle();
-  const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
+    .from("contacts").select("phone_number").eq("id", msg.contact_id).maybeSingle();
+  const phone = (contact?.phone_number ?? "").replace(/\D/g, "");
   if (!phone) return { ok: false, reason: "contact_without_phone" };
 
-  const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
-  const payload = { number: phone, text: msg.body, linkPreview: false };
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: EVO_KEY },
-    body: JSON.stringify(payload),
-  });
-  const text = await res.text();
-  let data: any = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
-  if (!res.ok) {
-    const detail = (data?.message ?? data?.error ?? data?.raw ?? "unknown").toString().slice(0, 200);
-    return { ok: false, reason: `evolution_${res.status}: ${detail}` };
-  }
-
-  const externalId =
-    data?.key?.id ?? data?.message?.key?.id ?? data?.data?.key?.id ??
-    data?.response?.key?.id ?? data?.messageId ?? data?.id ?? null;
-
-  // Persist a real message in history (outbound, system-originated automation)
+  // Insert history row as 'sending' FIRST so the ticket UI gets it via realtime immediately.
+  let historyId: string | null = null;
   if (msg.ticket_id) {
-    await admin.from("messages").insert({
+    const { data: ins, error: insErr } = await admin.from("messages").insert({
       company_id: msg.company_id,
       ticket_id: msg.ticket_id,
       contact_id: msg.contact_id,
@@ -71,16 +53,79 @@ async function sendWhatsapp(
       msg_type: "text",
       body: msg.body,
       raw_body: msg.body,
-      external_id: externalId,
-      provider_message_id: externalId,
       source: "automation",
+      status: "sending",
+      delivery_status: "sending",
+    }).select("id").single();
+    if (insErr) console.error("[SCHEDULED_PIPELINE_AUDIT] history_insert_failed", insErr.message);
+    historyId = ins?.id ?? null;
+  }
+
+  const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
+  // SAME contract as send-whatsapp-message — do NOT add linkPreview here (Evolution v2.3.7 rejects it).
+  const payload = { number: phone, text: msg.body };
+
+  console.log("[EVOLUTION_PAYLOAD_AUDIT]", {
+    scheduled_message_id: msg.id,
+    instance_name: instance.instance_name,
+    number_masked: maskPhone(phone),
+    has_text: !!msg.body,
+    text_length: (msg.body ?? "").length,
+    payload_shape: "number+text",
+  });
+
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: EVO_KEY },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    const reason = `evolution_network: ${String((e as Error)?.message ?? e).slice(0, 160)}`;
+    if (historyId) {
+      await admin.from("messages").update({
+        status: "failed", delivery_status: "failed",
+        failed_at: new Date().toISOString(), failure_reason: reason,
+      }).eq("id", historyId);
+    }
+    return { ok: false, reason, messageId: historyId ?? undefined };
+  }
+
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
+
+  if (!res.ok) {
+    const detail = (data?.message ?? data?.error ?? data?.raw ?? "unknown").toString().slice(0, 160);
+    const reason = `evolution_${res.status}: ${detail}`;
+    if (historyId) {
+      await admin.from("messages").update({
+        status: "failed", delivery_status: "failed",
+        failed_at: new Date().toISOString(), failure_reason: reason,
+      }).eq("id", historyId);
+    }
+    return { ok: false, reason, messageId: historyId ?? undefined };
+  }
+
+  const externalId =
+    data?.key?.id ?? data?.message?.key?.id ?? data?.data?.key?.id ??
+    data?.response?.key?.id ?? data?.messageId ?? data?.id ?? null;
+
+  const nowIso = new Date().toISOString();
+  if (historyId) {
+    await admin.from("messages").update({
       status: "sent",
       delivery_status: "sent",
-      sent_at: new Date().toISOString(),
-    });
-    await admin.from("tickets").update({ last_message_at: new Date().toISOString() }).eq("id", msg.ticket_id);
+      sent_at: nowIso,
+      external_id: externalId,
+      provider_message_id: externalId,
+    }).eq("id", historyId);
   }
-  return { ok: true, externalId };
+  if (msg.ticket_id) {
+    await admin.from("tickets").update({ last_message_at: nowIso }).eq("id", msg.ticket_id);
+  }
+  return { ok: true, externalId, messageId: historyId ?? undefined };
 }
 
 Deno.serve(async (req) => {
@@ -89,7 +134,6 @@ Deno.serve(async (req) => {
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Atomic claim: pending -> processing
     const nowIso = new Date().toISOString();
     const { data: claimed, error: claimErr } = await admin
       .from("scheduled_messages")
@@ -108,36 +152,31 @@ Deno.serve(async (req) => {
       .eq("status", "pending");
 
     const { data: msgs } = await admin
-      .from("scheduled_messages")
-      .select("*")
-      .in("id", ids);
+      .from("scheduled_messages").select("*").in("id", ids);
 
     let ok = 0, failed = 0;
     for (const msg of msgs ?? []) {
       try {
-        console.log("[SCHEDULED_MESSAGE_TIMING_AUDIT]", {
+        console.log("[SCHEDULED_PIPELINE_AUDIT]", {
           scheduled_message_id: msg.id,
           event_id: msg.event_id,
+          ticket_id: msg.ticket_id,
           type: msg.type,
+          channel_type: msg.channel_type,
           scheduled_for: msg.scheduled_for,
           now: new Date().toISOString(),
-          should_send_now: new Date(msg.scheduled_for).getTime() <= Date.now(),
           status_before: "processing",
         });
-        let result: { ok: boolean; reason?: string };
-        if (msg.channel_type === "whatsapp") {
-          result = await sendWhatsapp(admin, msg);
-        } else {
-          result = { ok: false, reason: `channel_not_implemented:${msg.channel_type ?? "unknown"}` };
-        }
-        console.log("[SCHEDULED_MESSAGE_WHATSAPP_SEND_AUDIT]", {
+        const result = msg.channel_type === "whatsapp"
+          ? await sendWhatsapp(admin, msg)
+          : { ok: false, reason: `channel_not_implemented:${msg.channel_type ?? "unknown"}` };
+
+        console.log("[SCHEDULED_PIPELINE_AUDIT]", {
           scheduled_message_id: msg.id,
-          ticket_id: msg.ticket_id,
-          contact_id: msg.contact_id,
-          channel_id: msg.channel_id,
-          send_success: result.ok,
-          error: result.ok ? null : result.reason,
+          status_after: result.ok ? "sent" : "failed",
+          failure_reason: result.ok ? null : result.reason,
         });
+
         if (result.ok) {
           ok++;
           await admin.from("scheduled_messages").update({
@@ -153,33 +192,16 @@ Deno.serve(async (req) => {
             failure_reason: result.reason ?? "unknown",
             updated_at: new Date().toISOString(),
           }).eq("id", msg.id);
-          // Visibility in the ticket history when there was a real attempt to send
-          if (msg.ticket_id && msg.contact_id) {
-            await admin.from("messages").insert({
-              company_id: msg.company_id,
-              ticket_id: msg.ticket_id,
-              contact_id: msg.contact_id,
-              channel_id: msg.channel_id,
-              direction: "outbound",
-              from_me: true,
-              msg_type: "text",
-              body: msg.body,
-              raw_body: msg.body,
-              source: "automation",
-              status: "failed",
-              delivery_status: "failed",
-              failure_reason: result.reason ?? "unknown",
-              failed_at: new Date().toISOString(),
-            }).then(() => {}, () => {});
-          }
         }
       } catch (e) {
         failed++;
+        const reason = String((e as Error)?.message ?? e).slice(0, 200);
         await admin.from("scheduled_messages").update({
           status: "failed",
           failed_at: new Date().toISOString(),
-          failure_reason: String((e as Error)?.message ?? e),
+          failure_reason: reason,
         }).eq("id", msg.id);
+        console.error("[SCHEDULED_PIPELINE_AUDIT] exception", { id: msg.id, reason });
       }
     }
 

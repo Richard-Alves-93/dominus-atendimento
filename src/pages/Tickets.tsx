@@ -96,6 +96,7 @@ interface MessageRow {
   msg_type: string;
   status: string | null;
   delivery_status?: string | null;
+  failure_reason?: string | null;
   sent_at: string;
   created_at: string;
   source?: string | null;
@@ -798,7 +799,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, sent_at, created_at, source, sent_by_name, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
@@ -1923,6 +1924,32 @@ const Tickets = () => {
 
                         })()}
                       </div>
+                      {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
+                        <div className="mt-1 flex items-center justify-end gap-2">
+                          {m.failure_reason ? (
+                            <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
+                              {m.failure_reason}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="text-[11px] underline text-destructive hover:opacity-80"
+                            onClick={async () => {
+                              try {
+                                const { error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                  body: { message_id: m.id },
+                                });
+                                if (error) throw error;
+                                toast({ title: "Reenfileirado para envio" });
+                              } catch (e: any) {
+                                toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
+                              }
+                            }}
+                          >
+                            Tentar novamente
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   );
