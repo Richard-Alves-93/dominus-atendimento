@@ -97,6 +97,10 @@ export default function Conexoes() {
       toast.error(error.message);
       return null;
     }
+    if (data && (data as { error?: string }).error) {
+      toast.error((data as { error: string }).error);
+      return data as { status: string; qr_code?: string | null; instance_name?: string | null };
+    }
     return data as { status: string; qr_code?: string | null; instance_name?: string | null };
   };
 
