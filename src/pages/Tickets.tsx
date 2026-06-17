@@ -32,6 +32,8 @@ import {
   Music,
   Plus,
   Trash2,
+  CalendarPlus,
+  BarChart3,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -64,6 +66,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { EventModal } from "@/components/events/EventModal";
 
 type TicketStatus = "open" | "pending" | "closed";
 type ListFilter = "todos" | "fila" | "meus" | "open" | "pending" | "closed";
