@@ -278,25 +278,50 @@ Deno.serve(async (req) => {
     if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
     const tIns = Math.round(performance.now() - tIns0);
 
-    // Bump ticket timestamp in background
-    admin.from("tickets")
-      .update({ last_message_at: nowIso, status: "open" })
-      .eq("id", ticket_id)
-      .then(() => {}, (e: any) => console.error("[SEND_WA] ticket bump failed", e?.message));
-
-    // Background dispatch to Evolution
-    const bg = dispatchToEvolution({
-      admin, messageId: inserted.id, ticketId: ticket_id, endpoint, instanceName: instance.instance_name, phone, finalText,
+    console.log("[WHATSAPP_SEND_AUDIT_START]", {
+      company_id, ticket_id,
+      contact_id: contact!.id,
+      channel_id: channelId,
+      channel_type: "whatsapp",
+      instance_name: instance.instance_name,
+      destination_masked: maskPhone(phone),
+      payload_shape: "number+text",
+      message_id: inserted.id,
     });
-    try { (globalThis as any).EdgeRuntime?.waitUntil?.(bg); } catch (_) {}
+
+    // Foreground dispatch — HTTP response must reflect the real Evolution outcome.
+    const result = await dispatchToEvolution({
+      admin, messageId: inserted.id, ticketId: ticket_id, endpoint,
+      instanceName: instance.instance_name, phone, finalText,
+    });
 
     const tTotal = Math.round(performance.now() - tStart);
-    console.log("[SEND_WA] times ms", { auth: tAuth, ctx: tCtx, insert: tIns, total: tTotal });
+    console.log("[WHATSAPP_SEND_AUDIT_END]", {
+      message_id: inserted.id,
+      status_final: result.ok ? "sent" : "failed",
+      provider_message_id: result.externalId ?? null,
+      failure_reason: result.failureReason ?? null,
+      total_ms: tTotal,
+    });
+
+    if (!result.ok) {
+      return json({
+        ok: false,
+        success: false,
+        status: "failed",
+        message_id: inserted.id,
+        failure_reason: result.failureReason ?? "unknown",
+        evolution_status: result.status ?? null,
+        body_raw: result.bodyRaw ?? null,
+      });
+    }
 
     return json({
       ok: true,
+      success: true,
       message_id: inserted.id,
-      delivery_status: "sending",
+      delivery_status: "sent",
+      provider_message_id: result.externalId ?? null,
       timings: { auth: tAuth, ctx: tCtx, insert: tIns, total: tTotal },
     });
   } catch (e) {
