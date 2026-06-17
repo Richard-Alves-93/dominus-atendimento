@@ -1007,15 +1007,6 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
-      user_can_view_event: {
-        Args: {
-          _assigned_user_id: string
-          _company_id: string
-          _created_by: string
-          _user_id: string
-        }
-        Returns: boolean
-      }
       user_company_role: {
         Args: { _company_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["company_user_role"]
