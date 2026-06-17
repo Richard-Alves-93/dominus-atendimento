@@ -2230,6 +2230,17 @@ const Tickets = () => {
                         </DropdownMenuContent>
                       </DropdownMenu>
 
+                      <QuickRepliesPopover
+                        disabled={!selected}
+                        contactName={selected?.contact?.name ?? null}
+                        protocol={(selected as any)?.protocol_number ?? null}
+                        onInsert={(snippet) =>
+                          setText((prev) =>
+                            prev.trim().length === 0 ? snippet : `${prev}\n${snippet}`,
+                          )
+                        }
+                      />
+
                       <Input
                         placeholder="Digite uma mensagem..."
                         value={text}
