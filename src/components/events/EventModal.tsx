@@ -410,7 +410,7 @@ export function EventModal({ open, onOpenChange, context, onCreated, defaultDate
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={submitting || hasConflict}>
             {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Criar evento
+            {isEdit ? "Salvar alterações" : "Criar evento"}
           </Button>
         </DialogFooter>
       </DialogContent>
