@@ -276,7 +276,14 @@ Deno.serve(async (req) => {
       channel = data;
     }
 
-    const instance_name = instanceNameFor(body.company_id);
+    // Load company name to build the slug-based instance name
+    const { data: companyRow } = await admin
+      .from("companies")
+      .select("name")
+      .eq("id", body.company_id)
+      .maybeSingle();
+    const desiredBaseName = instanceNameFor(body.company_id, companyRow?.name);
+    const legacyName = legacyInstanceNameFor(body.company_id);
 
     if (body.action === "create_or_connect") {
       if (!EVO_ENABLED) {
@@ -301,6 +308,35 @@ Deno.serve(async (req) => {
         await admin.from("channels").update({ status: "pending" }).eq("id", channel.id);
       }
 
+      // Reuse stored instance_name if it still exists on Evolution (stability rule).
+      const { data: existingInst } = await admin
+        .from("whatsapp_instances")
+        .select("id, instance_name")
+        .eq("channel_id", channel.id)
+        .maybeSingle();
+
+      let instance_name: string;
+      const storedName = existingInst?.instance_name ?? null;
+
+      if (storedName && (await evoFetchInstance(storedName))) {
+        // Keep existing connected/active instance — do NOT rename.
+        instance_name = storedName;
+      } else if (storedName === legacyName && (await evoFetchInstance(legacyName))) {
+        instance_name = legacyName;
+      } else {
+        // No live Evolution instance — generate a fresh name with the new pattern,
+        // resolving collisions via _v2, _v3, ...
+        instance_name = await resolveNewInstanceName(desiredBaseName);
+      }
+
+      console.log("[EVOLUTION_INSTANCE_NAME_RESOLVED]", {
+        company_id: body.company_id,
+        company_name: companyRow?.name ?? null,
+        desired_base: desiredBaseName,
+        stored: storedName,
+        chosen: instance_name,
+      });
+
       // Try connect first (works if instance already exists); otherwise create.
       let evo: { qr_code: string | null; status: "pending" };
       const existing = await evoFetchInstance(instance_name);
@@ -318,12 +354,6 @@ Deno.serve(async (req) => {
       } catch (e) {
         webhookErr = (e as Error)?.message ?? "unknown";
       }
-
-      const { data: existingInst } = await admin
-        .from("whatsapp_instances")
-        .select("id")
-        .eq("channel_id", channel.id)
-        .maybeSingle();
 
       const syncFields = webhookOk
         ? {
