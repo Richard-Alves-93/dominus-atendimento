@@ -21,6 +21,7 @@ import TrocarSenha from "./pages/TrocarSenha";
 import Placeholder from "./pages/Placeholder";
 import Configuracoes from "./pages/Configuracoes";
 import Agendamentos from "./pages/Agendamentos";
+import MensagensRapidas from "./pages/MensagensRapidas";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
