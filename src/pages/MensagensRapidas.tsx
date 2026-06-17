@@ -281,27 +281,27 @@ export default function MensagensRapidas() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl p-0 gap-0 max-h-[92vh] flex flex-col">
-          <DialogHeader className="px-5 pt-4 pb-2 border-b space-y-0.5">
-            <DialogTitle className="text-base">
+        <DialogContent className="sm:max-w-[560px] p-0 gap-0 max-h-[94vh] flex flex-col">
+          <DialogHeader className="px-4 pt-3 pb-2 border-b space-y-0">
+            <DialogTitle className="text-sm">
               {form.id ? "Editar mensagem rápida" : "Nova mensagem rápida"}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-[11px]">
               Crie atalhos pessoais para acelerar respostas.
             </DialogDescription>
           </DialogHeader>
-          <div className="px-5 py-3 space-y-2.5 overflow-y-auto min-h-0">
-            <div className="space-y-1">
+          <div className="px-4 py-2.5 space-y-2 overflow-y-auto min-h-0">
+            <div className="space-y-0.5">
               <Label className="text-xs">Título</Label>
               <Input
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 maxLength={120}
-                className="h-9"
+                className="h-8"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-0.5">
                 <Label className="text-xs">Atalho (opcional)</Label>
                 <Input
                   value={form.shortcut}
@@ -310,43 +310,41 @@ export default function MensagensRapidas() {
                   }
                   placeholder="ex.: saudacao"
                   maxLength={40}
-                  className="h-9"
+                  className="h-8"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <Label className="text-xs">Categoria (opcional)</Label>
                 <Input
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                   maxLength={60}
-                  className="h-9"
+                  className="h-8"
                 />
               </div>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <Label className="text-xs">Mensagem</Label>
               <Textarea
                 value={form.body}
                 onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
                 rows={3}
                 maxLength={4000}
-                className="resize-none min-h-[80px]"
+                className="resize-none min-h-[68px] text-sm"
               />
-              <p className="text-[11px] text-muted-foreground leading-snug flex items-start gap-1">
-                <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                <span>
-                  Variáveis: <code>{"{{nome_contato}}"}</code>, <code>{"{{nome_atendente}}"}</code>,{" "}
-                  <code>{"{{empresa}}"}</code>, <code>{"{{data}}"}</code>, <code>{"{{hora}}"}</code>,{" "}
-                  <code>{"{{protocolo}}"}</code>
-                </span>
+              <p
+                className="text-[10px] text-muted-foreground leading-tight truncate"
+                title="Variáveis: {{nome_contato}}, {{nome_atendente}}, {{empresa}}, {{data}}, {{hora}}, {{protocolo}}"
+              >
+                Variáveis: {"{{nome_contato}}"}, {"{{nome_atendente}}"}, {"{{empresa}}"}, {"{{data}}"}, {"{{hora}}"}, {"{{protocolo}}"}
               </p>
             </div>
-            <div className="flex items-center justify-between rounded-md border px-3 py-1.5">
-              <div className="leading-tight">
+            <div className="flex items-center justify-between rounded-md border px-3 py-1">
+              <div className="flex items-center gap-2 leading-tight min-w-0">
                 <Label className="text-xs">Ativa</Label>
-                <p className="text-[11px] text-muted-foreground">
+                <span className="text-[10px] text-muted-foreground truncate">
                   Inativas não aparecem no atendimento.
-                </p>
+                </span>
               </div>
               <Switch
                 checked={form.is_active}
@@ -354,7 +352,7 @@ export default function MensagensRapidas() {
               />
             </div>
           </div>
-          <DialogFooter className="px-5 py-2.5 border-t bg-background">
+          <DialogFooter className="px-4 py-2 border-t bg-background">
             <Button variant="ghost" size="sm" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
