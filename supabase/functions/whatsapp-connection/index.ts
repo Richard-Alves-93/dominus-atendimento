@@ -16,6 +16,14 @@ const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
 const EVO_WEBHOOK = Deno.env.get("EVOLUTION_WEBHOOK_URL");
 const EVO_ENABLED = Boolean(EVO_URL && EVO_KEY);
 
+console.log("[EVOLUTION_ENV_AUDIT]", {
+  has_evolution_api_url: !!EVO_URL,
+  has_evolution_api_key: !!EVO_KEY,
+  has_webhook_url: !!EVO_WEBHOOK,
+  has_app_public_url: !!Deno.env.get("APP_PUBLIC_URL"),
+  api_url_host: EVO_URL?.split("//")?.[1]?.split("/")?.[0],
+});
+
 const WEBHOOK_EVENTS = [
   "QRCODE_UPDATED",
   "CONNECTION_UPDATE",
@@ -109,26 +117,36 @@ async function evoSyncWebhook(instanceName: string) {
 }
 
 async function evoCreateInstance(instanceName: string) {
+  // Evolution v2.3.7: do NOT embed `webhook` in /instance/create — it rejects the body shape.
+  // We sync the webhook afterwards via /webhook/set.
   const body: Record<string, unknown> = {
     instanceName,
     qrcode: true,
     integration: "WHATSAPP-BAILEYS",
   };
-  if (EVO_WEBHOOK) {
-    body.webhook = evoWebhookConfig();
-  }
   const res = await fetch(`${evoBase()}/instance/create`, {
     method: "POST",
     headers: evoHeaders(),
     body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
+  console.log("[EVOLUTION_QR_AUDIT]", {
+    action: "create",
+    instance_name: instanceName,
+    endpoint_path: "/instance/create",
+    evolution_status: res.status,
+    evolution_response_truncated: text.slice(0, 300),
+  });
   if (!res.ok) {
-    // If already exists, fall back to connect
-    if (res.status === 403 || res.status === 409 || String(data?.response?.message ?? "").includes("already")) {
+    const msg = String(data?.response?.message ?? data?.message ?? "");
+    if (res.status === 403 || res.status === 409 || msg.includes("already")) {
       return await evoConnect(instanceName);
     }
-    throw new Error(`Evolution create failed: ${res.status} ${JSON.stringify(data)}`);
+    const nested = data?.response?.message ?? data?.message ?? data?.error ?? text;
+    const detail = (typeof nested === "string" ? nested : JSON.stringify(nested)).slice(0, 240);
+    throw new Error(`Evolution ${res.status}: ${detail}`);
   }
   const qr = data?.qrcode?.base64 ?? data?.qrcode?.code ?? null;
   return { qr_code: ensureDataUrl(qr), status: "pending" as const };
@@ -138,8 +156,21 @@ async function evoConnect(instanceName: string) {
   const res = await fetch(`${evoBase()}/instance/connect/${instanceName}`, {
     headers: evoHeaders(),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Evolution connect failed: ${res.status} ${JSON.stringify(data)}`);
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
+  console.log("[EVOLUTION_QR_AUDIT]", {
+    action: "connect",
+    instance_name: instanceName,
+    endpoint_path: "/instance/connect",
+    evolution_status: res.status,
+    evolution_response_truncated: text.slice(0, 300),
+  });
+  if (!res.ok) {
+    const nested = data?.response?.message ?? data?.message ?? data?.error ?? text;
+    const detail = (typeof nested === "string" ? nested : JSON.stringify(nested)).slice(0, 240);
+    throw new Error(`Evolution ${res.status}: ${detail}`);
+  }
   const qr = data?.base64 ?? data?.qrcode?.base64 ?? data?.code ?? null;
   return { qr_code: ensureDataUrl(qr), status: "pending" as const };
 }
@@ -347,6 +378,10 @@ Deno.serve(async (req) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (e) {
-    return json({ error: (e as Error).message }, 500);
+    const message = (e as Error)?.message ?? String(e);
+    console.error("[EVOLUTION_API_ERROR]", { message: message.slice(0, 300) });
+    // Return 200 with structured error so the frontend surfaces a clear message
+    // instead of "Edge Function returned a non-2xx status code".
+    return json({ error: message, status: "error" }, 200);
   }
 });
