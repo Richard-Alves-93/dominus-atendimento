@@ -2327,7 +2327,7 @@ const Tickets = () => {
                                 <Smile className="w-3.5 h-3.5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="p-1 rounded-full flex items-center gap-0.5">
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className={`p-1 rounded-full flex items-center gap-0.5 ${MENU_GLASS_CLASS}`}>
                               {["👍","❤️","😂","😮","😢","🙏"].map((emo) => (
                                 <button
                                   key={emo}
