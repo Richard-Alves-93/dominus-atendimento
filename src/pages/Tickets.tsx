@@ -2176,11 +2176,17 @@ const Tickets = () => {
                         </div>
                       )}
                       <div
+                        onTouchStart={() => startLongPress(m.id)}
+                        onTouchEnd={clearLongPress}
+                        onTouchMove={clearLongPress}
+                        onTouchCancel={clearLongPress}
                         className={`rounded-2xl px-4 py-2.5 ${
                           m.from_me
                             ? "bg-primary text-primary-foreground rounded-br-md"
                             : "bg-card text-foreground shadow-card rounded-bl-md"
-                        } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
+                        } ${m.status === "error" ? "ring-1 ring-destructive" : ""} ${
+                          isMobile && selectedMessageId === m.id ? "ring-2 ring-primary/60" : ""
+                        }`}
                       >
                         {hasReply && (
                           <button
