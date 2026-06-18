@@ -383,7 +383,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     const fromMe = Boolean(key.fromMe);
     const phone = jidToPhone(remoteJid);
     const externalId: string | null = key.id ?? null;
-    const pushName = m?.pushName ?? null;
+    const pushName = m?.pushName ?? m?.profileName ?? null;
     const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
 
     // ── Outbound (fromMe): we already created this message in send-whatsapp-message.
@@ -555,8 +555,30 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       .maybeSingle();
     if (existingContact) {
       contactId = existingContact.id;
-      if (!existingContact.name && pushName) {
-        await admin.from("contacts").update({ name: pushName }).eq("id", contactId);
+      if (pushName && (!existingContact.name || existingContact.name !== pushName)) {
+        let shouldUpdateName = !existingContact.name;
+        if (!shouldUpdateName) {
+          const { data: firstMessage } = await admin
+            .from("messages")
+            .select("from_me, source")
+            .eq("company_id", inst.company_id)
+            .eq("contact_id", contactId)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          shouldUpdateName = firstMessage?.from_me === true;
+        }
+        if (shouldUpdateName) {
+          await admin.from("contacts").update({ name: pushName, updated_at: new Date().toISOString() }).eq("id", contactId);
+          console.log("[CONTACT_RESOLUTION_AUDIT]", {
+            company_id: inst.company_id,
+            channel_id: inst.channel_id,
+            source: "inbound_pushName",
+            contact_id: contactId,
+            old_name_present: !!existingContact.name,
+            name_source: "pushName_from_inbound",
+          });
+        }
       }
     } else {
       const { data: created } = await admin

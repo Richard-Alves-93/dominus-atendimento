@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.reconcile_suspicious_contact_names(uuid, text, boolean);
