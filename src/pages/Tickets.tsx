@@ -36,6 +36,14 @@ import {
   CalendarPlus,
   BarChart3,
   ChevronDown,
+  CornerUpLeft,
+  Copy as CopyIcon,
+  Forward,
+  Pin,
+  Star,
+  SquareCheck,
+  Smile,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -105,6 +113,8 @@ interface MessageRow {
   created_at: string;
   source?: string | null;
   sent_by_name?: string | null;
+  provider_message_id?: string | null;
+  external_id?: string | null;
   media_mime_type?: string | null;
   media_file_name?: string | null;
   media_size?: number | null;
@@ -112,6 +122,11 @@ interface MessageRow {
   media_caption?: string | null;
   media_storage_path?: string | null;
   media_url?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to_provider_message_id?: string | null;
+  reply_to_preview?: string | null;
+  reply_to_sender_name?: string | null;
+  reply_to_message_type?: string | null;
   _optimistic?: boolean;
 }
 
@@ -371,6 +386,8 @@ const Tickets = () => {
     } catch { /* ignore */ }
   };
   const [text, setText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
@@ -831,7 +848,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
@@ -907,24 +924,32 @@ const Tickets = () => {
 
   const visibleMessages = useMemo<MessageRow[]>(() => {
     const real = (messagesQuery.data ?? []) as MessageRow[];
-    const optimistic: MessageRow[] = pendingForSelected.map((p) => ({
-      id: p.tempId,
-      ticket_id: p.ticketId,
-      direction: "outbound",
-      from_me: true,
-      body: p.body,
-      msg_type: p.media?.type ?? "text",
-      status: p.status === "error" ? "error" : "sending",
-      sent_at: p.createdAt,
-      created_at: p.createdAt,
-      media_mime_type: p.media?.mimeType ?? null,
-      media_file_name: p.media?.fileName ?? null,
-      media_size: p.media?.size ?? null,
-      media_caption: p.media?.caption ?? null,
-      media_storage_path: null,
-      media_url: p.media?.previewUrl ?? null,
-      _optimistic: true,
-    }));
+    const optimistic: MessageRow[] = pendingForSelected.map((p) => {
+      const r = (p as any).reply as { message_id?: string; provider_message_id?: string | null; preview?: string; sender_name?: string; message_type?: string } | null | undefined;
+      return {
+        id: p.tempId,
+        ticket_id: p.ticketId,
+        direction: "outbound",
+        from_me: true,
+        body: p.body,
+        msg_type: p.media?.type ?? "text",
+        status: p.status === "error" ? "error" : "sending",
+        sent_at: p.createdAt,
+        created_at: p.createdAt,
+        media_mime_type: p.media?.mimeType ?? null,
+        media_file_name: p.media?.fileName ?? null,
+        media_size: p.media?.size ?? null,
+        media_caption: p.media?.caption ?? null,
+        media_storage_path: null,
+        media_url: p.media?.previewUrl ?? null,
+        reply_to_message_id: r?.message_id ?? null,
+        reply_to_provider_message_id: r?.provider_message_id ?? null,
+        reply_to_preview: r?.preview ?? null,
+        reply_to_sender_name: r?.sender_name ?? null,
+        reply_to_message_type: r?.message_type ?? null,
+        _optimistic: true,
+      };
+    });
     return [...real, ...optimistic];
   }, [messagesQuery.data, pendingForSelected]);
 
@@ -1173,8 +1198,112 @@ const Tickets = () => {
     : "assumir_atendimento_parado";
 
 
+  // ── Helpers para responder mensagem ────────────────────────────
+  const messageTypeLabel = (t?: string | null): string => {
+    switch (t) {
+      case "image": return "[Imagem]";
+      case "audio": return "[Áudio]";
+      case "video": return "[Vídeo]";
+      case "document": return "[Documento]";
+      case "sticker": return "[Sticker]";
+      case "location": return "[Localização]";
+      case "contact": return "[Contato]";
+      default: return "";
+    }
+  };
+  const buildPreview = (m: MessageRow): string => {
+    if (m.msg_type && m.msg_type !== "text") {
+      const lbl = messageTypeLabel(m.msg_type);
+      const cap = m.media_caption ?? m.body ?? "";
+      return (cap ? `${lbl} ${cap}` : lbl).slice(0, 280);
+    }
+    return (m.body ?? "").slice(0, 280);
+  };
+  const senderLabelFor = (m: MessageRow): string => {
+    if (m.from_me) return m.sent_by_name || "Você";
+    return selected?.contact?.name || selected?.contact?.phone_number || "Cliente";
+  };
+  const buildReplyPayload = (m: MessageRow) => ({
+    message_id: m.id,
+    provider_message_id: m.provider_message_id ?? m.external_id ?? null,
+    preview: buildPreview(m),
+    sender_name: senderLabelFor(m),
+    message_type: m.msg_type ?? "text",
+    from_me: m.from_me,
+  });
+
+  // ── Reações por emoji ──────────────────────────────────────────
+  type ReactionRow = { id: string; message_id: string; user_id: string; emoji: string };
+  const reactionsQuery = useQuery({
+    queryKey: ["message-reactions", selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const ids = (messagesQuery.data ?? []).map((m) => m.id).filter((id) => !id.startsWith("tmp_"));
+      if (ids.length === 0) return [] as ReactionRow[];
+      const { data, error } = await supabase
+        .from("message_reactions")
+        .select("id, message_id, user_id, emoji")
+        .in("message_id", ids);
+      if (error) throw error;
+      return (data ?? []) as ReactionRow[];
+    },
+  });
+  useEffect(() => {
+    if (!selectedId) return;
+    qc.invalidateQueries({ queryKey: ["message-reactions", selectedId] });
+  }, [selectedId, messagesQuery.data?.length, qc]);
+
+  const reactionsByMsg = useMemo(() => {
+    const map = new Map<string, ReactionRow[]>();
+    (reactionsQuery.data ?? []).forEach((r) => {
+      const arr = map.get(r.message_id) ?? [];
+      arr.push(r);
+      map.set(r.message_id, arr);
+    });
+    return map;
+  }, [reactionsQuery.data]);
+
+  const toggleReaction = async (m: MessageRow, emoji: string) => {
+    if (!activeCompanyId || !profile?.id || m._optimistic) return;
+    const mine = (reactionsByMsg.get(m.id) ?? []).find((r) => r.user_id === profile.id);
+    try {
+      if (mine && mine.emoji === emoji) {
+        await supabase.from("message_reactions").delete().eq("id", mine.id);
+      } else if (mine) {
+        await supabase.from("message_reactions").update({ emoji }).eq("id", mine.id);
+      } else {
+        await supabase.from("message_reactions").insert({
+          company_id: activeCompanyId, message_id: m.id, user_id: profile.id, emoji,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["message-reactions", selectedId] });
+    } catch (e: any) {
+      toast({ title: "Falha ao reagir", description: e?.message ?? String(e), variant: "destructive" });
+    }
+  };
+
+  const handleCopyMessage = async (m: MessageRow) => {
+    const txt = m.body || m.media_caption || m.media_file_name || "";
+    if (!txt) {
+      toast({ title: "Nada para copiar", variant: "destructive" });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(txt);
+      toast({ title: "Mensagem copiada" });
+    } catch {
+      toast({ title: "Não foi possível copiar", variant: "destructive" });
+    }
+  };
+
+  const handleReplyClick = (m: MessageRow) => {
+    if (m._optimistic) return;
+    setReplyingTo(m);
+    setTimeout(() => composerRef.current?.focus(), 50);
+  };
+
   const sendMutation = useMutation({
-    mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
+    mutationFn: async (vars: { body: string; tempId: string; ticketId: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
       // Ensure we have a current session before invoking
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1184,7 +1313,12 @@ const Tickets = () => {
         throw err;
       }
       const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
-        body: { company_id: activeCompanyId, ticket_id: vars.ticketId, text: vars.body },
+        body: {
+          company_id: activeCompanyId,
+          ticket_id: vars.ticketId,
+          text: vars.body,
+          ...(vars.reply ? { reply: vars.reply } : {}),
+        },
       });
       if (error) {
         const status = (error as any)?.context?.status ?? (error as any)?.status;
@@ -1227,13 +1361,22 @@ const Tickets = () => {
     if (!v || !selected) return;
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const ticketId = selected.id;
+    const replySnapshot = replyingTo ? buildReplyPayload(replyingTo) : null;
     setPendingMessages((prev) => [
       ...prev,
-      { tempId, ticketId, body: v, createdAt: new Date().toISOString(), status: "sending" },
+      {
+        tempId,
+        ticketId,
+        body: v,
+        createdAt: new Date().toISOString(),
+        status: "sending",
+        reply: replySnapshot,
+      } as PendingMessage & { reply?: ReturnType<typeof buildReplyPayload> | null },
     ]);
     setText("");
+    setReplyingTo(null);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
-    sendMutation.mutate({ body: v, tempId, ticketId });
+    sendMutation.mutate({ body: v, tempId, ticketId, reply: replySnapshot });
   };
 
   // ── Envio de mídia ─────────────────────────────────────────────
@@ -1968,93 +2111,233 @@ const Tickets = () => {
                       </div>
                     );
                   }
+                  const reactions = reactionsByMsg.get(m.id) ?? [];
+                  const reactionCounts = reactions.reduce<Record<string, number>>((acc, r) => {
+                    acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+                    return acc;
+                  }, {});
+                  const myReaction = reactions.find((r) => r.user_id === profile?.id)?.emoji;
+                  const replySender = m.reply_to_sender_name;
+                  const replyPreview =
+                    m.reply_to_message_id
+                      ? (() => {
+                          const orig = (messagesQuery.data ?? []).find((x) => x.id === m.reply_to_message_id);
+                          if (orig) return buildPreview(orig);
+                          return m.reply_to_preview ?? null;
+                        })()
+                      : (m.reply_to_preview ?? null);
+                  const hasReply = !!(m.reply_to_message_id || m.reply_to_preview);
+                  const replyUnavailable = hasReply && !replyPreview;
                   return (
-                  <div key={m.id} className={`flex ${m.from_me ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                        m.from_me
-                          ? "bg-primary text-primary-foreground rounded-br-md"
-                          : "bg-card text-foreground shadow-card rounded-bl-md"
-                      } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
-                    >
-                      {(() => {
-                        const mediaTypes = ["image", "audio", "video", "document", "sticker"];
-                        const isMedia = mediaTypes.includes(m.msg_type);
-                        const caption = m.media_caption ?? (isMedia ? m.body : null);
-                        return (
-                          <>
-                            {isMedia && (
-                              <div className="mb-1">
-                                <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
-                              </div>
-                            )}
-                            {(isMedia ? caption : m.body) ? (
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                                {isMedia ? caption : m.body}
-                              </p>
-                            ) : isMedia ? null : (
-                              <p className="text-sm italic opacity-70">[{m.msg_type}]</p>
-                            )}
-                          </>
-                        );
-                      })()}
-                      {m.from_me && m.source === "whatsapp_device" && (
-                        <div
-                          className="text-[10px] mt-1 opacity-70 italic"
-                          title="Mensagem enviada diretamente pelo WhatsApp conectado"
-                        >
-                          Enviado pelo WhatsApp
-                        </div>
-                      )}
+                  <div key={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"}`}>
+                    <div className="relative max-w-[70%]">
                       <div
-                        className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                        className={`rounded-2xl px-4 py-2.5 ${
+                          m.from_me
+                            ? "bg-primary text-primary-foreground rounded-br-md"
+                            : "bg-card text-foreground shadow-card rounded-bl-md"
+                        } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
                       >
-                        <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
-                        {m.from_me && (() => {
-                          const ds = m._optimistic
-                            ? (m.status === "error" ? "failed" : "sending")
-                            : (m.delivery_status || m.status || "sent");
-                          if (ds === "failed") {
-                            return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
-                          }
-                          if (ds === "read") {
-                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
-                          }
-                          if (ds === "sending") {
-                            return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
-                          }
-                          if (ds === "delivered") {
-                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
-                          }
-                          // sent (e fallback) → 2 checks discretos = Enviada
-                          return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
-
-                        })()}
-                      </div>
-                      {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
-                        <div className="mt-1 flex items-center justify-end gap-2">
-                          {m.failure_reason ? (
-                            <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
-                              {m.failure_reason}
-                            </span>
-                          ) : null}
+                        {hasReply && (
                           <button
                             type="button"
-                            className="text-[11px] underline text-destructive hover:opacity-80"
-                            onClick={async () => {
-                              try {
-                                const { error } = await supabase.functions.invoke("retry-scheduled-message", {
-                                  body: { message_id: m.id },
-                                });
-                                if (error) throw error;
-                                toast({ title: "Reenfileirado para envio" });
-                              } catch (e: any) {
-                                toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
-                              }
+                            onClick={() => {
+                              if (!m.reply_to_message_id) return;
+                              const el = document.getElementById(`msg-${m.reply_to_message_id}`);
+                              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
                             }}
+                            className={`w-full text-left mb-1.5 rounded-md px-2 py-1 border-l-2 ${
+                              m.from_me
+                                ? "bg-primary-foreground/10 border-primary-foreground/50"
+                                : "bg-muted border-primary/50"
+                            }`}
                           >
-                            Tentar novamente
+                            <div className={`text-[11px] font-medium ${m.from_me ? "text-primary-foreground/90" : "text-primary"}`}>
+                              {replySender || "Mensagem"}
+                            </div>
+                            <div className={`text-[11px] truncate ${m.from_me ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                              {replyUnavailable ? "Mensagem original indisponível" : replyPreview}
+                            </div>
                           </button>
+                        )}
+                        <div id={`msg-${m.id}`}>
+                        {(() => {
+                          const mediaTypes = ["image", "audio", "video", "document", "sticker"];
+                          const isMedia = mediaTypes.includes(m.msg_type);
+                          const caption = m.media_caption ?? (isMedia ? m.body : null);
+                          return (
+                            <>
+                              {isMedia && (
+                                <div className="mb-1">
+                                  <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
+                                </div>
+                              )}
+                              {(isMedia ? caption : m.body) ? (
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                  {isMedia ? caption : m.body}
+                                </p>
+                              ) : isMedia ? null : (
+                                <p className="text-sm italic opacity-70">[{m.msg_type}]</p>
+                              )}
+                            </>
+                          );
+                        })()}
+                        </div>
+                        {m.from_me && m.source === "whatsapp_device" && (
+                          <div
+                            className="text-[10px] mt-1 opacity-70 italic"
+                            title="Mensagem enviada diretamente pelo WhatsApp conectado"
+                          >
+                            Enviado pelo WhatsApp
+                          </div>
+                        )}
+                        <div
+                          className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                        >
+                          <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
+                          {m.from_me && (() => {
+                            const ds = m._optimistic
+                              ? (m.status === "error" ? "failed" : "sending")
+                              : (m.delivery_status || m.status || "sent");
+                            if (ds === "failed") {
+                              return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
+                            }
+                            if (ds === "read") {
+                              return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
+                            }
+                            if (ds === "sending") {
+                              return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
+                            }
+                            if (ds === "delivered") {
+                              return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
+                            }
+                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
+                          })()}
+                        </div>
+                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
+                          <div className="mt-1 flex items-center justify-end gap-2">
+                            {m.failure_reason ? (
+                              <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
+                                {m.failure_reason}
+                              </span>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="text-[11px] underline text-destructive hover:opacity-80"
+                              onClick={async () => {
+                                try {
+                                  const { error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                    body: { message_id: m.id },
+                                  });
+                                  if (error) throw error;
+                                  toast({ title: "Reenfileirado para envio" });
+                                } catch (e: any) {
+                                  toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
+                                }
+                              }}
+                            >
+                              Tentar novamente
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Reactions chip (visible when any) */}
+                      {Object.keys(reactionCounts).length > 0 && (
+                        <div className={`mt-1 flex flex-wrap gap-1 ${m.from_me ? "justify-end" : "justify-start"}`}>
+                          {Object.entries(reactionCounts).map(([emo, count]) => (
+                            <button
+                              key={emo}
+                              type="button"
+                              onClick={() => toggleReaction(m, emo)}
+                              className={`text-[11px] leading-none rounded-full px-2 py-0.5 border bg-card hover:bg-muted ${
+                                myReaction === emo ? "border-primary/60 ring-1 ring-primary/30" : "border-border"
+                              }`}
+                              title={myReaction === emo ? "Remover reação" : "Reagir"}
+                            >
+                              <span className="mr-1">{emo}</span>
+                              <span className="text-muted-foreground">{count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Hover actions: emoji reactions + dropdown */}
+                      {!m._optimistic && m.source !== "system" && (
+                        <div
+                          className={`absolute top-1 ${m.from_me ? "left-0 -translate-x-full pl-0 pr-2" : "right-0 translate-x-full pl-2"} opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1`}
+                        >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Reagir"
+                                className="h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-700"
+                              >
+                                <Smile className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="p-1 rounded-full flex items-center gap-0.5">
+                              {["👍","❤️","😂","😮","😢","🙏"].map((emo) => (
+                                <button
+                                  key={emo}
+                                  type="button"
+                                  onClick={() => toggleReaction(m, emo)}
+                                  className={`text-base h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center ${myReaction === emo ? "bg-muted" : ""}`}
+                                >
+                                  {emo}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => toast({ title: "Em breve", description: "Seletor completo de emojis em breve." })}
+                                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-slate-500"
+                                aria-label="Mais emojis"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Mais ações"
+                                className="h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-700"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="w-48 rounded-xl shadow-lg">
+                              <DropdownMenuItem onClick={() => handleReplyClick(m)}>
+                                <CornerUpLeft className="w-4 h-4 mr-2" /> Responder
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleCopyMessage(m)}>
+                                <CopyIcon className="w-4 h-4 mr-2" /> Copiar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Encaminhamento será implementado em próxima etapa." })}
+                              >
+                                <Forward className="w-4 h-4 mr-2" /> Encaminhar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." })}
+                              >
+                                <Pin className="w-4 h-4 mr-2" /> Fixar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." })}
+                              >
+                                <Star className="w-4 h-4 mr-2" /> Favoritar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." })}
+                              >
+                                <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       )}
                     </div>
@@ -2136,7 +2419,31 @@ const Tickets = () => {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2">
+                  {replyingTo && (
+                    <div className="flex items-start gap-2 rounded-md border-l-2 border-primary/60 bg-muted/60 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-medium text-primary">
+                          Respondendo {senderLabelFor(replyingTo)}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {buildPreview(replyingTo) || messageTypeLabel(replyingTo.msg_type) || "Mensagem"}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setReplyingTo(null)}
+                        aria-label="Cancelar resposta"
+                        title="Cancelar resposta"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
                   <input ref={fileInputRef} type="file" accept={ACCEPT_TYPES} className="hidden" onChange={handleFileSelected} />
                   <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv" className="hidden" onChange={handleFileSelected} />
                   <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelected} />
@@ -2243,6 +2550,7 @@ const Tickets = () => {
                       />
 
                       <Textarea
+                        ref={composerRef}
                         placeholder="Digite uma mensagem..."
                         value={text}
                         onChange={(e) => setText(e.target.value)}
@@ -2291,6 +2599,7 @@ const Tickets = () => {
                       )}
                     </>
                   )}
+                  </div>
                 </div>
               )}
             </div>

@@ -83,15 +83,45 @@ async function dispatchToEvolution(params: {
   instanceName: string;
   phone: string;
   finalText: string;
-}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string }> {
-  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText } = params;
+  quotedProviderId?: string | null;
+  quotedFromMe?: boolean;
+  quotedText?: string | null;
+}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
+  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText } = params;
+  let quoteFallbackUsed = false;
   try {
     await syncEvolutionWebhook(instanceName);
-    const evoRes = await fetch(endpoint, {
+    const basePayload: Record<string, unknown> = { number: phone, text: finalText };
+    let payload: Record<string, unknown> = basePayload;
+    if (quotedProviderId) {
+      const remoteJid = `${phone}@s.whatsapp.net`;
+      payload = {
+        ...basePayload,
+        quoted: {
+          key: { id: quotedProviderId, remoteJid, fromMe: !!quotedFromMe },
+          message: { conversation: (quotedText ?? "").slice(0, 1024) || " " },
+        },
+      };
+    }
+    let evoRes = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-      body: JSON.stringify({ number: phone, text: finalText }),
+      body: JSON.stringify(payload),
     });
+    if (!evoRes.ok && quotedProviderId) {
+      const failTxt = await evoRes.text().catch(() => "");
+      console.warn("[WHATSAPP_REPLY_QUOTE_FALLBACK]", {
+        message_id: messageId,
+        status: evoRes.status,
+        detail_truncated: failTxt.slice(0, 200),
+      });
+      quoteFallbackUsed = true;
+      evoRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+        body: JSON.stringify(basePayload),
+      });
+    }
     const evoText = await evoRes.text();
     let evoData: any = {};
     try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
@@ -158,7 +188,7 @@ async function dispatchToEvolution(params: {
     if (updErr) console.error("[SEND_WA] update_after_send_failed", updErr.message);
     await admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId);
 
-    return { ok: true, status: evoRes.status, externalId };
+    return { ok: true, status: evoRes.status, externalId, quoteFallbackUsed };
   } catch (e) {
     const failureReason = String((e as Error)?.message ?? e).slice(0, 300);
     console.error("[EVOLUTION_SEND_RESPONSE]", { message_id: messageId, ok: false, exception: failureReason });
@@ -208,6 +238,7 @@ Deno.serve(async (req) => {
     const ticket_id = payload.ticket_id;
     const text: string | undefined = payload.text ?? payload.body ?? payload.message;
     const skipSignature: boolean = payload.skip_signature === true;
+    const reply = (payload.reply && typeof payload.reply === "object") ? payload.reply : null;
 
     if (!company_id || !ticket_id || !text?.trim()) {
       return fail("payload", "Invalid payload (company_id, ticket_id, text required)");
@@ -279,6 +310,11 @@ Deno.serve(async (req) => {
         sent_by_signature: signatureLineEffective,
         status: "sending",
         delivery_status: "sending",
+        reply_to_message_id: reply?.message_id ?? null,
+        reply_to_provider_message_id: reply?.provider_message_id ?? null,
+        reply_to_preview: reply?.preview ? String(reply.preview).slice(0, 280) : null,
+        reply_to_sender_name: reply?.sender_name ?? null,
+        reply_to_message_type: reply?.message_type ?? null,
       })
       .select("id").single();
     if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
@@ -291,15 +327,28 @@ Deno.serve(async (req) => {
       channel_type: "whatsapp",
       instance_name: instance.instance_name,
       destination_masked: maskPhone(phone),
-      payload_shape: "number+text",
+      payload_shape: reply?.provider_message_id ? "number+text+quoted" : "number+text",
       message_id: inserted.id,
+      has_reply: !!reply,
     });
 
     // Foreground dispatch — HTTP response must reflect the real Evolution outcome.
     const result = await dispatchToEvolution({
       admin, messageId: inserted.id, ticketId: ticket_id, endpoint,
       instanceName: instance.instance_name, phone, finalText,
+      quotedProviderId: reply?.provider_message_id ?? null,
+      quotedFromMe: reply?.from_me === true,
+      quotedText: reply?.preview ?? null,
     });
+
+    if (reply) {
+      console.log("[WHATSAPP_REPLY_SEND_AUDIT]", {
+        message_id: inserted.id,
+        had_provider_id: !!reply?.provider_message_id,
+        quote_fallback_used: result.quoteFallbackUsed === true,
+        final_ok: result.ok,
+      });
+    }
 
     const tTotal = Math.round(performance.now() - tStart);
     console.log("[WHATSAPP_SEND_AUDIT_END]", {
