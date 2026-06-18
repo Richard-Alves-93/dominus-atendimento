@@ -1238,7 +1238,7 @@ const Tickets = () => {
     queryKey: ["message-reactions", selectedId],
     enabled: !!selectedId,
     queryFn: async () => {
-      const ids = (messagesQuery.data ?? []).map((m) => m.id);
+      const ids = (messagesQuery.data ?? []).map((m) => m.id).filter((id) => !id.startsWith("tmp_"));
       if (ids.length === 0) return [] as ReactionRow[];
       const { data, error } = await supabase
         .from("message_reactions")
