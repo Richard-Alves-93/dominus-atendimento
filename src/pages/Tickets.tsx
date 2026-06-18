@@ -2101,103 +2101,233 @@ const Tickets = () => {
                   Nenhuma mensagem ainda
                 </div>
               ) : (
-                visibleMessages.map((m) => {
-                  if (m.source === "system") {
-                    return (
-                      <div key={m.id} className="flex justify-center">
-                        <div className="max-w-[80%] rounded-full bg-muted text-muted-foreground px-3 py-1 text-[11px] text-center italic">
-                          {m.body}
-                        </div>
-                      </div>
-                    );
-                  }
+                  const reactions = reactionsByMsg.get(m.id) ?? [];
+                  const reactionCounts = reactions.reduce<Record<string, number>>((acc, r) => {
+                    acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+                    return acc;
+                  }, {});
+                  const myReaction = reactions.find((r) => r.user_id === profile?.id)?.emoji;
+                  const replySender = m.reply_to_sender_name;
+                  const replyPreview =
+                    m.reply_to_message_id
+                      ? (() => {
+                          const orig = (messagesQuery.data ?? []).find((x) => x.id === m.reply_to_message_id);
+                          if (orig) return buildPreview(orig);
+                          return m.reply_to_preview ?? null;
+                        })()
+                      : (m.reply_to_preview ?? null);
+                  const hasReply = !!(m.reply_to_message_id || m.reply_to_preview);
+                  const replyUnavailable = hasReply && !replyPreview;
                   return (
-                  <div key={m.id} className={`flex ${m.from_me ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                        m.from_me
-                          ? "bg-primary text-primary-foreground rounded-br-md"
-                          : "bg-card text-foreground shadow-card rounded-bl-md"
-                      } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
-                    >
-                      {(() => {
-                        const mediaTypes = ["image", "audio", "video", "document", "sticker"];
-                        const isMedia = mediaTypes.includes(m.msg_type);
-                        const caption = m.media_caption ?? (isMedia ? m.body : null);
-                        return (
-                          <>
-                            {isMedia && (
-                              <div className="mb-1">
-                                <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
-                              </div>
-                            )}
-                            {(isMedia ? caption : m.body) ? (
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                                {isMedia ? caption : m.body}
-                              </p>
-                            ) : isMedia ? null : (
-                              <p className="text-sm italic opacity-70">[{m.msg_type}]</p>
-                            )}
-                          </>
-                        );
-                      })()}
-                      {m.from_me && m.source === "whatsapp_device" && (
-                        <div
-                          className="text-[10px] mt-1 opacity-70 italic"
-                          title="Mensagem enviada diretamente pelo WhatsApp conectado"
-                        >
-                          Enviado pelo WhatsApp
-                        </div>
-                      )}
+                  <div key={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"}`}>
+                    <div className="relative max-w-[70%]">
                       <div
-                        className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                        className={`rounded-2xl px-4 py-2.5 ${
+                          m.from_me
+                            ? "bg-primary text-primary-foreground rounded-br-md"
+                            : "bg-card text-foreground shadow-card rounded-bl-md"
+                        } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
                       >
-                        <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
-                        {m.from_me && (() => {
-                          const ds = m._optimistic
-                            ? (m.status === "error" ? "failed" : "sending")
-                            : (m.delivery_status || m.status || "sent");
-                          if (ds === "failed") {
-                            return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
-                          }
-                          if (ds === "read") {
-                            return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
-                          }
-                          if (ds === "sending") {
-                            return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
-                          }
-                          if (ds === "delivered") {
-                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
-                          }
-                          // sent (e fallback) → 2 checks discretos = Enviada
-                          return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
-
-                        })()}
-                      </div>
-                      {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
-                        <div className="mt-1 flex items-center justify-end gap-2">
-                          {m.failure_reason ? (
-                            <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
-                              {m.failure_reason}
-                            </span>
-                          ) : null}
+                        {hasReply && (
                           <button
                             type="button"
-                            className="text-[11px] underline text-destructive hover:opacity-80"
-                            onClick={async () => {
-                              try {
-                                const { error } = await supabase.functions.invoke("retry-scheduled-message", {
-                                  body: { message_id: m.id },
-                                });
-                                if (error) throw error;
-                                toast({ title: "Reenfileirado para envio" });
-                              } catch (e: any) {
-                                toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
-                              }
+                            onClick={() => {
+                              if (!m.reply_to_message_id) return;
+                              const el = document.getElementById(`msg-${m.reply_to_message_id}`);
+                              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
                             }}
+                            className={`w-full text-left mb-1.5 rounded-md px-2 py-1 border-l-2 ${
+                              m.from_me
+                                ? "bg-primary-foreground/10 border-primary-foreground/50"
+                                : "bg-muted border-primary/50"
+                            }`}
                           >
-                            Tentar novamente
+                            <div className={`text-[11px] font-medium ${m.from_me ? "text-primary-foreground/90" : "text-primary"}`}>
+                              {replySender || "Mensagem"}
+                            </div>
+                            <div className={`text-[11px] truncate ${m.from_me ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                              {replyUnavailable ? "Mensagem original indisponível" : replyPreview}
+                            </div>
                           </button>
+                        )}
+                        <div id={`msg-${m.id}`}>
+                        {(() => {
+                          const mediaTypes = ["image", "audio", "video", "document", "sticker"];
+                          const isMedia = mediaTypes.includes(m.msg_type);
+                          const caption = m.media_caption ?? (isMedia ? m.body : null);
+                          return (
+                            <>
+                              {isMedia && (
+                                <div className="mb-1">
+                                  <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
+                                </div>
+                              )}
+                              {(isMedia ? caption : m.body) ? (
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                  {isMedia ? caption : m.body}
+                                </p>
+                              ) : isMedia ? null : (
+                                <p className="text-sm italic opacity-70">[{m.msg_type}]</p>
+                              )}
+                            </>
+                          );
+                        })()}
+                        </div>
+                        {m.from_me && m.source === "whatsapp_device" && (
+                          <div
+                            className="text-[10px] mt-1 opacity-70 italic"
+                            title="Mensagem enviada diretamente pelo WhatsApp conectado"
+                          >
+                            Enviado pelo WhatsApp
+                          </div>
+                        )}
+                        <div
+                          className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                        >
+                          <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
+                          {m.from_me && (() => {
+                            const ds = m._optimistic
+                              ? (m.status === "error" ? "failed" : "sending")
+                              : (m.delivery_status || m.status || "sent");
+                            if (ds === "failed") {
+                              return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
+                            }
+                            if (ds === "read") {
+                              return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
+                            }
+                            if (ds === "sending") {
+                              return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
+                            }
+                            if (ds === "delivered") {
+                              return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
+                            }
+                            return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
+                          })()}
+                        </div>
+                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
+                          <div className="mt-1 flex items-center justify-end gap-2">
+                            {m.failure_reason ? (
+                              <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
+                                {m.failure_reason}
+                              </span>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="text-[11px] underline text-destructive hover:opacity-80"
+                              onClick={async () => {
+                                try {
+                                  const { error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                    body: { message_id: m.id },
+                                  });
+                                  if (error) throw error;
+                                  toast({ title: "Reenfileirado para envio" });
+                                } catch (e: any) {
+                                  toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
+                                }
+                              }}
+                            >
+                              Tentar novamente
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Reactions chip (visible when any) */}
+                      {Object.keys(reactionCounts).length > 0 && (
+                        <div className={`mt-1 flex flex-wrap gap-1 ${m.from_me ? "justify-end" : "justify-start"}`}>
+                          {Object.entries(reactionCounts).map(([emo, count]) => (
+                            <button
+                              key={emo}
+                              type="button"
+                              onClick={() => toggleReaction(m, emo)}
+                              className={`text-[11px] leading-none rounded-full px-2 py-0.5 border bg-card hover:bg-muted ${
+                                myReaction === emo ? "border-primary/60 ring-1 ring-primary/30" : "border-border"
+                              }`}
+                              title={myReaction === emo ? "Remover reação" : "Reagir"}
+                            >
+                              <span className="mr-1">{emo}</span>
+                              <span className="text-muted-foreground">{count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Hover actions: emoji reactions + dropdown */}
+                      {!m._optimistic && m.source !== "system" && (
+                        <div
+                          className={`absolute top-1 ${m.from_me ? "left-0 -translate-x-full pl-0 pr-2" : "right-0 translate-x-full pl-2"} opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1`}
+                        >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Reagir"
+                                className="h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-700"
+                              >
+                                <Smile className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="p-1 rounded-full flex items-center gap-0.5">
+                              {["👍","❤️","😂","😮","😢","🙏"].map((emo) => (
+                                <button
+                                  key={emo}
+                                  type="button"
+                                  onClick={() => toggleReaction(m, emo)}
+                                  className={`text-base h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center ${myReaction === emo ? "bg-muted" : ""}`}
+                                >
+                                  {emo}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => toast({ title: "Em breve", description: "Seletor completo de emojis em breve." })}
+                                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-slate-500"
+                                aria-label="Mais emojis"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Mais ações"
+                                className="h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-700"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="w-48 rounded-xl shadow-lg">
+                              <DropdownMenuItem onClick={() => handleReplyClick(m)}>
+                                <CornerUpLeft className="w-4 h-4 mr-2" /> Responder
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleCopyMessage(m)}>
+                                <CopyIcon className="w-4 h-4 mr-2" /> Copiar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Encaminhamento será implementado em próxima etapa." })}
+                              >
+                                <Forward className="w-4 h-4 mr-2" /> Encaminhar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." })}
+                              >
+                                <Pin className="w-4 h-4 mr-2" /> Fixar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." })}
+                              >
+                                <Star className="w-4 h-4 mr-2" /> Favoritar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." })}
+                              >
+                                <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       )}
                     </div>
