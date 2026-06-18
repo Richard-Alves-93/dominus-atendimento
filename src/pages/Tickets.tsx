@@ -2152,6 +2152,29 @@ const Tickets = () => {
                   return (
                   <div key={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"}`}>
                     <div className="relative max-w-[70%]">
+                      {/* Mobile reaction strip when selected */}
+                      {isMobile && selectedMessageId === m.id && !m._optimistic && m.source !== "system" && (
+                        <div className={`absolute -top-12 z-20 ${m.from_me ? "right-0" : "left-0"} ${MENU_GLASS_CLASS} rounded-full p-1 flex items-center gap-0.5 animate-in fade-in zoom-in-95`}>
+                          {["👍","❤️","😂","😮","😢","🙏"].map((emo) => (
+                            <button
+                              key={emo}
+                              type="button"
+                              onClick={() => { toggleReaction(m, emo); setSelectedMessageId(null); }}
+                              className={`text-base h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center ${myReaction === emo ? "bg-muted" : ""}`}
+                            >
+                              {emo}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => toast({ title: "Em breve", description: "Seletor completo de emojis em breve." })}
+                            className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-slate-500"
+                            aria-label="Mais emojis"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                       <div
                         className={`rounded-2xl px-4 py-2.5 ${
                           m.from_me
