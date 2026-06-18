@@ -2101,6 +2101,16 @@ const Tickets = () => {
                   Nenhuma mensagem ainda
                 </div>
               ) : (
+                visibleMessages.map((m) => {
+                  if (m.source === "system") {
+                    return (
+                      <div key={m.id} className="flex justify-center">
+                        <div className="max-w-[80%] rounded-full bg-muted text-muted-foreground px-3 py-1 text-[11px] text-center italic">
+                          {m.body}
+                        </div>
+                      </div>
+                    );
+                  }
                   const reactions = reactionsByMsg.get(m.id) ?? [];
                   const reactionCounts = reactions.reduce<Record<string, number>>((acc, r) => {
                     acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
