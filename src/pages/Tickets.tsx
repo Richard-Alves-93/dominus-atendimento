@@ -78,6 +78,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { EventModal } from "@/components/events/EventModal";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+const MENU_GLASS_CLASS =
+  "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
 
 type TicketStatus = "open" | "pending" | "closed";
 type ListFilter = "todos" | "fila" | "meus" | "open" | "pending" | "closed";
@@ -387,6 +391,23 @@ const Tickets = () => {
   };
   const [text, setText] = useState("");
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const isMobile = useIsMobile();
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+  const startLongPress = (id: string) => {
+    if (!isMobile) return;
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setSelectedMessageId(id);
+      try { (navigator as any).vibrate?.(20); } catch { /* noop */ }
+    }, 450);
+  };
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
@@ -1976,6 +1997,48 @@ const Tickets = () => {
         {/* Chat */}
         {selected ? (
           <div className="flex-1 flex flex-col min-w-0">
+            {isMobile && selectedMessageId ? (
+              <div className="h-12 flex items-center px-2 border-b bg-card gap-1">
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedMessageId(null)} aria-label="Cancelar seleção">
+                  <X className="w-5 h-5" />
+                </Button>
+                <span className="text-sm font-medium mr-2">1</span>
+                <div className="flex-1" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Responder" onClick={() => {
+                  const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                  if (m) { handleReplyClick(m); setSelectedMessageId(null); }
+                }}>
+                  <CornerUpLeft className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Favoritar" onClick={() => { toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." }); setSelectedMessageId(null); }}>
+                  <Star className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Fixar" onClick={() => { toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
+                  <Pin className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Encaminhar" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
+                  <Forward className="w-5 h-5" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Mais opções">
+                      <MoreVertical className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className={`w-48 rounded-xl ${MENU_GLASS_CLASS}`}>
+                    <DropdownMenuItem onClick={() => {
+                      const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                      if (m) { handleCopyMessage(m); setSelectedMessageId(null); }
+                    }}>
+                      <CopyIcon className="w-4 h-4 mr-2" /> Copiar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." }); setSelectedMessageId(null); }}>
+                      <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
             <div className="h-auto py-2 flex items-center justify-between px-4 border-b bg-card gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <Avatar className="h-9 w-9">
@@ -2085,6 +2148,7 @@ const Tickets = () => {
                 </DropdownMenu>
               </div>
             </div>
+            )}
 
             <div className="flex-1 relative">
             <div
@@ -2131,12 +2195,41 @@ const Tickets = () => {
                   return (
                   <div key={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"}`}>
                     <div className="relative max-w-[70%]">
+                      {/* Mobile reaction strip when selected */}
+                      {isMobile && selectedMessageId === m.id && !m._optimistic && m.source !== "system" && (
+                        <div className={`absolute -top-12 z-20 ${m.from_me ? "right-0" : "left-0"} ${MENU_GLASS_CLASS} rounded-full p-1 flex items-center gap-0.5 animate-in fade-in zoom-in-95`}>
+                          {["👍","❤️","😂","😮","😢","🙏"].map((emo) => (
+                            <button
+                              key={emo}
+                              type="button"
+                              onClick={() => { toggleReaction(m, emo); setSelectedMessageId(null); }}
+                              className={`text-base h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center ${myReaction === emo ? "bg-muted" : ""}`}
+                            >
+                              {emo}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => toast({ title: "Em breve", description: "Seletor completo de emojis em breve." })}
+                            className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-slate-500"
+                            aria-label="Mais emojis"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                       <div
+                        onTouchStart={() => startLongPress(m.id)}
+                        onTouchEnd={clearLongPress}
+                        onTouchMove={clearLongPress}
+                        onTouchCancel={clearLongPress}
                         className={`rounded-2xl px-4 py-2.5 ${
                           m.from_me
                             ? "bg-primary text-primary-foreground rounded-br-md"
                             : "bg-card text-foreground shadow-card rounded-bl-md"
-                        } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
+                        } ${m.status === "error" ? "ring-1 ring-destructive" : ""} ${
+                          isMobile && selectedMessageId === m.id ? "ring-2 ring-primary/60" : ""
+                        }`}
                       >
                         {hasReply && (
                           <button
@@ -2265,7 +2358,7 @@ const Tickets = () => {
                       {/* Hover actions: emoji reactions + dropdown */}
                       {!m._optimistic && m.source !== "system" && (
                         <div
-                          className={`absolute top-1 ${m.from_me ? "left-0 -translate-x-full pl-0 pr-2" : "right-0 translate-x-full pl-2"} opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1`}
+                          className={`absolute top-1 ${m.from_me ? "left-0 -translate-x-full pl-0 pr-2" : "right-0 translate-x-full pl-2"} opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity hidden md:flex items-center gap-1`}
                         >
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -2277,7 +2370,7 @@ const Tickets = () => {
                                 <Smile className="w-3.5 h-3.5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="p-1 rounded-full flex items-center gap-0.5">
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className={`p-1 rounded-full flex items-center gap-0.5 ${MENU_GLASS_CLASS}`}>
                               {["👍","❤️","😂","😮","😢","🙏"].map((emo) => (
                                 <button
                                   key={emo}
@@ -2309,7 +2402,7 @@ const Tickets = () => {
                                 <ChevronDown className="w-3.5 h-3.5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="w-48 rounded-xl shadow-lg">
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className={`w-48 rounded-xl ${MENU_GLASS_CLASS}`}>
                               <DropdownMenuItem onClick={() => handleReplyClick(m)}>
                                 <CornerUpLeft className="w-4 h-4 mr-2" /> Responder
                               </DropdownMenuItem>
