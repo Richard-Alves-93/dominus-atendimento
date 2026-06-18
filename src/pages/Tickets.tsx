@@ -924,24 +924,32 @@ const Tickets = () => {
 
   const visibleMessages = useMemo<MessageRow[]>(() => {
     const real = (messagesQuery.data ?? []) as MessageRow[];
-    const optimistic: MessageRow[] = pendingForSelected.map((p) => ({
-      id: p.tempId,
-      ticket_id: p.ticketId,
-      direction: "outbound",
-      from_me: true,
-      body: p.body,
-      msg_type: p.media?.type ?? "text",
-      status: p.status === "error" ? "error" : "sending",
-      sent_at: p.createdAt,
-      created_at: p.createdAt,
-      media_mime_type: p.media?.mimeType ?? null,
-      media_file_name: p.media?.fileName ?? null,
-      media_size: p.media?.size ?? null,
-      media_caption: p.media?.caption ?? null,
-      media_storage_path: null,
-      media_url: p.media?.previewUrl ?? null,
-      _optimistic: true,
-    }));
+    const optimistic: MessageRow[] = pendingForSelected.map((p) => {
+      const r = (p as any).reply as { message_id?: string; provider_message_id?: string | null; preview?: string; sender_name?: string; message_type?: string } | null | undefined;
+      return {
+        id: p.tempId,
+        ticket_id: p.ticketId,
+        direction: "outbound",
+        from_me: true,
+        body: p.body,
+        msg_type: p.media?.type ?? "text",
+        status: p.status === "error" ? "error" : "sending",
+        sent_at: p.createdAt,
+        created_at: p.createdAt,
+        media_mime_type: p.media?.mimeType ?? null,
+        media_file_name: p.media?.fileName ?? null,
+        media_size: p.media?.size ?? null,
+        media_caption: p.media?.caption ?? null,
+        media_storage_path: null,
+        media_url: p.media?.previewUrl ?? null,
+        reply_to_message_id: r?.message_id ?? null,
+        reply_to_provider_message_id: r?.provider_message_id ?? null,
+        reply_to_preview: r?.preview ?? null,
+        reply_to_sender_name: r?.sender_name ?? null,
+        reply_to_message_type: r?.message_type ?? null,
+        _optimistic: true,
+      };
+    });
     return [...real, ...optimistic];
   }, [messagesQuery.data, pendingForSelected]);
 
