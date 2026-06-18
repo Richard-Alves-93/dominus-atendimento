@@ -115,6 +115,8 @@ export default function Conexoes() {
       "channels",
       "whatsapp_instances",
       "event-modal-channels",
+      "event-modal-contacts",
+      "events-contacts",
     ];
     try {
       Object.keys(sessionStorage)
@@ -134,6 +136,8 @@ export default function Conexoes() {
       queryClient.invalidateQueries({ queryKey: ["channels", activeCompanyId] }),
       queryClient.invalidateQueries({ queryKey: ["whatsapp_instances", activeCompanyId] }),
       queryClient.invalidateQueries({ queryKey: ["event-modal-channels", activeCompanyId] }),
+      queryClient.invalidateQueries({ queryKey: ["event-modal-contacts", activeCompanyId] }),
+      queryClient.invalidateQueries({ queryKey: ["events-contacts", activeCompanyId] }),
     ]);
   };
 
