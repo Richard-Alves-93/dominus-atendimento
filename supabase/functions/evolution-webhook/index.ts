@@ -275,6 +275,44 @@ function extractBody(m: any): string | null {
   );
 }
 
+// Extract WhatsApp/Baileys quoted/reply contextInfo for inbound messages.
+function extractReplyContext(m: any): {
+  provider_message_id: string | null;
+  preview: string | null;
+  message_type: string | null;
+  sender_name: string | null;
+} | null {
+  const msg = m?.message ?? {};
+  const ctx =
+    msg.extendedTextMessage?.contextInfo ??
+    msg.imageMessage?.contextInfo ??
+    msg.videoMessage?.contextInfo ??
+    msg.audioMessage?.contextInfo ??
+    msg.documentMessage?.contextInfo ??
+    msg.stickerMessage?.contextInfo ??
+    m?.contextInfo ??
+    null;
+  if (!ctx || !ctx.stanzaId) return null;
+  const qm = ctx.quotedMessage ?? {};
+  let type: string | null = null;
+  let preview: string | null = null;
+  if (qm.conversation || qm.extendedTextMessage) {
+    type = "text";
+    preview = (qm.conversation ?? qm.extendedTextMessage?.text ?? "").slice(0, 280) || null;
+  } else if (qm.imageMessage) { type = "image"; preview = qm.imageMessage.caption ?? "[Imagem]"; }
+  else if (qm.audioMessage) { type = "audio"; preview = "[Áudio]"; }
+  else if (qm.videoMessage) { type = "video"; preview = qm.videoMessage.caption ?? "[Vídeo]"; }
+  else if (qm.documentMessage) { type = "document"; preview = qm.documentMessage.fileName ?? "[Documento]"; }
+  else if (qm.stickerMessage) { type = "sticker"; preview = "[Sticker]"; }
+  return {
+    provider_message_id: String(ctx.stanzaId),
+    preview,
+    message_type: type,
+    sender_name: ctx.participantPushName ?? null,
+  };
+}
+
+
 // Maps Evolution/Baileys status values to our delivery_status.
 // Strings: PENDING, SERVER_ACK, DELIVERY_ACK, READ, PLAYED
 // Numbers: 0 ERROR, 1 PENDING, 2 SERVER_ACK(sent), 3 DELIVERY_ACK(delivered), 4 READ, 5 PLAYED
