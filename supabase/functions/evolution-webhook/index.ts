@@ -592,6 +592,37 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       ? await persistMedia(admin, inst, ticket.id, externalId, mediaInfo, m, inst.instance_name)
       : null;
 
+    // Try to capture quoted/reply context safely; failures must not break inbound persistence.
+    let replyToMessageId: string | null = null;
+    let replyCtx: ReturnType<typeof extractReplyContext> = null;
+    try {
+      replyCtx = extractReplyContext(m);
+      if (replyCtx?.provider_message_id) {
+        const { data: original } = await admin
+          .from("messages")
+          .select("id, from_me, sent_by_name")
+          .eq("company_id", inst.company_id)
+          .or(`provider_message_id.eq.${replyCtx.provider_message_id},external_id.eq.${replyCtx.provider_message_id}`)
+          .limit(1)
+          .maybeSingle();
+        if (original?.id) {
+          replyToMessageId = original.id;
+          if (!replyCtx.sender_name && original.from_me && original.sent_by_name) {
+            replyCtx = { ...replyCtx, sender_name: original.sent_by_name };
+          }
+        }
+      }
+      console.log("[WHATSAPP_REPLY_CONTEXT_AUDIT]", {
+        message_id: null,
+        provider_message_id: externalId,
+        has_reply_context: !!replyCtx,
+        reply_to_provider_message_id: replyCtx?.provider_message_id ?? null,
+        resolved_internal: !!replyToMessageId,
+      });
+    } catch (e) {
+      console.warn("[WHATSAPP_REPLY_CONTEXT_AUDIT] extract_failed", (e as Error)?.message);
+    }
+
     await admin.from("messages").upsert(
       {
         company_id: inst.company_id,
@@ -615,6 +646,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         media_url: mediaInfo?.mediaUrl ?? null,
         media_storage_path: media?.storage_path ?? null,
         media_provider_id: mediaInfo?.providerId ?? null,
+        reply_to_message_id: replyToMessageId,
+        reply_to_provider_message_id: replyCtx?.provider_message_id ?? null,
+        reply_to_preview: replyCtx?.preview ?? null,
+        reply_to_sender_name: replyCtx?.sender_name ?? null,
+        reply_to_message_type: replyCtx?.message_type ?? null,
       },
       { onConflict: "channel_id,external_id" },
     );
