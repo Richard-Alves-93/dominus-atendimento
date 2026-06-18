@@ -2419,7 +2419,31 @@ const Tickets = () => {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2">
+                  {replyingTo && (
+                    <div className="flex items-start gap-2 rounded-md border-l-2 border-primary/60 bg-muted/60 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-medium text-primary">
+                          Respondendo {senderLabelFor(replyingTo)}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {buildPreview(replyingTo) || messageTypeLabel(replyingTo.msg_type) || "Mensagem"}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => setReplyingTo(null)}
+                        aria-label="Cancelar resposta"
+                        title="Cancelar resposta"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
                   <input ref={fileInputRef} type="file" accept={ACCEPT_TYPES} className="hidden" onChange={handleFileSelected} />
                   <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv" className="hidden" onChange={handleFileSelected} />
                   <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileSelected} />
