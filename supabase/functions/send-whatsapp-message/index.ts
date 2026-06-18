@@ -188,7 +188,7 @@ async function dispatchToEvolution(params: {
     if (updErr) console.error("[SEND_WA] update_after_send_failed", updErr.message);
     await admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId);
 
-    return { ok: true, status: evoRes.status, externalId };
+    return { ok: true, status: evoRes.status, externalId, quoteFallbackUsed };
   } catch (e) {
     const failureReason = String((e as Error)?.message ?? e).slice(0, 300);
     console.error("[EVOLUTION_SEND_RESPONSE]", { message_id: messageId, ok: false, exception: failureReason });
