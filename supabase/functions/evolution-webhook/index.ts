@@ -427,6 +427,10 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         console.log("[WEBHOOK] upsert_fromMe_device keyId=", externalId);
         const { status: mappedStatus } = mapDeliveryStatus(statusRaw);
 
+        // IMPORTANTE: em payloads fromMe, `pushName` é o nome do DONO do dispositivo
+        // conectado (ex.: o atendente/empresa), NÃO do contato do outro lado.
+        // Nunca usar pushName como nome do contato aqui — isso causava vários
+        // contatos diferentes salvos com o mesmo nome (ex.: "Richard Alves").
         let contactId: string | null = null;
         const { data: existingContact } = await admin
           .from("contacts")
@@ -436,17 +440,24 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
           .maybeSingle();
         if (existingContact) {
           contactId = existingContact.id;
-          if (!existingContact.name && pushName) {
-            await admin.from("contacts").update({ name: pushName }).eq("id", contactId);
-          }
+          // não sobrescrever nome com pushName do fromMe
         } else {
           const { data: created } = await admin
             .from("contacts")
-            .insert({ company_id: inst.company_id, phone_number: phone, name: pushName })
+            .insert({ company_id: inst.company_id, phone_number: phone, name: null })
             .select("id")
             .single();
           contactId = created?.id ?? null;
         }
+        console.log("[CONTACT_RESOLUTION_AUDIT]", {
+          company_id: inst.company_id,
+          channel_id: inst.channel_id,
+          source: "fromMe_device",
+          phone_masked: phone ? phone.slice(0, 4) + "***" + phone.slice(-2) : null,
+          existing_contact_id: existingContact?.id ?? null,
+          created_contact_id: existingContact ? null : contactId,
+          name_source: "none_fromMe",
+        });
         if (!contactId) {
           auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, mappedStatus, 0);
           continue;
