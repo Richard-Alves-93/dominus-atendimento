@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function Conexoes() {
+  const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [open, setOpen] = useState(false);
@@ -104,6 +106,37 @@ export default function Conexoes() {
     return data as { status: string; qr_code?: string | null; instance_name?: string | null };
   };
 
+  const invalidateContactCaches = async (reason: "whatsapp_disconnect" | "whatsapp_reconnect") => {
+    if (!activeCompanyId) return;
+    const queriesInvalidated = [
+      "tickets",
+      "contacts",
+      "messages",
+      "channels",
+      "whatsapp_instances",
+      "event-modal-channels",
+    ];
+    try {
+      Object.keys(sessionStorage)
+        .filter((key) => key.startsWith(`dominus:selected_ticket:${activeCompanyId}:`))
+        .forEach((key) => sessionStorage.removeItem(key));
+    } catch { /* noop */ }
+    console.debug("[CONTACT_CACHE_INVALIDATION]", {
+      company_id: activeCompanyId,
+      channel_id: channels.find((c) => c.channel_type === "whatsapp")?.id ?? null,
+      reason,
+      queries_invalidated: queriesInvalidated,
+    });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["tickets", activeCompanyId] }),
+      queryClient.invalidateQueries({ queryKey: ["contacts", activeCompanyId] }),
+      queryClient.invalidateQueries({ queryKey: ["messages"] }),
+      queryClient.invalidateQueries({ queryKey: ["channels", activeCompanyId] }),
+      queryClient.invalidateQueries({ queryKey: ["whatsapp_instances", activeCompanyId] }),
+      queryClient.invalidateQueries({ queryKey: ["event-modal-channels", activeCompanyId] }),
+    ]);
+  };
+
   const openWhatsAppDialog = async () => {
     setOpen(true);
     setQr(null);
@@ -122,6 +155,7 @@ export default function Conexoes() {
     const res = await callFn("create_or_connect");
     setLoading(false);
     if (!res) return;
+    await invalidateContactCaches("whatsapp_reconnect");
     setStatus(res.status);
     setQr(res.qr_code ?? null);
     setInstanceName(res.instance_name ?? null);
@@ -151,6 +185,7 @@ export default function Conexoes() {
     if (res.status === "disconnected") {
       setQr(null);
       stopPolling();
+      await invalidateContactCaches("whatsapp_disconnect");
       toast.success("WhatsApp desconectado.");
     }
     await loadChannels();

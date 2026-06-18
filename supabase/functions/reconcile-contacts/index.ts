@@ -89,18 +89,18 @@ Deno.serve(async (req) => {
 
       if (firstMessage?.from_me !== true) continue;
 
-      const { data: latestInbound } = await admin
+      const { data: inboundMessages } = await admin
         .from("messages")
         .select("raw, created_at")
         .eq("company_id", companyId)
         .eq("contact_id", contact.id)
         .eq("from_me", false)
-        .not("raw->>pushName", "is", null)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(20);
 
-      const inboundName = cleanName((latestInbound?.raw as Record<string, unknown> | null)?.pushName as string | null);
+      const inboundName = (inboundMessages ?? [])
+        .map((msg: { raw?: Record<string, unknown> | null }) => cleanName(msg.raw?.pushName as string | null))
+        .find((name: string | null): name is string => !!name) ?? null;
       const newName = inboundName && inboundName.toLowerCase() !== suspiciousName.toLowerCase() ? inboundName : null;
       const reason = newName
         ? "first_message_from_me_later_inbound_push_name_found"
