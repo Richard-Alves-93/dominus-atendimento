@@ -744,7 +744,36 @@ const Tickets = () => {
     },
   });
 
-  // unread_count só zera ao aceitar — não zerar apenas por visualizar.
+  // Ao abrir um ticket: zerar unread_count (somente leitura/visualização).
+  // NÃO altera assigned_user_id, status nem move de Pendentes para Atendendo.
+  useEffect(() => {
+    if (!selectedId || !activeCompanyId) return;
+    const current = (ticketsQuery.data ?? []).find((t) => t.id === selectedId);
+    if (!current || (current.unread_count ?? 0) === 0) return;
+    const prev = current.unread_count ?? 0;
+    // Optimistic local update — badge desaparece sem F5
+    qc.setQueryData(["tickets", activeCompanyId], (old: any) => {
+      if (!Array.isArray(old)) return old;
+      return old.map((t: any) => (t.id === selectedId ? { ...t, unread_count: 0 } : t));
+    });
+    (async () => {
+      const { error } = await (supabase as any)
+        .from("tickets")
+        .update({ unread_count: 0 })
+        .eq("id", selectedId)
+        .eq("company_id", activeCompanyId);
+      if (error) {
+        console.warn("[TICKET_MARK_READ_AUDIT] failed", { ticket_id: selectedId, error: error.message });
+      } else {
+        console.log("[TICKET_MARK_READ_AUDIT]", {
+          company_id: activeCompanyId,
+          ticket_id: selectedId,
+          previous_unread_count: prev,
+          new_unread_count: 0,
+        });
+      }
+    })();
+  }, [selectedId, activeCompanyId, ticketsQuery.data, qc]);
 
   const isPendingAcceptance = !!selected && !selected.assigned_user_id && selected.status !== "closed";
   const canAcceptSelected = useMemo(() => {
