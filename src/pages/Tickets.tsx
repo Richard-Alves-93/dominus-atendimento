@@ -1190,8 +1190,112 @@ const Tickets = () => {
     : "assumir_atendimento_parado";
 
 
+  // ── Helpers para responder mensagem ────────────────────────────
+  const messageTypeLabel = (t?: string | null): string => {
+    switch (t) {
+      case "image": return "[Imagem]";
+      case "audio": return "[Áudio]";
+      case "video": return "[Vídeo]";
+      case "document": return "[Documento]";
+      case "sticker": return "[Sticker]";
+      case "location": return "[Localização]";
+      case "contact": return "[Contato]";
+      default: return "";
+    }
+  };
+  const buildPreview = (m: MessageRow): string => {
+    if (m.msg_type && m.msg_type !== "text") {
+      const lbl = messageTypeLabel(m.msg_type);
+      const cap = m.media_caption ?? m.body ?? "";
+      return (cap ? `${lbl} ${cap}` : lbl).slice(0, 280);
+    }
+    return (m.body ?? "").slice(0, 280);
+  };
+  const senderLabelFor = (m: MessageRow): string => {
+    if (m.from_me) return m.sent_by_name || "Você";
+    return selected?.contact?.name || selected?.contact?.phone_number || "Cliente";
+  };
+  const buildReplyPayload = (m: MessageRow) => ({
+    message_id: m.id,
+    provider_message_id: m.provider_message_id ?? m.external_id ?? null,
+    preview: buildPreview(m),
+    sender_name: senderLabelFor(m),
+    message_type: m.msg_type ?? "text",
+    from_me: m.from_me,
+  });
+
+  // ── Reações por emoji ──────────────────────────────────────────
+  type ReactionRow = { id: string; message_id: string; user_id: string; emoji: string };
+  const reactionsQuery = useQuery({
+    queryKey: ["message-reactions", selectedId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const ids = (messagesQuery.data ?? []).map((m) => m.id);
+      if (ids.length === 0) return [] as ReactionRow[];
+      const { data, error } = await supabase
+        .from("message_reactions")
+        .select("id, message_id, user_id, emoji")
+        .in("message_id", ids);
+      if (error) throw error;
+      return (data ?? []) as ReactionRow[];
+    },
+  });
+  useEffect(() => {
+    if (!selectedId) return;
+    qc.invalidateQueries({ queryKey: ["message-reactions", selectedId] });
+  }, [selectedId, messagesQuery.data?.length, qc]);
+
+  const reactionsByMsg = useMemo(() => {
+    const map = new Map<string, ReactionRow[]>();
+    (reactionsQuery.data ?? []).forEach((r) => {
+      const arr = map.get(r.message_id) ?? [];
+      arr.push(r);
+      map.set(r.message_id, arr);
+    });
+    return map;
+  }, [reactionsQuery.data]);
+
+  const toggleReaction = async (m: MessageRow, emoji: string) => {
+    if (!activeCompanyId || !profile?.id || m._optimistic) return;
+    const mine = (reactionsByMsg.get(m.id) ?? []).find((r) => r.user_id === profile.id);
+    try {
+      if (mine && mine.emoji === emoji) {
+        await supabase.from("message_reactions").delete().eq("id", mine.id);
+      } else if (mine) {
+        await supabase.from("message_reactions").update({ emoji }).eq("id", mine.id);
+      } else {
+        await supabase.from("message_reactions").insert({
+          company_id: activeCompanyId, message_id: m.id, user_id: profile.id, emoji,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["message-reactions", selectedId] });
+    } catch (e: any) {
+      toast({ title: "Falha ao reagir", description: e?.message ?? String(e), variant: "destructive" });
+    }
+  };
+
+  const handleCopyMessage = async (m: MessageRow) => {
+    const txt = m.body || m.media_caption || m.media_file_name || "";
+    if (!txt) {
+      toast({ title: "Nada para copiar", variant: "destructive" });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(txt);
+      toast({ title: "Mensagem copiada" });
+    } catch {
+      toast({ title: "Não foi possível copiar", variant: "destructive" });
+    }
+  };
+
+  const handleReplyClick = (m: MessageRow) => {
+    if (m._optimistic) return;
+    setReplyingTo(m);
+    setTimeout(() => composerRef.current?.focus(), 50);
+  };
+
   const sendMutation = useMutation({
-    mutationFn: async (vars: { body: string; tempId: string; ticketId: string }) => {
+    mutationFn: async (vars: { body: string; tempId: string; ticketId: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
       // Ensure we have a current session before invoking
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1201,7 +1305,12 @@ const Tickets = () => {
         throw err;
       }
       const { data, error } = await supabase.functions.invoke("send-whatsapp-message", {
-        body: { company_id: activeCompanyId, ticket_id: vars.ticketId, text: vars.body },
+        body: {
+          company_id: activeCompanyId,
+          ticket_id: vars.ticketId,
+          text: vars.body,
+          ...(vars.reply ? { reply: vars.reply } : {}),
+        },
       });
       if (error) {
         const status = (error as any)?.context?.status ?? (error as any)?.status;
@@ -1244,13 +1353,24 @@ const Tickets = () => {
     if (!v || !selected) return;
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const ticketId = selected.id;
+    const replySnapshot = replyingTo ? buildReplyPayload(replyingTo) : null;
     setPendingMessages((prev) => [
       ...prev,
-      { tempId, ticketId, body: v, createdAt: new Date().toISOString(), status: "sending" },
+      {
+        tempId,
+        ticketId,
+        body: v,
+        createdAt: new Date().toISOString(),
+        status: "sending",
+        // attach reply preview onto pending so optimistic bubble shows quote
+        // @ts-expect-error informal field consumed in visibleMessages
+        reply: replySnapshot,
+      },
     ]);
     setText("");
+    setReplyingTo(null);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
-    sendMutation.mutate({ body: v, tempId, ticketId });
+    sendMutation.mutate({ body: v, tempId, ticketId, reply: replySnapshot });
   };
 
   // ── Envio de mídia ─────────────────────────────────────────────
