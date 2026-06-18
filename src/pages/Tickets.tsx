@@ -1997,6 +1997,48 @@ const Tickets = () => {
         {/* Chat */}
         {selected ? (
           <div className="flex-1 flex flex-col min-w-0">
+            {isMobile && selectedMessageId ? (
+              <div className="h-12 flex items-center px-2 border-b bg-card gap-1">
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedMessageId(null)} aria-label="Cancelar seleção">
+                  <X className="w-5 h-5" />
+                </Button>
+                <span className="text-sm font-medium mr-2">1</span>
+                <div className="flex-1" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Responder" onClick={() => {
+                  const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                  if (m) { handleReplyClick(m); setSelectedMessageId(null); }
+                }}>
+                  <CornerUpLeft className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Favoritar" onClick={() => { toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." }); setSelectedMessageId(null); }}>
+                  <Star className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Fixar" onClick={() => { toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
+                  <Pin className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Encaminhar" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
+                  <Forward className="w-5 h-5" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Mais opções">
+                      <MoreVertical className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className={`w-48 rounded-xl ${MENU_GLASS_CLASS}`}>
+                    <DropdownMenuItem onClick={() => {
+                      const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                      if (m) { handleCopyMessage(m); setSelectedMessageId(null); }
+                    }}>
+                      <CopyIcon className="w-4 h-4 mr-2" /> Copiar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." }); setSelectedMessageId(null); }}>
+                      <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
             <div className="h-auto py-2 flex items-center justify-between px-4 border-b bg-card gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <Avatar className="h-9 w-9">
