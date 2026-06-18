@@ -391,6 +391,23 @@ const Tickets = () => {
   };
   const [text, setText] = useState("");
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const isMobile = useIsMobile();
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+  const startLongPress = (id: string) => {
+    if (!isMobile) return;
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setSelectedMessageId(id);
+      try { (navigator as any).vibrate?.(20); } catch { /* noop */ }
+    }, 450);
+  };
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
