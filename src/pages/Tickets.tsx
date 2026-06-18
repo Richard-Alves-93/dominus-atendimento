@@ -36,6 +36,14 @@ import {
   CalendarPlus,
   BarChart3,
   ChevronDown,
+  CornerUpLeft,
+  Copy as CopyIcon,
+  Forward,
+  Pin,
+  Star,
+  SquareCheck,
+  Smile,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
