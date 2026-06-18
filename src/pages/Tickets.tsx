@@ -2550,6 +2550,7 @@ const Tickets = () => {
                       />
 
                       <Textarea
+                        ref={composerRef}
                         placeholder="Digite uma mensagem..."
                         value={text}
                         onChange={(e) => setText(e.target.value)}
