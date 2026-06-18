@@ -2359,7 +2359,7 @@ const Tickets = () => {
                                 <ChevronDown className="w-3.5 h-3.5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className="w-48 rounded-xl shadow-lg">
+                            <DropdownMenuContent align={m.from_me ? "end" : "start"} className={`w-48 rounded-xl ${MENU_GLASS_CLASS}`}>
                               <DropdownMenuItem onClick={() => handleReplyClick(m)}>
                                 <CornerUpLeft className="w-4 h-4 mr-2" /> Responder
                               </DropdownMenuItem>
