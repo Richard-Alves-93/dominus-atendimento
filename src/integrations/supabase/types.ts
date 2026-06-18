@@ -1191,20 +1191,6 @@ export type Database = {
         Returns: boolean
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
-      reconcile_suspicious_contact_names: {
-        Args: {
-          p_company_id: string
-          p_dry_run?: boolean
-          p_suspicious_name: string
-        }
-        Returns: {
-          action: string
-          contact_id: string
-          new_name: string
-          old_name: string
-          reason: string
-        }[]
-      }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
