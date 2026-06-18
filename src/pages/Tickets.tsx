@@ -2315,7 +2315,7 @@ const Tickets = () => {
                       {/* Hover actions: emoji reactions + dropdown */}
                       {!m._optimistic && m.source !== "system" && (
                         <div
-                          className={`absolute top-1 ${m.from_me ? "left-0 -translate-x-full pl-0 pr-2" : "right-0 translate-x-full pl-2"} opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1`}
+                          className={`absolute top-1 ${m.from_me ? "left-0 -translate-x-full pl-0 pr-2" : "right-0 translate-x-full pl-2"} opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity hidden md:flex items-center gap-1`}
                         >
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
