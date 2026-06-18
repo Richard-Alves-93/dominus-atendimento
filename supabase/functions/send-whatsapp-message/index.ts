@@ -83,15 +83,45 @@ async function dispatchToEvolution(params: {
   instanceName: string;
   phone: string;
   finalText: string;
-}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string }> {
-  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText } = params;
+  quotedProviderId?: string | null;
+  quotedFromMe?: boolean;
+  quotedText?: string | null;
+}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
+  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText } = params;
+  let quoteFallbackUsed = false;
   try {
     await syncEvolutionWebhook(instanceName);
-    const evoRes = await fetch(endpoint, {
+    const basePayload: Record<string, unknown> = { number: phone, text: finalText };
+    let payload: Record<string, unknown> = basePayload;
+    if (quotedProviderId) {
+      const remoteJid = `${phone}@s.whatsapp.net`;
+      payload = {
+        ...basePayload,
+        quoted: {
+          key: { id: quotedProviderId, remoteJid, fromMe: !!quotedFromMe },
+          message: { conversation: (quotedText ?? "").slice(0, 1024) || " " },
+        },
+      };
+    }
+    let evoRes = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-      body: JSON.stringify({ number: phone, text: finalText }),
+      body: JSON.stringify(payload),
     });
+    if (!evoRes.ok && quotedProviderId) {
+      const failTxt = await evoRes.text().catch(() => "");
+      console.warn("[WHATSAPP_REPLY_QUOTE_FALLBACK]", {
+        message_id: messageId,
+        status: evoRes.status,
+        detail_truncated: failTxt.slice(0, 200),
+      });
+      quoteFallbackUsed = true;
+      evoRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+        body: JSON.stringify(basePayload),
+      });
+    }
     const evoText = await evoRes.text();
     let evoData: any = {};
     try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
