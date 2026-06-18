@@ -1362,10 +1362,8 @@ const Tickets = () => {
         body: v,
         createdAt: new Date().toISOString(),
         status: "sending",
-        // attach reply preview onto pending so optimistic bubble shows quote
-        // @ts-expect-error informal field consumed in visibleMessages
         reply: replySnapshot,
-      },
+      } as PendingMessage & { reply?: ReturnType<typeof buildReplyPayload> | null },
     ]);
     setText("");
     setReplyingTo(null);
