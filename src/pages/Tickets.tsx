@@ -386,6 +386,8 @@ const Tickets = () => {
     } catch { /* ignore */ }
   };
   const [text, setText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
