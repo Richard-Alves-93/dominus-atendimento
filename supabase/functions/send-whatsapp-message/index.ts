@@ -310,6 +310,11 @@ Deno.serve(async (req) => {
         sent_by_signature: signatureLineEffective,
         status: "sending",
         delivery_status: "sending",
+        reply_to_message_id: reply?.message_id ?? null,
+        reply_to_provider_message_id: reply?.provider_message_id ?? null,
+        reply_to_preview: reply?.preview ? String(reply.preview).slice(0, 280) : null,
+        reply_to_sender_name: reply?.sender_name ?? null,
+        reply_to_message_type: reply?.message_type ?? null,
       })
       .select("id").single();
     if (insErr) return fail("db_insert", "Failed to save message", { detail: insErr.message });
@@ -322,15 +327,28 @@ Deno.serve(async (req) => {
       channel_type: "whatsapp",
       instance_name: instance.instance_name,
       destination_masked: maskPhone(phone),
-      payload_shape: "number+text",
+      payload_shape: reply?.provider_message_id ? "number+text+quoted" : "number+text",
       message_id: inserted.id,
+      has_reply: !!reply,
     });
 
     // Foreground dispatch — HTTP response must reflect the real Evolution outcome.
     const result = await dispatchToEvolution({
       admin, messageId: inserted.id, ticketId: ticket_id, endpoint,
       instanceName: instance.instance_name, phone, finalText,
+      quotedProviderId: reply?.provider_message_id ?? null,
+      quotedFromMe: reply?.from_me === true,
+      quotedText: reply?.preview ?? null,
     });
+
+    if (reply) {
+      console.log("[WHATSAPP_REPLY_SEND_AUDIT]", {
+        message_id: inserted.id,
+        had_provider_id: !!reply?.provider_message_id,
+        quote_fallback_used: result.quoteFallbackUsed === true,
+        final_ok: result.ok,
+      });
+    }
 
     const tTotal = Math.round(performance.now() - tStart);
     console.log("[WHATSAPP_SEND_AUDIT_END]", {
