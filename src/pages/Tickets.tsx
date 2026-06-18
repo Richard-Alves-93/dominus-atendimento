@@ -113,6 +113,8 @@ interface MessageRow {
   created_at: string;
   source?: string | null;
   sent_by_name?: string | null;
+  provider_message_id?: string | null;
+  external_id?: string | null;
   media_mime_type?: string | null;
   media_file_name?: string | null;
   media_size?: number | null;
@@ -120,6 +122,11 @@ interface MessageRow {
   media_caption?: string | null;
   media_storage_path?: string | null;
   media_url?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to_provider_message_id?: string | null;
+  reply_to_preview?: string | null;
+  reply_to_sender_name?: string | null;
+  reply_to_message_type?: string | null;
   _optimistic?: boolean;
 }
 
