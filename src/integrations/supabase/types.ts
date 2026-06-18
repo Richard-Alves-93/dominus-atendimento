@@ -450,6 +450,58 @@ export type Database = {
           },
         ]
       }
+      message_reactions: {
+        Row: {
+          company_id: string
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string | null
@@ -478,6 +530,11 @@ export type Database = {
           raw: Json
           raw_body: string | null
           read_at: string | null
+          reply_to_message_id: string | null
+          reply_to_message_type: string | null
+          reply_to_preview: string | null
+          reply_to_provider_message_id: string | null
+          reply_to_sender_name: string | null
           sent_at: string
           sent_by_name: string | null
           sent_by_signature: string | null
@@ -513,6 +570,11 @@ export type Database = {
           raw?: Json
           raw_body?: string | null
           read_at?: string | null
+          reply_to_message_id?: string | null
+          reply_to_message_type?: string | null
+          reply_to_preview?: string | null
+          reply_to_provider_message_id?: string | null
+          reply_to_sender_name?: string | null
           sent_at?: string
           sent_by_name?: string | null
           sent_by_signature?: string | null
@@ -548,6 +610,11 @@ export type Database = {
           raw?: Json
           raw_body?: string | null
           read_at?: string | null
+          reply_to_message_id?: string | null
+          reply_to_message_type?: string | null
+          reply_to_preview?: string | null
+          reply_to_provider_message_id?: string | null
+          reply_to_sender_name?: string | null
           sent_at?: string
           sent_by_name?: string | null
           sent_by_signature?: string | null
@@ -576,6 +643,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
