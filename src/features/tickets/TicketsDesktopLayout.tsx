@@ -82,6 +82,7 @@ import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import TicketsMobileLayout from "@/features/tickets/TicketsMobileLayout";
 import { MediaContent } from "@/features/tickets/MediaContent";
+import ForwardDialog from "@/features/tickets/ForwardDialog";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
