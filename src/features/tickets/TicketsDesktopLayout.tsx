@@ -3268,7 +3268,7 @@ const TicketsDesktopLayout = () => {
                                 <Star className={`w-4 h-4 mr-2 ${favoriteIds.has(m.id) ? "fill-amber-400 text-amber-400" : ""}`} /> {favoriteIds.has(m.id) ? "Desfavoritar" : "Favoritar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." })}
+                                onClick={() => enterSelection(m.id)}
                               >
                                 <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
                               </DropdownMenuItem>
