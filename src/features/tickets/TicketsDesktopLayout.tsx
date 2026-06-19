@@ -354,6 +354,24 @@ const TicketsDesktopLayout = () => {
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
   const isMobile = useIsMobile();
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  // G.5 — modo de seleção múltipla
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const enterSelection = (id: string) => {
+    setSelectionMode(true);
+    setSelectedMessageIds(new Set([id]));
+  };
+  const toggleSelected = (id: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => {
+    setSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  };
   const longPressTimerRef = useRef<number | null>(null);
   const clearLongPress = () => {
     if (longPressTimerRef.current) {
@@ -370,6 +388,8 @@ const TicketsDesktopLayout = () => {
     }, 450);
   };
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  // G.5 — limpar seleção ao trocar de ticket
+  useEffect(() => { clearSelection(); }, [selectedId]);
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
@@ -2840,7 +2860,7 @@ const TicketsDesktopLayout = () => {
                     }}>
                       <CopyIcon className="w-4 h-4 mr-2" /> Copiar
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." }); setSelectedMessageId(null); }}>
+                    <DropdownMenuItem onClick={() => { if (selectedMessageId) { enterSelection(selectedMessageId); } setSelectedMessageId(null); }}>
                       <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -2980,6 +3000,54 @@ const TicketsDesktopLayout = () => {
                 </Button>
               </div>
             )}
+
+            {/* G.5 — Barra contextual de seleção múltipla */}
+            {selectionMode && (() => {
+              const selectedList = visibleMessages.filter((x) => selectedMessageIds.has(x.id));
+              const count = selectedList.length;
+              const MEDIA_DL = ["image", "audio", "video", "document", "sticker"];
+              const single = count === 1 ? selectedList[0] : null;
+              const canDownload = !!(single && MEDIA_DL.includes((single as any).msg_type) && ((single as any).media_url || (single as any).media_storage_path));
+              const label = count === 0 ? "Selecione mensagens" : count === 1 ? "1 selecionada" : `${count} mensagens selecionadas`;
+              const bulkFavorite = async () => {
+                for (const m of selectedList) {
+                  if (!favoriteIds.has(m.id)) {
+                    await toggleFavorite(m as MessageRow);
+                  }
+                }
+                clearSelection();
+              };
+              const downloadOne = () => {
+                if (!single) return;
+                const url = (single as any).media_url as string | null;
+                const path = (single as any).media_storage_path as string | null;
+                if (url) {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                } else if (path) {
+                  toast({ title: "Download", description: "Abra a mídia na bolha para baixar." });
+                }
+              };
+              return (
+                <div className="px-3 py-2 border-b bg-card flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={clearSelection} aria-label="Cancelar seleção">
+                    <X className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm font-medium">{label}</span>
+                  <div className="flex-1" />
+                  {canDownload && (
+                    <Button variant="ghost" size="sm" onClick={downloadOne} className="gap-2">
+                      <Download className="w-4 h-4" /> Baixar
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={bulkFavorite} disabled={count === 0} className="gap-2">
+                    <Star className="w-4 h-4" /> Favoritar
+                  </Button>
+                  <Button variant="default" size="sm" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado na G.6." }); }} disabled={count === 0} className="gap-2">
+                    <Forward className="w-4 h-4" /> Encaminhar
+                  </Button>
+                </div>
+              );
+            })()}
             <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
@@ -3046,13 +3114,20 @@ const TicketsDesktopLayout = () => {
                         onTouchEnd={clearLongPress}
                         onTouchMove={clearLongPress}
                         onTouchCancel={clearLongPress}
+                        onClick={() => {
+                          if (!selectionMode) return;
+                          if (m._optimistic || m.source === "system") return;
+                          toggleSelected(m.id);
+                        }}
                         className={`rounded-2xl px-4 py-2.5 ${
                           m.from_me
                             ? "bg-primary text-primary-foreground rounded-br-md"
                             : "bg-card text-foreground shadow-card rounded-bl-md"
                         } ${m.status === "error" ? "ring-1 ring-destructive" : ""} ${
                           isMobile && selectedMessageId === m.id ? "ring-2 ring-primary/60" : ""
-                        }`}
+                        } ${
+                          selectionMode && selectedMessageIds.has(m.id) ? "ring-2 ring-primary outline outline-2 outline-primary/30" : ""
+                        } ${selectionMode ? "cursor-pointer" : ""}`}
                       >
                         {hasReply && (
                           <button
@@ -3248,7 +3323,7 @@ const TicketsDesktopLayout = () => {
                                 <Star className={`w-4 h-4 mr-2 ${favoriteIds.has(m.id) ? "fill-amber-400 text-amber-400" : ""}`} /> {favoriteIds.has(m.id) ? "Desfavoritar" : "Favoritar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." })}
+                                onClick={() => enterSelection(m.id)}
                               >
                                 <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
                               </DropdownMenuItem>
