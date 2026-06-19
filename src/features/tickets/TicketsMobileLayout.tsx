@@ -88,6 +88,16 @@ interface Props {
   setDeptFilter: (id: string) => void;
   // E.1 — read-only extras
   reactionsByMsg?: Map<string, ReactionRow[]>;
+  // F.1 — ações do atendimento (handlers/permissions do desktop)
+  canEditSelected?: boolean;
+  canAcceptSelected?: boolean;
+  canTakeOverSelected?: boolean;
+  acceptLoading?: boolean;
+  onAccept?: () => void;
+  onTakeOver?: () => void;
+  onChangeStatus?: (status: "open" | "pending" | "closed") => void;
+  onOpenAssignDept?: () => void;
+  onCopyProtocol?: () => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
