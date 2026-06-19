@@ -156,6 +156,15 @@ export default function TicketsMobileLayout(props: Props) {
     deptFilter,
     setDeptFilter,
     reactionsByMsg,
+    canEditSelected = false,
+    canAcceptSelected = false,
+    canTakeOverSelected = false,
+    acceptLoading = false,
+    onAccept,
+    onTakeOver,
+    onChangeStatus,
+    onOpenAssignDept,
+    onCopyProtocol,
   } = props;
 
   const filterOptions = [
