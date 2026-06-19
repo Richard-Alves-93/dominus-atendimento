@@ -635,15 +635,26 @@ const TicketsDesktopLayout = () => {
     const withAssignee = list.map((t) => ({
       ...t,
       assignee: t.assigned_user_id ? pmap[t.assigned_user_id] ?? null : null,
+      pinned: pinnedIds.has(t.id),
     }));
-    if (!search.trim()) return withAssignee;
-    const s = search.toLowerCase();
-    return withAssignee.filter(
-      (t) =>
-        (t.contact?.name || "").toLowerCase().includes(s) ||
-        (t.contact?.phone_number || "").includes(s),
-    );
-  }, [ticketsQuery.data, assigneeProfilesQuery.data, search]);
+    const filtered = !search.trim()
+      ? withAssignee
+      : withAssignee.filter((t) => {
+          const s = search.toLowerCase();
+          return (
+            (t.contact?.name || "").toLowerCase().includes(s) ||
+            (t.contact?.phone_number || "").includes(s)
+          );
+        });
+    // Ordenação: fixadas primeiro, depois por last_message_at desc.
+    return [...filtered].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return tb - ta;
+    });
+  }, [ticketsQuery.data, assigneeProfilesQuery.data, search, pinnedIds]);
+
 
   const selected = useMemo(
     () => tickets.find((t) => t.id === selectedId) ?? null,
