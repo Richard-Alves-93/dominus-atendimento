@@ -413,6 +413,7 @@ export default function TicketsMobileLayout(props: Props) {
             <Send className="w-4 h-4" />
           </Button>
         </div>
+        </div>
       </div>
     </AppLayout>
   );
