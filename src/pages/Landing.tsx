@@ -161,15 +161,16 @@ function MockChat() {
                       : "text-slate-300/80 hover:bg-white/5"
                   }`}
                 >
-                  <i.icon className="w-3.5 h-3.5" /> {i.label}
+                  <i.icon className="w-3.5 h-3.5 shrink-0" />{" "}
+                  <span className="hidden sm:inline truncate">{i.label}</span>
                 </div>
               ))}
             </div>
-            <div className="px-2 pb-1 text-[9.5px] uppercase tracking-wider text-slate-400/70">Configuração</div>
-            <div className="space-y-0.5">
+            <div className="px-2 pb-1 text-[9.5px] uppercase tracking-wider text-slate-400/70 hidden sm:block">Configuração</div>
+            <div className="space-y-0.5 hidden sm:block">
               {navConfig.map((i) => (
                 <div key={i.label} className="px-2 py-1.5 rounded-md flex items-center gap-2 text-slate-300/80">
-                  <i.icon className="w-3.5 h-3.5" /> {i.label}
+                  <i.icon className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{i.label}</span>
                 </div>
               ))}
             </div>
