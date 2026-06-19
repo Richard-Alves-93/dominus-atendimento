@@ -834,13 +834,19 @@ const TicketsDesktopLayout = () => {
             if (prev.some((m) => m.id === row.id)) return prev;
             return [...prev, row];
           });
-          // Drop any matching optimistic bubble for this ticket+body
+          // Drop any matching optimistic bubble for this ticket+body.
+          // Não casar quando algum lado tem body vazio (".includes('')" sempre true)
+          // — isso removia otimistas que não correspondiam à mensagem real.
           if (row.from_me) {
+            const realBody = (row.body ?? "").trim();
             setPendingMessages((prev) =>
-              prev.filter(
-                (p) =>
-                  !(p.ticketId === selectedId && (row.body ?? "").includes(p.body)),
-              ),
+              prev.filter((p) => {
+                if (p.ticketId !== selectedId) return true;
+                const pBody = (p.body ?? "").trim();
+                if (!pBody && !realBody) return false; // ambos vazios (mídia s/ caption)
+                if (!pBody || !realBody) return true;  // apenas um vazio → mantém
+                return !(realBody === pBody || realBody.includes(pBody));
+              }),
             );
           }
         },
