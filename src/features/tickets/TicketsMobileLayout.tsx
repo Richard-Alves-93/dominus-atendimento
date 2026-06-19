@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
+import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 
 // Fase C — Shell mobile com chips, filtro de setor e quick-switch.
 // Continua sem duplicar regra de negócio: recebe estado/handlers via props.
