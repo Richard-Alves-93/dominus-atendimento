@@ -2753,7 +2753,10 @@ const TicketsDesktopLayout = () => {
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Favoritar" onClick={() => { toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." }); setSelectedMessageId(null); }}>
                   <Star className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Fixar" onClick={() => { toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={pinnedMessageId === selectedMessageId ? "Desafixar" : "Fixar"} onClick={() => {
+                  const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                  if (m) { togglePinMessage(m); setSelectedMessageId(null); }
+                }}>
                   <Pin className="w-5 h-5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Encaminhar" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
