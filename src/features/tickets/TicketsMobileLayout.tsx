@@ -74,6 +74,7 @@ function formatRecTime(sec: number) {
 
 type AnyTicket = {
   id: string;
+  company_id: string;
   status: string;
   unread_count: number;
   last_message_at: string | null;
