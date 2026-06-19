@@ -1304,10 +1304,34 @@ const TicketsDesktopLayout = () => {
       }
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
-    onSuccess: (res) => {
-      setTimeout(() => {
-        setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
-      }, 1500);
+    onSuccess: async (res) => {
+      // Garante que a mensagem real esteja no cache ANTES de remover a otimista.
+      // Sem isso, se o realtime atrasar/falhar, a bolha some sem nada no lugar.
+      try {
+        await qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
+      } catch {}
+      const hasReal = () => {
+        const cur = (qc.getQueryData<MessageRow[]>(["messages", res.ticketId]) ?? []) as MessageRow[];
+        const body = (((res as any).data?.body ?? "") as string).trim();
+        // Considera real a mensagem mais recente from_me com body equivalente,
+        // ou qualquer linha cujo provider_message_id bata com a resposta.
+        const pid = (res as any).data?.provider_message_id ?? (res as any).data?.message_id ?? null;
+        return cur.some((m) => {
+          if (m.id.startsWith("tmp_")) return false;
+          if (pid && (m.provider_message_id === pid || m.external_id === pid)) return true;
+          if (m.from_me && body && (m.body ?? "").trim() === body) return true;
+          return false;
+        });
+      };
+      const drop = () => setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
+      // Tenta até 6s; depois remove de qualquer jeito para não travar a UI.
+      let tries = 0;
+      const tick = () => {
+        if (hasReal() || tries >= 12) return drop();
+        tries++;
+        window.setTimeout(tick, 500);
+      };
+      tick();
     },
     onError: (e: any, vars) => {
       setPendingMessages((prev) =>
