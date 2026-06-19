@@ -112,6 +112,7 @@ interface MessageRow {
   direction: "inbound" | "outbound";
   from_me: boolean;
   body: string | null;
+  raw_body?: string | null;
   msg_type: string;
   status: string | null;
   delivery_status?: string | null;
@@ -137,6 +138,56 @@ interface MessageRow {
   is_edited?: boolean | null;
   edited_at?: string | null;
   _optimistic?: boolean;
+}
+
+const MESSAGE_SELECT_FIELDS =
+  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at";
+
+const MIN_BODY_MATCH_CHARS = 8;
+const BODY_MATCH_WINDOW_MS = 10 * 60 * 1000;
+
+function orderedMessages(rows: MessageRow[]) {
+  return [...rows].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+function upsertMessage(rows: MessageRow[] = [], row: MessageRow) {
+  const exists = rows.some((m) => m.id === row.id);
+  const next = exists ? rows.map((m) => (m.id === row.id ? { ...m, ...row } : m)) : [...rows, row];
+  return orderedMessages(next);
+}
+
+function compactBody(v?: string | null) {
+  return (v ?? "").trim().replace(/\s+/g, " ");
+}
+
+function sameShortWindow(a?: string | null, b?: string | null) {
+  if (!a || !b) return false;
+  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= BODY_MATCH_WINDOW_MS;
+}
+
+function realMatchesPending(
+  pending: PendingMessage,
+  real: MessageRow,
+  ids?: { realId?: string | null; providerId?: string | null },
+) {
+  if (real._optimistic || real.id.startsWith("tmp_")) return false;
+  if (real.ticket_id !== pending.ticketId || !real.from_me || real.direction !== "outbound") return false;
+  if (ids?.realId && real.id === ids.realId) return true;
+  if (ids?.providerId && (real.provider_message_id === ids.providerId || real.external_id === ids.providerId)) return true;
+  if (pending.media) {
+    const mediaStoragePath = (pending.media as PendingMessage["media"] & { storagePath?: string })?.storagePath;
+    if (mediaStoragePath && real.media_storage_path === mediaStoragePath) return true;
+    return (
+      real.msg_type === pending.media.type &&
+      real.media_file_name === pending.media.fileName &&
+      real.media_size === pending.media.size &&
+      sameShortWindow(real.created_at, pending.createdAt)
+    );
+  }
+  const pendingBody = compactBody(pending.body);
+  if (pendingBody.length < MIN_BODY_MATCH_CHARS) return false;
+  const realBodies = [real.raw_body, real.body, real.media_caption].map(compactBody).filter(Boolean);
+  return realBodies.some((body) => body === pendingBody) && sameShortWindow(real.created_at, pending.createdAt);
 }
 
 
