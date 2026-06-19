@@ -1772,47 +1772,276 @@ const TicketsDesktopLayout = () => {
     setPendingUserId("");
   };
 
-  // Fase B — Shell mobile mínimo.
-  // Em telas pequenas renderiza um layout dedicado que reaproveita os mesmos
-  // estados/handlers desta página (zero duplicação de regra de negócio).
-  // O JSX desktop abaixo continua intacto.
-  if (isMobile) {
-    return (
-      <TicketsMobileLayout
-        tickets={tickets}
-        ticketsLoading={ticketsQuery.isLoading}
-        ticketsError={ticketsQuery.isError}
-        selectedId={selectedId}
-        setSelectedId={setSelectedId}
-        selected={selected}
-        visibleMessages={visibleMessages}
-        messagesLoading={messagesQuery.isLoading}
-        text={text}
-        setText={setText}
-        handleSend={handleSend}
-        filter={filter}
-        setFilter={setFilter}
-        search={search}
-        setSearch={setSearch}
-        canSeeGeneralQueue={canSeeGeneralQueue}
-        activeDepts={activeDepts}
-        deptFilter={deptFilter}
-        setDeptFilter={setDeptFilter}
-        reactionsByMsg={reactionsByMsg}
-        canEditSelected={canEditSelected}
-        canAcceptSelected={canAcceptSelected}
-        canTakeOverSelected={canTakeOverSelected}
-        acceptLoading={acceptMutation.isPending}
-        onAccept={() => acceptMutation.mutate()}
-        onTakeOver={() => setTakeOverOpen(true)}
-        onChangeStatus={changeStatus}
-        onOpenAssignDept={() => setAssignDeptOpen(true)}
-        onCopyProtocol={() => {
-          if (!selected?.protocol_number) return;
-          navigator.clipboard?.writeText(selected.protocol_number).catch(() => {});
-          toast({ title: "Protocolo copiado", description: selected.protocol_number });
+  // Modais compartilhados entre desktop e mobile (transferir setor, atribuir,
+  // assumir, preview de mídia, evento). Renderizados em ambos os layouts via
+  // {sharedModals} para evitar duplicação e garantir que ações do mobile
+  // (F.1/F.2) abram os mesmos diálogos do desktop.
+  const sharedModals = (
+    <>
+      {/* Dialog: Definir setor */}
+      <Dialog open={assignDeptOpen} onOpenChange={setAssignDeptOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selected?.department_id ? "Transferir atendimento para outro setor" : "Definir setor do atendimento"}</DialogTitle>
+            <DialogDescription>{selected?.department_id ? "Escolha o novo setor responsável. O atendimento será movido para a fila do novo setor." : "Escolha o setor responsável por este atendimento."}</DialogDescription>
+          </DialogHeader>
+          <Select value={pendingDeptId} onValueChange={setPendingDeptId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione um setor" />
+            </SelectTrigger>
+            <SelectContent>
+              {activeDepts.map((d) => (
+                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAssignDeptOpen(false)}>Cancelar</Button>
+            <Button onClick={handleDeptSaveClick} disabled={!pendingDeptId}>
+              {selected?.department_id && selected.department_id !== pendingDeptId ? "Transferir" : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm: Transferir entre setores */}
+      <AlertDialog open={transferConfirmOpen} onOpenChange={setTransferConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Transferir atendimento para {activeDepts.find((d) => d.id === pendingDeptId)?.name ?? "novo setor"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Após a transferência, o atendimento ficará disponível para o novo setor e será removido da fila do setor atual. O responsável atual será removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void saveDepartment();
+              }}
+            >
+              Transferir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog: Atribuir atendente */}
+      <Dialog open={assignUserOpen} onOpenChange={setAssignUserOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atribuir atendente</DialogTitle>
+            <DialogDescription>
+              {selected?.department_id
+                ? "Apenas atendentes do setor são listados."
+                : "Defina um setor primeiro para filtrar atendentes (opcional)."}
+            </DialogDescription>
+          </DialogHeader>
+          {assignableUsersQuery.isLoading ? (
+            <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando...
+            </div>
+          ) : (
+            <Select value={pendingUserId} onValueChange={setPendingUserId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um atendente" />
+              </SelectTrigger>
+              <SelectContent>
+                {(assignableUsersQuery.data ?? []).map((u) => (
+                  <SelectItem key={u.user_id} value={u.user_id}>
+                    {u.full_name || u.email || u.user_id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAssignUserOpen(false)}>Cancelar</Button>
+            <Button onClick={saveAssignee} disabled={!pendingUserId}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Confirm: Assumir atendimento */}
+      <AlertDialog open={takeOverOpen} onOpenChange={setTakeOverOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assumir atendimento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este atendimento está sendo realizado por{" "}
+              <span className="font-medium text-foreground">
+                {selected?.assignee?.full_name || selected?.assignee?.email || "outro atendente"}
+              </span>
+              . Deseja assumir o controle desta conversa?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={takeOverMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                takeOverMutation.mutate(takeOverReason);
+              }}
+              disabled={takeOverMutation.isPending}
+            >
+              {takeOverMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Assumir atendimento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Dialog: Preview e envio de mídia */}
+      <Dialog
+        open={!!attachFile}
+        onOpenChange={(open) => {
+          if (!open && !attachUploading) closeAttachDialog();
         }}
-      />
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar arquivo</DialogTitle>
+            <DialogDescription>
+              {attachType === "image" && "Imagem"}
+              {attachType === "video" && "Vídeo"}
+              {attachType === "audio" && "Áudio"}
+              {attachType === "document" && "Documento"}
+              {" · "}
+              {attachFile && formatBytes(attachFile.size)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3">
+            {attachType === "image" && attachPreviewUrl && (
+              <img src={attachPreviewUrl} alt="preview" className="max-h-64 rounded-lg object-contain mx-auto" />
+            )}
+            {attachType === "video" && attachPreviewUrl && (
+              <video src={attachPreviewUrl} controls className="max-h-64 rounded-lg w-full" />
+            )}
+            {attachType === "audio" && attachPreviewUrl && (
+              <audio src={attachPreviewUrl} controls className="w-full" />
+            )}
+            {attachType === "document" && attachFile && (
+              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-3">
+                <FileText className="w-8 h-8 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{attachFile.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {attachFile.type || "documento"} · {formatBytes(attachFile.size)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {attachType !== "audio" && (
+              <Input
+                placeholder="Legenda (opcional)"
+                value={attachCaption}
+                maxLength={1024}
+                onChange={(e) => setAttachCaption(e.target.value)}
+                disabled={attachUploading}
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeAttachDialog} disabled={attachUploading}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSendMedia} disabled={attachUploading}>
+              {attachUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {selected && (
+        <EventModal
+          open={eventModalOpen}
+          onOpenChange={setEventModalOpen}
+          context={{
+            mode: "ticket",
+            ticket_id: selected.id,
+            contact_id: selected.contact_id,
+            channel_id: selected.channel_id ?? undefined,
+            contactLabel: selected.contact?.name ?? selected.contact?.phone_number ?? undefined,
+          }}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ["messages", selected.id] });
+          }}
+        />
+      )}
+    </>
+  );
+
+  // Fase B/C/D/E/F — Shell mobile dedicado, reaproveitando handlers e modais.
+  if (isMobile) {
+    const replyPreviewMobile = replyingTo
+      ? {
+          sender: senderLabelFor(replyingTo),
+          preview:
+            buildPreview(replyingTo) ||
+            messageTypeLabel(replyingTo.msg_type) ||
+            "Mensagem",
+        }
+      : null;
+    return (
+      <>
+        <TicketsMobileLayout
+          tickets={tickets}
+          ticketsLoading={ticketsQuery.isLoading}
+          ticketsError={ticketsQuery.isError}
+          selectedId={selectedId}
+          setSelectedId={setSelectedId}
+          selected={selected}
+          visibleMessages={visibleMessages}
+          messagesLoading={messagesQuery.isLoading}
+          text={text}
+          setText={setText}
+          handleSend={handleSend}
+          filter={filter}
+          setFilter={setFilter}
+          search={search}
+          setSearch={setSearch}
+          canSeeGeneralQueue={canSeeGeneralQueue}
+          activeDepts={activeDepts}
+          deptFilter={deptFilter}
+          setDeptFilter={setDeptFilter}
+          reactionsByMsg={reactionsByMsg}
+          canEditSelected={canEditSelected}
+          canAcceptSelected={canAcceptSelected}
+          canTakeOverSelected={canTakeOverSelected}
+          acceptLoading={acceptMutation.isPending}
+          onAccept={() => acceptMutation.mutate()}
+          onTakeOver={() => setTakeOverOpen(true)}
+          onChangeStatus={changeStatus}
+          onOpenAssignDept={() => setAssignDeptOpen(true)}
+          onCopyProtocol={() => {
+            if (!selected?.protocol_number) return;
+            navigator.clipboard?.writeText(selected.protocol_number).catch(() => {});
+            toast({ title: "Protocolo copiado", description: selected.protocol_number });
+          }}
+          // F.2 — composer mobile
+          onFileSelected={handleFileSelected}
+          replyPreview={replyPreviewMobile}
+          onCancelReply={() => setReplyingTo(null)}
+          onOpenEvent={() => {
+            if (!selected) return;
+            setEventModalOpen(true);
+          }}
+          onShowComingSoon={(label) =>
+            toast({ title: "Em breve", description: `Envio de ${label.toLowerCase()} será adicionado em breve.` })
+          }
+          isRecording={isRecording}
+          recSeconds={recSeconds}
+          onStartRecording={startRecording}
+          onCancelRecording={cancelRecording}
+          onStopAndSendRecording={stopAndSendRecording}
+        />
+        {sharedModals}
+      </>
     );
   }
 
