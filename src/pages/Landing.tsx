@@ -322,9 +322,9 @@ function MockChat() {
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen w-full max-w-full bg-background overflow-x-hidden">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-40">
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 overflow-hidden">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
               <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
@@ -348,36 +348,43 @@ export default function Landing() {
 
       <main>
         {/* HERO */}
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-12 md:pt-24 md:pb-16 overflow-hidden">
-          <div className="grid lg:grid-cols-2 gap-10 items-center">
-            <div className="text-center lg:text-left">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1] break-words">
+        <section className="w-full max-w-full overflow-hidden pt-12 pb-12 md:pt-24 md:pb-16">
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center min-w-0">
+            <div className="text-center lg:text-left w-full max-w-full min-w-0">
+              <h1 className="max-w-full text-[36px] sm:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight mb-5 leading-[1.05] break-words">
                 Organize todos os atendimentos da sua empresa em um só lugar.
               </h1>
-              <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
-                Com o Dominus, sua equipe centraliza atendimentos de{" "}
-                <Typewriter words={["WhatsApp", "Instagram", "Facebook", "E-mail", "todos os seus canais"]} />{" "}
-                com mais organização, histórico, setores, responsáveis e
-                acompanhamento em tempo real.
+              <p className="max-w-full text-base sm:text-lg lg:text-xl leading-relaxed break-words text-muted-foreground mb-7 mx-auto lg:mx-0 lg:max-w-xl">
+                <span className="sm:hidden">
+                  Com o Dominus, sua equipe centraliza atendimentos de todos os canais com mais organização, histórico e acompanhamento em tempo real.
+                </span>
+                <span className="hidden sm:inline">
+                  Com o Dominus, sua equipe centraliza atendimentos de{" "}
+                  <Typewriter words={["WhatsApp", "Instagram", "Facebook", "E-mail", "todos os seus canais"]} />{" "}
+                  com mais organização, histórico, setores, responsáveis e
+                  acompanhamento em tempo real.
+                </span>
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
-                <Button asChild size="lg" className="gradient-primary text-primary-foreground w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 w-full max-w-full">
+                <Button asChild size="lg" className="gradient-primary text-primary-foreground w-full sm:w-auto max-w-full">
                   <Link to="/cadastro">Começar agora <ArrowRight className="w-4 h-4 ml-2" /></Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
+                <Button asChild size="lg" variant="outline" className="w-full sm:w-auto max-w-full">
                   <a href="#como-funciona">Ver como funciona</a>
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-4">
-                Teste grátis · Sem cartão de crédito · Suporte em português
+              <p className="max-w-full flex flex-wrap justify-center lg:justify-start gap-x-2 gap-y-1 text-xs text-muted-foreground mt-4">
+                <span>Teste grátis</span><span>·</span><span>Sem cartão de crédito</span><span className="hidden sm:inline">·</span><span className="hidden sm:inline">Suporte em português</span>
               </p>
             </div>
 
-            <div className="lg:pl-4 w-full max-w-full">
-              <div className="w-full max-w-[560px] mx-auto">
+            <div className="w-full max-w-full overflow-hidden px-0 sm:px-4 lg:px-0 lg:pl-4 min-w-0">
+              <div className="w-full max-w-[360px] sm:max-w-[520px] lg:max-w-none mx-auto min-w-0">
                 <MockChat />
               </div>
             </div>
+          </div>
           </div>
         </section>
 
