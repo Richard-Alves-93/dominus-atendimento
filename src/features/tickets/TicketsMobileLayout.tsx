@@ -337,6 +337,9 @@ export default function TicketsMobileLayout(props: Props) {
     setSelectedMsgIds(new Set());
   };
   useEffect(() => { clearSelection(); }, [selectedId]);
+  // G.6 — encaminhamento (mobile)
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const qcMobile = useQueryClient();
 
 
   const mobileReactionAudit = (label: string, payload: Record<string, unknown>) => {
