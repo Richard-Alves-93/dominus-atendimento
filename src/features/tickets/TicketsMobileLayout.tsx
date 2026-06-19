@@ -1,27 +1,24 @@
-import { ArrowLeft, Loader2, Send } from "lucide-react";
+import { ArrowLeft, Filter, Loader2, Send } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 
-// Fase B — Shell mobile mínimo.
-// Não duplica regra de negócio: recebe via props o estado/handlers já
-// existentes no TicketsDesktopLayout (ticketsQuery, messagesQuery, selectedId,
-// setSelectedId, text, setText, handleSend, filter, setFilter, etc.) e apenas
-// reembala num shell adequado a telas pequenas.
-//
-// Funcionalidades não implementadas nesta fase (virão nas Fases C–E):
-//   sidebar compacta, carrossel, mídias, anexos, gravação de áudio, reply,
-//   reações, mensagens rápidas, transferência, assumir, refinamentos visuais.
-// Em todos esses casos o usuário ainda pode usar o desktop ou aguardar fases
-// seguintes. Esta fase entrega: listar, abrir, voltar, ler mensagens e enviar
-// texto puro.
+// Fase C — Shell mobile com chips, filtro de setor e quick-switch.
+// Continua sem duplicar regra de negócio: recebe estado/handlers via props.
 
 type AnyTicket = {
   id: string;
   status: string;
   unread_count: number;
   last_message_at: string | null;
+  department_id: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
   department: { id: string; name: string } | null;
   assignee?: { id: string; full_name: string | null; email: string | null } | null;
@@ -36,6 +33,8 @@ type AnyMessage = {
   created_at: string;
   source?: string | null;
 };
+
+type AnyDept = { id: string; name: string; status: string };
 
 type ListFilter = "open" | "pending" | "closed" | "todos" | "fila" | "meus";
 
@@ -56,6 +55,9 @@ interface Props {
   search: string;
   setSearch: (s: string) => void;
   canSeeGeneralQueue: boolean;
+  activeDepts: AnyDept[];
+  deptFilter: string;
+  setDeptFilter: (id: string) => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -72,6 +74,12 @@ function fmtTime(iso?: string | null) {
   const sameDay = d.toDateString() === today.toDateString();
   if (sameDay) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return d.toLocaleDateString();
+}
+
+function firstName(name?: string | null, phone?: string | null) {
+  const s = (name || phone || "").trim();
+  if (!s) return "Sem nome";
+  return s.split(/\s+/)[0].slice(0, 14);
 }
 
 export default function TicketsMobileLayout(props: Props) {
@@ -92,10 +100,26 @@ export default function TicketsMobileLayout(props: Props) {
     search,
     setSearch,
     canSeeGeneralQueue,
+    activeDepts,
+    deptFilter,
+    setDeptFilter,
   } = props;
+
+  const filterOptions = [
+    { value: "open" as const, label: "Abertos" },
+    { value: "pending" as const, label: "Pendentes" },
+    { value: "closed" as const, label: "Fechados" },
+    ...(canSeeGeneralQueue ? [{ value: "fila" as const, label: "Fila" }] : []),
+    { value: "meus" as const, label: "Meus" },
+  ];
 
   // ───────────────────── Lista de tickets ─────────────────────
   if (!selectedId) {
+    const deptLabel =
+      deptFilter === "all"
+        ? null
+        : activeDepts.find((d) => d.id === deptFilter)?.name ?? null;
+
     return (
       <AppLayout title="Atendimentos">
         <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background">
@@ -106,28 +130,54 @@ export default function TicketsMobileLayout(props: Props) {
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 bg-secondary border-0"
             />
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              {(
-                [
-                  ["open", "Abertos"],
-                  ["pending", "Pendentes"],
-                  ["closed", "Fechados"],
-                  ...(canSeeGeneralQueue ? [["fila", "Fila"] as const] : []),
-                  ["meus", "Meus"],
-                ] as Array<readonly [ListFilter, string]>
-              ).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setFilter(k)}
-                  className={`shrink-0 text-xs px-3 h-7 rounded-full border transition ${
-                    filter === k
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-transparent"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex items-center gap-1.5">
+              <MobileFilterChips
+                value={filter}
+                onChange={setFilter}
+                options={filterOptions}
+                ariaLabel="Filtro de atendimentos"
+                className="flex-1"
+              />
+              {activeDepts.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className={`shrink-0 inline-flex items-center gap-1 text-xs px-2.5 h-7 rounded-full border transition ${
+                        deptFilter !== "all"
+                          ? "bg-primary/15 text-primary border-primary/30"
+                          : "bg-muted text-muted-foreground border-transparent"
+                      }`}
+                      aria-label="Filtrar por setor"
+                    >
+                      <Filter className="w-3 h-3" />
+                      <span className="max-w-[80px] truncate">
+                        {deptLabel ?? "Setor"}
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-56 p-1">
+                    <button
+                      onClick={() => setDeptFilter("all")}
+                      className={`w-full text-left text-sm px-3 py-2 rounded-md hover:bg-muted ${
+                        deptFilter === "all" ? "bg-muted font-medium" : ""
+                      }`}
+                    >
+                      Todos os setores
+                    </button>
+                    {activeDepts.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => setDeptFilter(d.id)}
+                        className={`w-full text-left text-sm px-3 py-2 rounded-md hover:bg-muted ${
+                          deptFilter === d.id ? "bg-muted font-medium" : ""
+                        }`}
+                      >
+                        {d.name}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
           </div>
 
@@ -195,6 +245,9 @@ export default function TicketsMobileLayout(props: Props) {
   const name = selected?.contact?.name || selected?.contact?.phone_number || "Atendimento";
   const phone = selected?.contact?.phone_number || "";
 
+  // Quick-switch: top 6 tickets para troca rápida (inclui o atual).
+  const quickStrip = tickets.slice(0, 6);
+
   return (
     <AppLayout title="Atendimentos">
       <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[hsl(var(--muted))]/30">
@@ -234,6 +287,50 @@ export default function TicketsMobileLayout(props: Props) {
             </span>
           )}
         </div>
+
+        {/* Quick-switch carousel */}
+        {quickStrip.length > 1 && (
+          <div className="border-b bg-background px-2 py-2 flex gap-2 overflow-x-auto scrollbar-thin shrink-0">
+            {quickStrip.map((t) => {
+              const isActive = t.id === selectedId;
+              const tName = firstName(t.contact?.name, t.contact?.phone_number);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedId(t.id)}
+                  className={`shrink-0 flex flex-col items-center gap-1 px-1.5 py-1 rounded-md min-w-[56px] ${
+                    isActive ? "bg-success/15" : ""
+                  }`}
+                  aria-pressed={isActive}
+                >
+                  <div className="relative">
+                    <div className={`h-9 w-9 rounded-full overflow-hidden bg-primary/15 text-primary flex items-center justify-center text-[10px] font-semibold ${
+                      isActive ? "ring-2 ring-success" : ""
+                    }`}>
+                      {t.contact?.avatar_url ? (
+                        <img
+                          src={t.contact.avatar_url}
+                          alt={tName}
+                          className="h-9 w-9 rounded-full object-cover"
+                        />
+                      ) : (
+                        initials(t.contact?.name, t.contact?.phone_number)
+                      )}
+                    </div>
+                    {t.unread_count > 0 && (
+                      <span className="absolute -top-1 -right-1 text-[8.5px] min-w-[14px] h-[14px] px-1 rounded-full bg-success text-white flex items-center justify-center">
+                        {t.unread_count}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] truncate max-w-[56px] ${isActive ? "font-semibold" : "text-muted-foreground"}`}>
+                    {tName}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Mensagens */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
