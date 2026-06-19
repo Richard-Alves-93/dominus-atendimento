@@ -355,6 +355,54 @@ function extractBody(m: any): string | null {
   );
 }
 
+function isTechnicalWhatsAppEvent(m: any): { technical: boolean; reason: string | null } {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const keys = Object.keys(msg);
+  if (!keys.length) return { technical: false, reason: null };
+
+  if (msg.secretEncryptedMessage) return { technical: true, reason: "secretEncryptedMessage" };
+  if (msg.protocolMessage) return { technical: true, reason: "protocolMessage" };
+  if (msg.senderKeyDistributionMessage) return { technical: true, reason: "senderKeyDistributionMessage" };
+
+  const usefulBody = extractBody({ message: msg });
+  const usefulMedia = extractMediaInfo({ message: msg });
+  const technicalOnlyKeys = new Set([
+    "messageContextInfo",
+    "deviceListMetadata",
+    "senderKeyDistributionMessage",
+    "protocolMessage",
+    "secretEncryptedMessage",
+  ]);
+  const onlyTechnicalKeys = keys.every((key) => technicalOnlyKeys.has(key));
+  if (!usefulBody && !usefulMedia && onlyTechnicalKeys) {
+    return { technical: true, reason: "technical_keys_without_chat_content" };
+  }
+
+  return { technical: false, reason: null };
+}
+
+function auditTechnicalEventSkipped(inst: any, source: string, m: any, reason: string | null, editInfo: ReturnType<typeof extractEditInfo>) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  console.log("[WHATSAPP_TECHNICAL_EVENT_SKIPPED]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    instance_name: inst.instance_name ?? null,
+    event_type: source,
+    reason,
+    message_id: m?.key?.id ?? m?.update?.key?.id ?? m?.id ?? null,
+    has_protocolMessage: !!msg.protocolMessage,
+    protocol_type: msg.protocolMessage?.type ?? null,
+    has_secretEncryptedMessage: !!msg.secretEncryptedMessage,
+    secret_enc_type: msg.secretEncryptedMessage?.secretEncType ?? null,
+    target_message_id_present: !!msg.secretEncryptedMessage?.targetMessageKey?.id,
+    edit_detected: !!editInfo,
+    skipped_insert: true,
+    skipped_unread_increment: true,
+    message_keys: Object.keys(msg),
+    key: safeKeyAudit(m?.key ?? m?.update?.key ?? {}),
+  });
+}
+
 // Detect WhatsApp/Baileys "message edit" payloads.
 // Edits arrive in two shapes depending on Evolution event:
 //  - messages.upsert with message.protocolMessage { type: 14 (MESSAGE_EDIT), key.id: <originalId>, editedMessage: { ... } }
@@ -631,11 +679,14 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 
     // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
     const editInfo = extractEditInfo(m);
+    const technicalEvent = isTechnicalWhatsAppEvent(m);
+    if (detectMsgType(m) === "other") auditOtherMessage(inst, m, source);
     if (editInfo || m?.message?.protocolMessage || m?.message?.editedMessage || m?.message?.secretEncryptedMessage) {
       auditEditDetection(inst, source, m, editInfo);
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, m, editInfo, source);
+      auditTechnicalEventSkipped(inst, source, m, technicalEvent.reason ?? editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
         channel_id: inst.channel_id,
@@ -643,6 +694,11 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         edit_applied: editApplied,
         skipped_insert: true,
       });
+      continue;
+    }
+    if (technicalEvent.technical) {
+      auditEditDetection(inst, source, m, null);
+      auditTechnicalEventSkipped(inst, source, m, technicalEvent.reason, null);
       continue;
     }
 
@@ -1063,6 +1119,7 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, u, editInfo, source);
+      auditTechnicalEventSkipped(inst, source, u, editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
         channel_id: inst.channel_id,
@@ -1070,6 +1127,12 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
         edit_applied: editApplied,
         skipped_insert: true,
       });
+      continue;
+    }
+    const technicalEvent = isTechnicalWhatsAppEvent(u);
+    if (technicalEvent.technical) {
+      auditEditDetection(inst, source, u, null);
+      auditTechnicalEventSkipped(inst, source, u, technicalEvent.reason, null);
       continue;
     }
     const providerId: string | undefined =
