@@ -122,15 +122,15 @@ export default function TicketsMobileLayout(props: Props) {
 
     return (
       <AppLayout title="Atendimentos">
-        <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background">
-          <div className="p-3 space-y-2 border-b">
+        <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background w-full max-w-full overflow-x-hidden min-w-0">
+          <div className="p-3 space-y-2 border-b min-w-0 max-w-full">
             <Input
               placeholder="Buscar atendimentos..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 bg-secondary border-0"
             />
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
               <MobileFilterChips
                 value={filter}
                 onChange={setFilter}
@@ -250,9 +250,9 @@ export default function TicketsMobileLayout(props: Props) {
 
   return (
     <AppLayout title="Atendimentos">
-      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[hsl(var(--muted))]/30">
+      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[hsl(var(--muted))]/30 w-full max-w-full overflow-x-hidden min-w-0">
         {/* Header */}
-        <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0">
+        <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0 min-w-0 max-w-full">
           <Button
             size="icon"
             variant="ghost"
@@ -382,13 +382,13 @@ export default function TicketsMobileLayout(props: Props) {
         </div>
 
         {/* Composer mínimo (apenas texto nesta fase) */}
-        <div className="border-t bg-background px-2 py-2 flex items-end gap-2 shrink-0">
+        <div className="border-t bg-background px-2 py-2 flex items-end gap-2 shrink-0 w-full max-w-full min-w-0">
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Digite..."
             rows={1}
-            className="min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-muted border-0 px-3 py-2 text-sm"
+            className="flex-1 min-w-0 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-muted border-0 px-3 py-2 text-sm"
           />
           <Button
             size="icon"

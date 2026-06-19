@@ -32,7 +32,7 @@ export function MobileFilterChips<T extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className={`flex items-center gap-1.5 overflow-x-auto scrollbar-thin -mx-1 px-1 ${className ?? ""}`}
+      className={`flex items-center gap-1.5 overflow-x-auto scrollbar-thin min-w-0 max-w-full ${className ?? ""}`}
     >
       {options.map((opt) => {
         const active = opt.value === value;
