@@ -309,9 +309,10 @@ export default function TicketsMobileLayout(props: Props) {
     try {
       await Promise.resolve(onToggleReaction(snapshot, emoji));
       // Mantém o Sheet aberto por enquanto para isolar o fluxo de toque/mutation.
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const reactionError = err as Error & { __reactionToastShown?: boolean };
       console.error("[MOBILE_REACTION_ERROR]", err);
-      if (!err?.__reactionToastShown) {
+      if (!reactionError.__reactionToastShown) {
         toast({
           title: "Falha ao reagir",
           description: err instanceof Error ? err.message : String(err),

@@ -1406,10 +1406,11 @@ const TicketsDesktopLayout = () => {
         reactionsForMessage: nextRows.filter((r) => r.message_id === m.id),
       });
       qc.invalidateQueries({ queryKey: reactionKey });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const reactionError = e as Error & { __reactionToastShown?: boolean };
       console.error("[MOBILE_REACTION_ERROR]", e);
-      toast({ title: "Falha ao reagir", description: e?.message ?? String(e), variant: "destructive" });
-      e.__reactionToastShown = true;
+      toast({ title: "Falha ao reagir", description: reactionError?.message ?? String(e), variant: "destructive" });
+      reactionError.__reactionToastShown = true;
       throw e;
     }
   };
