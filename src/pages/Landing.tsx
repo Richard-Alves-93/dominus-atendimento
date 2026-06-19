@@ -123,7 +123,7 @@ function MockChat() {
   ];
 
   return (
-    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden w-full max-w-full">
+    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden w-full max-w-full min-w-0">
       {/* Top window bar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/40">
         <span className="w-2.5 h-2.5 rounded-full bg-destructive/70 shrink-0" />
@@ -132,10 +132,10 @@ function MockChat() {
         <span className="ml-3 text-[11px] text-muted-foreground truncate">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[52px_130px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[400px] sm:h-[440px] lg:h-[460px] text-sm">
+      <div className="grid grid-cols-[44px_112px_minmax(0,1fr)] min-[390px]:grid-cols-[48px_126px_minmax(0,1fr)] sm:grid-cols-[160px_210px_minmax(0,1fr)] lg:grid-cols-[190px_240px_minmax(0,1fr)] h-[360px] min-[390px]:h-[390px] sm:h-[440px] lg:h-[460px] text-sm min-w-0">
 
         {/* Sidebar */}
-        <aside className="bg-[#0b1220] text-slate-200 flex flex-col">
+        <aside className="bg-[#0b1220] text-slate-200 flex flex-col min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 px-3 h-12 border-b border-white/10">
             <div className="w-7 h-7 rounded-md gradient-primary flex items-center justify-center">
               <Zap className="w-4 h-4 text-primary-foreground" />
@@ -178,24 +178,24 @@ function MockChat() {
         </aside>
 
         {/* Conversation list */}
-        <div className="border-r flex flex-col bg-background">
-          <div className="px-3 pt-2.5 pb-1.5 flex items-center justify-between">
+        <div className="border-r flex flex-col bg-background min-w-0 overflow-hidden">
+          <div className="px-2 sm:px-3 pt-2.5 pb-1.5 flex items-center justify-between gap-1 min-w-0">
             <span className="text-[13px] font-semibold">Atendimentos</span>
-            <span className="text-[10px] text-muted-foreground">{conversations.length} ativos</span>
+            <span className="text-[10px] text-muted-foreground shrink-0 hidden min-[390px]:inline">{conversations.length} ativos</span>
           </div>
-          <div className="px-3 pb-2 flex items-center gap-1.5">
+          <div className="px-2 sm:px-3 pb-2 flex items-center gap-1.5 min-w-0">
             <div className="flex-1 h-7 rounded-md border bg-muted/40 flex items-center gap-1.5 px-2">
               <Search className="w-3 h-3 text-muted-foreground" />
-              <span className="text-[11px] text-muted-foreground">Buscar atendimentos...</span>
+              <span className="text-[11px] text-muted-foreground truncate hidden min-[390px]:inline">Buscar atendimentos...</span>
             </div>
             <button className="w-7 h-7 rounded-md gradient-primary flex items-center justify-center shrink-0">
               <span className="text-primary-foreground text-sm leading-none">+</span>
             </button>
           </div>
-          <div className="px-2 pb-1.5 flex gap-1 border-b">
+          <div className="px-2 pb-1.5 flex gap-1 border-b overflow-hidden">
             <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-primary text-primary-foreground">Abertos</span>
-            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Pendentes</span>
-            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Fechados</span>
+            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground hidden min-[390px]:inline">Pendentes</span>
+            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground hidden sm:inline">Fechados</span>
           </div>
           <div className="px-2 py-1.5 border-b flex items-center gap-1 text-[10.5px] text-muted-foreground">
             <Filter className="w-3 h-3" /> Todos os setores
@@ -244,8 +244,8 @@ function MockChat() {
         </div>
 
         {/* Chat */}
-        <section className="flex flex-col bg-[hsl(var(--muted))]/30">
-          <div className="h-14 border-b px-4 flex items-center justify-between bg-background">
+        <section className="flex flex-col bg-[hsl(var(--muted))]/30 min-w-0 overflow-hidden">
+          <div className="h-14 border-b px-2 sm:px-4 flex items-center justify-between bg-background gap-2 min-w-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 bg-primary/15">
                 <img
@@ -270,7 +270,7 @@ function MockChat() {
             </div>
           </div>
 
-          <div className="flex-1 px-4 py-4 space-y-2 overflow-hidden">
+          <div className="flex-1 px-2 sm:px-4 py-4 space-y-2 overflow-hidden">
             <div className="flex justify-start">
               <div className="max-w-[78%] bg-background border rounded-2xl rounded-tl-sm px-3 py-2 text-[12.5px] shadow-card">
                 Olá, gostaria de saber mais sobre o serviço.
