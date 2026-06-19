@@ -354,6 +354,24 @@ const TicketsDesktopLayout = () => {
   const [replyingTo, setReplyingTo] = useState<MessageRow | null>(null);
   const isMobile = useIsMobile();
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  // G.5 — modo de seleção múltipla
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const enterSelection = (id: string) => {
+    setSelectionMode(true);
+    setSelectedMessageIds(new Set([id]));
+  };
+  const toggleSelected = (id: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => {
+    setSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  };
   const longPressTimerRef = useRef<number | null>(null);
   const clearLongPress = () => {
     if (longPressTimerRef.current) {
