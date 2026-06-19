@@ -657,6 +657,9 @@ export default function TicketsMobileLayout(props: Props) {
                 acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
                 return acc;
               }, {});
+              const myReactionEmoji = profileId
+                ? reactions.find((r) => r.user_id === profileId)?.emoji
+                : undefined;
 
               return (
                 <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
