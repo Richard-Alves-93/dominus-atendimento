@@ -1280,12 +1280,18 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
   for (const u of dataArr) {
     // Edit detection: messages.update can carry editedMessage/protocolMessage.
     // Detect FIRST so we don't mistakenly treat an edit as a status update.
-    const editInfo = extractEditInfo(u);
+    let editInfo = extractEditInfo(u);
+    if (!editInfo) {
+      const sameProviderEdit = await detectSameProviderContentEdit(admin, inst, u);
+      if (sameProviderEdit.editInfo) editInfo = sameProviderEdit.editInfo;
+    }
     if (editInfo || u?.message?.protocolMessage || u?.message?.editedMessage || u?.message?.secretEncryptedMessage || u?.update?.message?.protocolMessage || u?.update?.message?.editedMessage || u?.update?.message?.secretEncryptedMessage) {
       auditEditDetection(inst, source, u, editInfo);
+      auditEditPayloadStructure(inst, source, u, editInfo);
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, u, editInfo, source);
+      auditEditEventSequence(inst, source, u, editInfo, true, true);
       auditTechnicalEventSkipped(inst, source, u, editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
@@ -1299,6 +1305,8 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
     const technicalEvent = isTechnicalWhatsAppEvent(u);
     if (technicalEvent.technical) {
       auditEditDetection(inst, source, u, null);
+      auditEditPayloadStructure(inst, source, u, null);
+      auditEditEventSequence(inst, source, u, null, false, true);
       auditTechnicalEventSkipped(inst, source, u, technicalEvent.reason, null);
       continue;
     }
