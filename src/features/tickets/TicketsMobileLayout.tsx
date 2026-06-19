@@ -240,7 +240,36 @@ export default function TicketsMobileLayout(props: Props) {
     onStartRecording,
     onCancelRecording,
     onStopAndSendRecording,
+    profileId = null,
+    onToggleReaction,
+    onCopyMessage,
+    onReplyMessage,
+    onComingSoonAction,
   } = props;
+
+  // F.3 — long-press → bottom sheet de ações da mensagem
+  const [actionMsg, setActionMsg] = useState<AnyMessage | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+  const startLongPress = (m: AnyMessage) => {
+    if (m._optimistic || m.source === "system") return;
+    clearLongPress();
+    longPressFiredRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      setActionMsg(m);
+      try { (navigator as any).vibrate?.(20); } catch { /* noop */ }
+    }, 450);
+  };
+  const closeActionSheet = () => setActionMsg(null);
+  const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
 
   const documentInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
