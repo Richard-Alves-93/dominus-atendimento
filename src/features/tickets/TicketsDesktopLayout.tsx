@@ -2539,6 +2539,10 @@ const TicketsDesktopLayout = () => {
           onComingSoonAction={(label) => toast({ title: "Em breve", description: `${label} será implementado em próxima etapa.` })}
           pinnedIds={pinnedIds}
           onTogglePinTicket={togglePinTicket}
+          pinnedMessageId={pinnedMessageId}
+          pinnedMessagePreview={pinnedMessagePreview}
+          onTogglePinMessage={togglePinMessage}
+          onUnpinMessage={unpinMessage}
         />
         {sharedModals}
       </>
