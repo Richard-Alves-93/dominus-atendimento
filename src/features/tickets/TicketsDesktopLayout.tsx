@@ -1440,6 +1440,90 @@ const TicketsDesktopLayout = () => {
     from_me: m.from_me,
   });
 
+  // G.3 — mensagem fixada do ticket selecionado
+  const pinnedMessageQuery = useQuery({
+    queryKey: ["pinned-message", selectedId],
+    enabled: !!selectedId && !!activeCompanyId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pinned_messages")
+        .select("id, message_id, pinned_by, created_at")
+        .eq("ticket_id", selectedId)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+  });
+  const pinnedMessageId: string | null = pinnedMessageQuery.data?.message_id ?? null;
+
+  const togglePinMessage = async (m: MessageRow) => {
+    if (!profile?.id || !activeCompanyId || !selectedId) return;
+    if (m._optimistic || m.id.startsWith("tmp_")) {
+      toast({ title: "Aguarde", description: "Mensagem ainda não confirmada." });
+      return;
+    }
+    try {
+      if (pinnedMessageId === m.id) {
+        const { error } = await (supabase as any)
+          .from("pinned_messages")
+          .delete()
+          .eq("ticket_id", selectedId);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("pinned_messages")
+          .upsert(
+            { company_id: activeCompanyId, ticket_id: selectedId, message_id: m.id, pinned_by: profile.id },
+            { onConflict: "ticket_id" }
+          );
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["pinned-message", selectedId] });
+    } catch (e: any) {
+      toast({ title: "Não foi possível fixar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+  const unpinMessage = async () => {
+    if (!selectedId) return;
+    try {
+      const { error } = await (supabase as any)
+        .from("pinned_messages")
+        .delete()
+        .eq("ticket_id", selectedId);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["pinned-message", selectedId] });
+    } catch (e: any) {
+      toast({ title: "Erro ao desafixar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+  const pinnedMessagePreview = useMemo(() => {
+    if (!pinnedMessageId) return null;
+    const m = (messagesQuery.data ?? []).find((x) => x.id === pinnedMessageId) as MessageRow | undefined;
+    if (m) {
+      return {
+        sender: senderLabelFor(m),
+        preview: buildPreview(m) || messageTypeLabel(m.msg_type) || "Mensagem",
+        found: true as const,
+      };
+    }
+    return { sender: "Mensagem fixada", preview: "Não está no histórico recente", found: false as const };
+  }, [pinnedMessageId, messagesQuery.data, selected]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const c = scrollContainerRef.current;
+    if (!c) return;
+    const el = c.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!el) {
+      toast({ title: "Mensagem não carregada", description: "Está fora do histórico recente." });
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary/60", "rounded-lg");
+    setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-lg"), 1500);
+  }, [toast]);
+
   // ── Reações por emoji ──────────────────────────────────────────
   type ReactionRow = { id: string; message_id: string; user_id: string; emoji: string };
   const reactionsQuery = useQuery({
@@ -2455,6 +2539,10 @@ const TicketsDesktopLayout = () => {
           onComingSoonAction={(label) => toast({ title: "Em breve", description: `${label} será implementado em próxima etapa.` })}
           pinnedIds={pinnedIds}
           onTogglePinTicket={togglePinTicket}
+          pinnedMessageId={pinnedMessageId}
+          pinnedMessagePreview={pinnedMessagePreview}
+          onTogglePinMessage={togglePinMessage}
+          onUnpinMessage={unpinMessage}
         />
         {sharedModals}
       </>
@@ -2669,7 +2757,10 @@ const TicketsDesktopLayout = () => {
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Favoritar" onClick={() => { toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." }); setSelectedMessageId(null); }}>
                   <Star className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Fixar" onClick={() => { toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={pinnedMessageId === selectedMessageId ? "Desafixar" : "Fixar"} onClick={() => {
+                  const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                  if (m) { togglePinMessage(m); setSelectedMessageId(null); }
+                }}>
                   <Pin className="w-5 h-5" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Encaminhar" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado em próxima etapa." }); setSelectedMessageId(null); }}>
@@ -2809,6 +2900,25 @@ const TicketsDesktopLayout = () => {
             </div>
             )}
 
+            {pinnedMessagePreview && (
+              <div className="px-3 py-2 border-b bg-card/70 backdrop-blur flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => pinnedMessageId && scrollToMessage(pinnedMessageId)}
+                  className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-md border-l-2 border-primary/60 bg-muted/40 hover:bg-muted/60 px-2 py-1.5"
+                  title="Ir para a mensagem fixada"
+                >
+                  <Pin className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-primary leading-tight">Mensagem fixada</p>
+                    <p className="text-xs text-foreground/80 truncate">{pinnedMessagePreview.preview}</p>
+                  </div>
+                </button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Desafixar" onClick={() => unpinMessage()}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
             <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
@@ -2853,7 +2963,7 @@ const TicketsDesktopLayout = () => {
                   const hasReply = !!(m.reply_to_message_id || m.reply_to_preview);
                   const replyUnavailable = hasReply && !replyPreview;
                   return (
-                  <div key={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"}`}>
+                  <div key={m.id} data-message-id={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"} transition-shadow`}>
                     <div className="relative max-w-[70%]">
                       {/* Mobile reaction strip when selected */}
                       {isMobile && selectedMessageId === m.id && !m._optimistic && m.source !== "system" && (
@@ -3064,9 +3174,9 @@ const TicketsDesktopLayout = () => {
                                 <Forward className="w-4 h-4 mr-2" /> Encaminhar
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." })}
+                                onClick={() => togglePinMessage(m)}
                               >
-                                <Pin className="w-4 h-4 mr-2" /> Fixar
+                                <Pin className="w-4 h-4 mr-2" /> {pinnedMessageId === m.id ? "Desafixar" : "Fixar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." })}

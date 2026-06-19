@@ -170,6 +170,11 @@ interface Props {
   // G.2 — fixar conversa na lista
   pinnedIds?: Set<string>;
   onTogglePinTicket?: (ticketId: string, companyId: string) => void | Promise<void>;
+  // G.3 — fixar mensagem dentro da conversa
+  pinnedMessageId?: string | null;
+  pinnedMessagePreview?: { sender: string; preview: string; found: boolean } | null;
+  onTogglePinMessage?: (m: AnyMessage) => void | Promise<void>;
+  onUnpinMessage?: () => void | Promise<void>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -253,6 +258,10 @@ export default function TicketsMobileLayout(props: Props) {
     onComingSoonAction,
     pinnedIds,
     onTogglePinTicket,
+    pinnedMessageId = null,
+    pinnedMessagePreview = null,
+    onTogglePinMessage,
+    onUnpinMessage,
   } = props;
   const pinnedSet = pinnedIds ?? new Set<string>();
 
@@ -824,6 +833,42 @@ export default function TicketsMobileLayout(props: Props) {
           </div>
         )}
 
+        {/* G.3 — Mensagem fixada */}
+        {pinnedMessagePreview && (
+          <div className="px-3 py-2 border-b bg-card/80 backdrop-blur flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (!pinnedMessageId) return;
+                const c = messagesContainerRef.current;
+                const el = c?.querySelector<HTMLElement>(`[data-message-id="${pinnedMessageId}"]`);
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.add("ring-2", "ring-primary/60", "rounded-lg");
+                  setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-lg"), 1500);
+                } else {
+                  onShowComingSoon?.("Mensagem fora do histórico recente");
+                }
+              }}
+              className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-md border-l-2 border-primary/60 bg-muted/40 px-2 py-1.5"
+            >
+              <Pin className="w-3.5 h-3.5 text-primary shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-primary leading-tight">Mensagem fixada</p>
+                <p className="text-xs text-foreground/80 truncate">{pinnedMessagePreview.preview}</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onUnpinMessage?.()}
+              aria-label="Desafixar"
+              className="h-7 w-7 shrink-0 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Mensagens */}
         <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
         <div
@@ -864,7 +909,7 @@ export default function TicketsMobileLayout(props: Props) {
               }, {});
 
               return (
-                <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div key={m.id} data-message-id={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                   <div className="relative max-w-[82%] min-w-0">
                     <div
                       role="button"
@@ -1172,10 +1217,10 @@ export default function TicketsMobileLayout(props: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => showComing("Fixar mensagem")}
+                    onClick={() => { onTogglePinMessage?.(actionMsg); closeActionSheet(); }}
                     className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
                   >
-                    <Pin className="w-4 h-4 text-muted-foreground" /> Fixar
+                    <Pin className="w-4 h-4 text-muted-foreground" /> {pinnedMessageId === actionMsg.id ? "Desafixar" : "Fixar"}
                   </button>
                   <button
                     type="button"
