@@ -183,7 +183,7 @@ function realMatchesPending(
   if (ids?.realId && real.id === ids.realId) return true;
   if (ids?.providerId && (real.provider_message_id === ids.providerId || real.external_id === ids.providerId)) return true;
   if (pending.media) {
-    const mediaStoragePath = (pending.media as PendingMessage["media"] & { storagePath?: string })?.storagePath;
+    const mediaStoragePath = pending.media.storagePath;
     if (mediaStoragePath && real.media_storage_path === mediaStoragePath) return true;
     return (
       real.msg_type === pending.media.type &&
@@ -866,6 +866,7 @@ const TicketsDesktopLayout = () => {
     const { data, error } = await supabase
       .from("messages")
       .select(MESSAGE_SELECT_FIELDS)
+      .eq("company_id", activeCompanyId!)
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: false })
       .limit(500);
@@ -883,7 +884,7 @@ const TicketsDesktopLayout = () => {
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
-    enabled: !!selectedId,
+    enabled: !!selectedId && !!activeCompanyId,
     queryFn: () => fetchMessagesForTicket(selectedId!),
   });
 
