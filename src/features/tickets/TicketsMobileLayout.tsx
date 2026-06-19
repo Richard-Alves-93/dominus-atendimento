@@ -940,38 +940,42 @@ export default function TicketsMobileLayout(props: Props) {
               <div className="px-3 pt-3 pb-4 flex flex-col gap-2">
                 {/* Linha rápida de reações */}
                 <div className="flex items-center justify-around bg-muted/60 rounded-full px-2 py-1.5">
-                  {QUICK_EMOJIS.map((emo) => (
-                    <button
-                      key={emo}
-                      type="button"
-                      // F.3-fix #6/#7/#8: usar onPointerDown garante disparo
-                      // antes do Sheet começar a fechar em iOS/Android e
-                      // evita que o overlay engula o tap.
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const snapshot = actionMsg;
-                        // Fecha primeiro o sheet (visualmente) e dispara
-                        // a mutation logo em seguida — o invalidate do
-                        // desktop atualiza reactionsByMsg e o badge.
+                  {QUICK_EMOJIS.map((emo) => {
+                    const fireReaction = (e: React.SyntheticEvent) => {
+                      e.stopPropagation();
+                      // Captura a mensagem ANTES de fechar o sheet para evitar
+                      // que o setState async limpe a referência usada na mutation.
+                      const snapshot = actionMsg;
+                      if (!snapshot?.id || snapshot._optimistic) {
                         closeActionSheet();
-                        Promise.resolve(onToggleReaction?.(snapshot, emo)).catch(
-                          () => { /* erro já é tratado no handler */ }
-                        );
-                      }}
-                      onClick={(e) => {
-                        // Fallback para cliques não-touch (mouse no DevTools).
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      className={`text-2xl px-2 py-1.5 rounded-full transition active:scale-90 touch-manipulation ${
-                        myReaction === emo ? "bg-primary/15" : "hover:bg-background"
-                      }`}
-                      aria-label={`Reagir com ${emo}`}
-                    >
-                      {emo}
-                    </button>
-                  ))}
+                        return;
+                      }
+                      // Dispara a mutation primeiro (síncrono no JS), depois
+                      // fecha o sheet num próximo frame — assim o Radix não
+                      // engole o handler durante a animação de saída.
+                      try {
+                        Promise.resolve(onToggleReaction?.(snapshot, emo)).catch(() => {});
+                      } finally {
+                        requestAnimationFrame(() => closeActionSheet());
+                      }
+                    };
+                    return (
+                      <button
+                        key={emo}
+                        type="button"
+                        // onClick é mais confiável dentro do Radix Dialog em
+                        // iOS/Android do que onPointerDown + preventDefault
+                        // (que cancelava a ativação do botão em alguns devices).
+                        onClick={fireReaction}
+                        className={`text-2xl px-3 py-2 rounded-full transition active:scale-90 touch-manipulation select-none ${
+                          myReaction === emo ? "bg-primary/15" : "hover:bg-background"
+                        }`}
+                        aria-label={`Reagir com ${emo}`}
+                      >
+                        {emo}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Ações */}
