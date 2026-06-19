@@ -364,9 +364,23 @@ function extractEditInfo(m: any): {
   original_provider_id: string;
   new_body: string | null;
   edited_message: any;
+  detection_source?: string;
 } | null {
   const msg = m?.message ?? m?.update?.message ?? null;
   if (!msg) return null;
+  // Shape 0: Evolution/Baileys encrypted edit notification.
+  // Real v2.3.7 payload observed: message.secretEncryptedMessage { secretEncType: 2, targetMessageKey: { id } }
+  // It does not expose edited plaintext, but it MUST NOT be inserted as a new "other" bubble.
+  const secret = msg.secretEncryptedMessage ?? null;
+  const secretTargetId = secret?.targetMessageKey?.id ?? null;
+  if (secret && Number(secret.secretEncType) === 2 && secretTargetId) {
+    return {
+      original_provider_id: String(secretTargetId),
+      new_body: null,
+      edited_message: secret,
+      detection_source: "secretEncryptedMessage.secretEncType=2",
+    };
+  }
   // Shape A: protocolMessage type 14
   const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
   if (proto && (proto.type === 14 || proto.type === "MESSAGE_EDIT" || proto.editedMessage)) {
@@ -380,7 +394,7 @@ function extractEditInfo(m: any): {
         edited?.videoMessage?.caption ??
         edited?.documentMessage?.caption ??
         null;
-      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited };
+      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited, detection_source: "protocolMessage" };
     }
   }
   // Shape B: top-level editedMessage with separate key.id reference (fallback)
@@ -388,7 +402,7 @@ function extractEditInfo(m: any): {
   const refId = m?.key?.id ?? m?.update?.key?.id ?? null;
   if (editedTop && refId && (editedTop.conversation || editedTop.extendedTextMessage)) {
     const newBody = editedTop.conversation ?? editedTop.extendedTextMessage?.text ?? null;
-    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop };
+    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop, detection_source: "editedMessage" };
   }
   return null;
 }
