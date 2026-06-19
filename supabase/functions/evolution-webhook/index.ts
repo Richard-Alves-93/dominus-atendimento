@@ -938,6 +938,13 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 async function handleMessageUpdate(admin: any, inst: any, payload: any, source = "message_update") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const u of dataArr) {
+    // Edit detection: messages.update can carry editedMessage/protocolMessage.
+    // Detect FIRST so we don't mistakenly treat an edit as a status update.
+    const editInfo = extractEditInfo(u);
+    if (editInfo) {
+      await applyMessageEdit(admin, inst, u, editInfo, source);
+      continue;
+    }
     const providerId: string | undefined =
       u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id ?? u?.update?.key?.id;
     const statusRaw =
