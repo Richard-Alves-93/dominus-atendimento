@@ -3114,13 +3114,20 @@ const TicketsDesktopLayout = () => {
                         onTouchEnd={clearLongPress}
                         onTouchMove={clearLongPress}
                         onTouchCancel={clearLongPress}
+                        onClick={() => {
+                          if (!selectionMode) return;
+                          if (m._optimistic || m.source === "system") return;
+                          toggleSelected(m.id);
+                        }}
                         className={`rounded-2xl px-4 py-2.5 ${
                           m.from_me
                             ? "bg-primary text-primary-foreground rounded-br-md"
                             : "bg-card text-foreground shadow-card rounded-bl-md"
                         } ${m.status === "error" ? "ring-1 ring-destructive" : ""} ${
                           isMobile && selectedMessageId === m.id ? "ring-2 ring-primary/60" : ""
-                        }`}
+                        } ${
+                          selectionMode && selectedMessageIds.has(m.id) ? "ring-2 ring-primary outline outline-2 outline-primary/30" : ""
+                        } ${selectionMode ? "cursor-pointer" : ""}`}
                       >
                         {hasReply && (
                           <button
