@@ -1440,6 +1440,90 @@ const TicketsDesktopLayout = () => {
     from_me: m.from_me,
   });
 
+  // G.3 — mensagem fixada do ticket selecionado
+  const pinnedMessageQuery = useQuery({
+    queryKey: ["pinned-message", selectedId],
+    enabled: !!selectedId && !!activeCompanyId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pinned_messages")
+        .select("id, message_id, pinned_by, created_at")
+        .eq("ticket_id", selectedId)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+  });
+  const pinnedMessageId: string | null = pinnedMessageQuery.data?.message_id ?? null;
+
+  const togglePinMessage = async (m: MessageRow) => {
+    if (!profile?.id || !activeCompanyId || !selectedId) return;
+    if (m._optimistic || m.id.startsWith("tmp_")) {
+      toast({ title: "Aguarde", description: "Mensagem ainda não confirmada." });
+      return;
+    }
+    try {
+      if (pinnedMessageId === m.id) {
+        const { error } = await (supabase as any)
+          .from("pinned_messages")
+          .delete()
+          .eq("ticket_id", selectedId);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("pinned_messages")
+          .upsert(
+            { company_id: activeCompanyId, ticket_id: selectedId, message_id: m.id, pinned_by: profile.id },
+            { onConflict: "ticket_id" }
+          );
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["pinned-message", selectedId] });
+    } catch (e: any) {
+      toast({ title: "Não foi possível fixar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+  const unpinMessage = async () => {
+    if (!selectedId) return;
+    try {
+      const { error } = await (supabase as any)
+        .from("pinned_messages")
+        .delete()
+        .eq("ticket_id", selectedId);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["pinned-message", selectedId] });
+    } catch (e: any) {
+      toast({ title: "Erro ao desafixar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+  const pinnedMessagePreview = useMemo(() => {
+    if (!pinnedMessageId) return null;
+    const m = (messagesQuery.data ?? []).find((x) => x.id === pinnedMessageId) as MessageRow | undefined;
+    if (m) {
+      return {
+        sender: senderLabelFor(m),
+        preview: buildPreview(m) || messageTypeLabel(m.msg_type) || "Mensagem",
+        found: true as const,
+      };
+    }
+    return { sender: "Mensagem fixada", preview: "Não está no histórico recente", found: false as const };
+  }, [pinnedMessageId, messagesQuery.data, selected]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const c = scrollContainerRef.current;
+    if (!c) return;
+    const el = c.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!el) {
+      toast({ title: "Mensagem não carregada", description: "Está fora do histórico recente." });
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary/60", "rounded-lg");
+    setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-lg"), 1500);
+  }, [toast]);
+
   // ── Reações por emoji ──────────────────────────────────────────
   type ReactionRow = { id: string; message_id: string; user_id: string; emoji: string };
   const reactionsQuery = useQuery({
