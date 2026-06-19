@@ -407,6 +407,27 @@ function extractEditInfo(m: any): {
   return null;
 }
 
+function auditEditDetection(inst: any, source: string, m: any, editInfo: ReturnType<typeof extractEditInfo>) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  console.log(editInfo ? "[WHATSAPP_EDIT_DETECT_AUDIT]" : "[WHATSAPP_EDIT_DETECT_MISS]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    event_type: source,
+    detection_source: editInfo?.detection_source ?? null,
+    has_protocolMessage: !!proto,
+    protocol_type: proto?.type ?? null,
+    has_secretEncryptedMessage: !!msg.secretEncryptedMessage,
+    secret_enc_type: msg.secretEncryptedMessage?.secretEncType ?? null,
+    original_provider_id_present: !!editInfo?.original_provider_id,
+    edited_text_present: !!editInfo?.new_body,
+    edited_media_caption_present: false,
+    reason: editInfo ? null : "not_recognized_as_edit",
+    message_keys: Object.keys(msg),
+    key: safeKeyAudit(m?.key ?? m?.update?.key ?? {}),
+  });
+}
+
 async function applyMessageEdit(
   admin: any,
   inst: any,
@@ -415,26 +436,54 @@ async function applyMessageEdit(
   source: string,
 ): Promise<boolean> {
   const remoteJid: string | null = m?.key?.remoteJid ?? m?.update?.key?.remoteJid ?? null;
-  const remoteJidMasked = remoteJid ? remoteJid.slice(0, 4) + "***" : null;
+  const remoteJidMasked = maskJid(remoteJid);
 
-  const { data: original } = await admin
+  const { data: foundByProvider } = await admin
     .from("messages")
     .select("id, body, original_body, ticket_id, media_caption, msg_type")
     .eq("company_id", inst.company_id)
     .eq("channel_id", inst.channel_id)
-    .or(`provider_message_id.eq.${edit.original_provider_id},external_id.eq.${edit.original_provider_id}`)
+    .eq("provider_message_id", edit.original_provider_id)
     .limit(1)
     .maybeSingle();
+  const { data: foundByExternal } = foundByProvider ? { data: null } : await admin
+    .from("messages")
+    .select("id, body, original_body, ticket_id, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .eq("external_id", edit.original_provider_id)
+    .limit(1)
+    .maybeSingle();
+  const { data: foundByRawKey } = foundByProvider || foundByExternal ? { data: null } : await admin
+    .from("messages")
+    .select("id, body, original_body, ticket_id, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .eq("raw->key->>id", edit.original_provider_id)
+    .limit(1)
+    .maybeSingle();
+  const original = foundByProvider ?? foundByExternal ?? foundByRawKey;
+
+  console.log("[WHATSAPP_EDIT_LOOKUP_AUDIT]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    original_provider_id: edit.original_provider_id,
+    found_by_provider_message_id: !!foundByProvider,
+    found_by_external_id: !!foundByExternal,
+    found_by_raw_key_id: !!foundByRawKey,
+    found_message_id: original?.id ?? null,
+    found_ticket_id: original?.ticket_id ?? null,
+  });
 
   if (!original) {
     console.log("[WHATSAPP_EDIT_ORIGINAL_NOT_FOUND]", {
       company_id: inst.company_id,
       channel_id: inst.channel_id,
       instance_name: inst.instance_name ?? null,
-      edited_message_id: edit.original_provider_id,
+      original_provider_id: edit.original_provider_id,
       remote_jid_masked: remoteJidMasked,
     });
-    return true; // swallow: do NOT insert a new "[other]" row
+    return false; // caller still swallows: do NOT insert a new "[other]" row
   }
 
   const editedAt = m?.messageTimestamp
