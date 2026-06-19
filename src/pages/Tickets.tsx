@@ -1972,6 +1972,9 @@ const Tickets = () => {
                     className={`flex items-start gap-3 px-3 py-3 cursor-pointer border-b transition-colors hover:bg-secondary/50 ${selectedId === t.id ? "bg-secondary" : ""}`}
                   >
                     <Avatar className="h-10 w-10 flex-shrink-0">
+                      {t.contact?.avatar_url && (
+                        <AvatarImage src={t.contact.avatar_url} alt={t.contact?.name ?? ""} />
+                      )}
                       <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                         {initialsOf(t.contact?.name, t.contact?.phone_number)}
                       </AvatarFallback>
