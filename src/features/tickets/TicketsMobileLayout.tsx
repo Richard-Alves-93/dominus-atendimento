@@ -32,6 +32,7 @@ import {
   Star,
   SquareCheck,
   ChevronDown,
+  Download,
 } from "lucide-react";
 import {
   Sheet,
