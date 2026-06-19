@@ -253,13 +253,17 @@ function MockChat() {
         {/* Chat */}
         <section className="flex flex-col bg-[hsl(var(--muted))]/30">
           <div className="h-14 border-b px-4 flex items-center justify-between bg-background">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-semibold">
-                MS
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 bg-primary/15">
+                <img
+                  src="https://i.pravatar.cc/80?img=47"
+                  alt="Mariana Souza"
+                  className="h-9 w-9 rounded-full object-cover"
+                />
               </div>
-              <div className="leading-tight">
-                <div className="text-[13px] font-semibold">Mariana Souza</div>
-                <div className="text-[10.5px] text-muted-foreground">
+              <div className="leading-tight min-w-0">
+                <div className="text-[13px] font-semibold truncate">Mariana Souza</div>
+                <div className="text-[10.5px] text-muted-foreground truncate">
                   +55 21 99876-5432 · Vendas · Responsável: Ana
                 </div>
               </div>
