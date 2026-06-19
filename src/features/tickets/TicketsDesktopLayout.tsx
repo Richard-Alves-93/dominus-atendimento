@@ -870,7 +870,15 @@ const TicketsDesktopLayout = () => {
       .order("created_at", { ascending: false })
       .limit(500);
     if (error) throw error;
-    return orderedMessages((data ?? []) as MessageRow[]);
+    const rows = orderedMessages((data ?? []) as MessageRow[]);
+    messageLifecycleAudit("MESSAGES_QUERY_AFTER_REFETCH", {
+      ticketId,
+      count: rows.length,
+      last5Ids: rows.slice(-5).map((m) => m.id),
+      last5Bodies: rows.slice(-5).map((m) => m.raw_body ?? m.body ?? m.media_caption ?? ""),
+      last5CreatedAt: rows.slice(-5).map((m) => m.created_at),
+    });
+    return rows;
   };
 
   const messagesQuery = useQuery({
