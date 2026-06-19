@@ -64,6 +64,49 @@ const resources = [
   { icon: BarChart3, title: "Relatórios de atendimento" },
 ];
 
+function Typewriter({ words }: { words: string[] }) {
+  const [index, setIndex] = useState(0);
+  const [text, setText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const current = words[index];
+    let timeout: number;
+    if (!deleting && text === current) {
+      timeout = window.setTimeout(() => setDeleting(true), 1200);
+    } else if (deleting && text === "") {
+      setDeleting(false);
+      setIndex((i) => (i + 1) % words.length);
+    } else {
+      timeout = window.setTimeout(
+        () => {
+          setText(
+            deleting
+              ? current.slice(0, text.length - 1)
+              : current.slice(0, text.length + 1),
+          );
+        },
+        deleting ? 40 : 70,
+      );
+    }
+    return () => clearTimeout(timeout);
+  }, [text, deleting, index, words]);
+
+  const longest = words.reduce((a, b) => (a.length > b.length ? a : b), "");
+
+  return (
+    <span className="relative inline-block align-baseline">
+      <span className="invisible whitespace-pre" aria-hidden>
+        {longest}
+      </span>
+      <span className="absolute left-0 top-0 text-primary font-semibold whitespace-pre">
+        {text}
+        <span className="inline-block w-[2px] h-[1em] align-[-2px] bg-primary ml-0.5 animate-pulse" />
+      </span>
+    </span>
+  );
+}
+
 function MockChat() {
   const conversations = [
     { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true },
