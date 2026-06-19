@@ -813,8 +813,9 @@ export default function TicketsMobileLayout(props: Props) {
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="absolute inset-0 overflow-y-auto overflow-x-hidden px-3 pt-3 pb-6 space-y-2"
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain"
         >
+          <div ref={messagesContentRef} className="min-h-full px-3 pt-3 pb-4 space-y-2">
           {messagesLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -933,12 +934,14 @@ export default function TicketsMobileLayout(props: Props) {
               );
             })
           )}
+          <div className="h-28 shrink-0" aria-hidden="true" />
           <div ref={messagesEndRef} aria-hidden="true" />
+          </div>
         </div>
         {!isNearBottom && (
           <button
             type="button"
-            onClick={scrollToBottom}
+            onClick={() => scrollToBottom("button")}
             aria-label="Ir para o fim da conversa"
             className="absolute bottom-3 right-3 z-10 h-9 w-9 rounded-full bg-background/90 border border-border shadow-md backdrop-blur text-muted-foreground hover:text-foreground flex items-center justify-center"
           >
