@@ -170,6 +170,11 @@ interface Props {
   // G.2 — fixar conversa na lista
   pinnedIds?: Set<string>;
   onTogglePinTicket?: (ticketId: string, companyId: string) => void | Promise<void>;
+  // G.3 — fixar mensagem dentro da conversa
+  pinnedMessageId?: string | null;
+  pinnedMessagePreview?: { sender: string; preview: string; found: boolean } | null;
+  onTogglePinMessage?: (m: AnyMessage) => void | Promise<void>;
+  onUnpinMessage?: () => void | Promise<void>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
