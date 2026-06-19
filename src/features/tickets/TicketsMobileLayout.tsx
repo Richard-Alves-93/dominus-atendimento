@@ -635,7 +635,18 @@ export default function TicketsMobileLayout(props: Props) {
                 <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                   <div className="relative max-w-[82%] min-w-0">
                     <div
-                      className={`rounded-2xl px-3 py-2 text-[13px] border shadow-sm ${
+                      role="button"
+                      tabIndex={0}
+                      onTouchStart={() => startLongPress(m)}
+                      onTouchEnd={clearLongPress}
+                      onTouchMove={clearLongPress}
+                      onTouchCancel={clearLongPress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (m._optimistic) return;
+                        setActionMsg(m);
+                      }}
+                      className={`select-none rounded-2xl px-3 py-2 text-[13px] border shadow-sm ${
                         isMine
                           ? "bg-success/15 border-success/20 text-foreground rounded-tr-sm"
                           : "bg-background border-border/60 text-foreground rounded-tl-sm"
