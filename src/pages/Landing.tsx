@@ -90,17 +90,10 @@ function Typewriter({ words }: { words: string[] }) {
     return () => clearTimeout(timeout);
   }, [text, deleting, index, words]);
 
-  const longest = words.reduce((a, b) => (a.length > b.length ? a : b), "");
-
   return (
-    <span className="relative inline-block align-baseline">
-      <span className="invisible whitespace-pre" aria-hidden>
-        {longest}
-      </span>
-      <span className="absolute left-0 top-0 text-primary font-semibold whitespace-pre">
-        {text}
-        <span className="inline-block w-[2px] h-[1em] align-[-2px] bg-primary ml-0.5 animate-pulse" />
-      </span>
+    <span className="text-primary font-semibold inline-baseline break-words">
+      {text}
+      <span className="inline-block w-[2px] h-[1em] align-[-2px] bg-primary ml-0.5 animate-pulse" />
     </span>
   );
 }
@@ -139,7 +132,7 @@ function MockChat() {
         <span className="ml-3 text-[11px] text-muted-foreground truncate">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[80px_140px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[420px] sm:h-[440px] lg:h-[460px] text-sm">
+      <div className="grid grid-cols-[52px_130px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[400px] sm:h-[440px] lg:h-[460px] text-sm">
 
         {/* Sidebar */}
         <aside className="bg-[#0b1220] text-slate-200 flex flex-col">
@@ -176,10 +169,10 @@ function MockChat() {
             </div>
           </nav>
           <div className="px-3 py-2 border-t border-white/10 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary/30 text-white flex items-center justify-center text-[10px] font-semibold">A</div>
-            <div className="leading-tight">
-              <div className="text-[11px] font-medium">Ana Lima</div>
-              <div className="text-[9.5px] text-slate-400">Rives Atendimento</div>
+            <div className="w-6 h-6 rounded-full bg-primary/30 text-white flex items-center justify-center text-[10px] font-semibold shrink-0">A</div>
+            <div className="leading-tight hidden sm:block min-w-0">
+              <div className="text-[11px] font-medium truncate">Ana Lima</div>
+              <div className="text-[9.5px] text-slate-400 truncate">Rives Atendimento</div>
             </div>
           </div>
         </aside>
@@ -309,15 +302,15 @@ function MockChat() {
           </div>
 
           {/* Composer */}
-          <div className="border-t bg-background px-3 py-2 flex items-center gap-2">
-            <button className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-sm leading-none">+</button>
-            <Tag className="w-4 h-4 text-muted-foreground" />
-            <div className="flex-1 h-8 rounded-full bg-muted px-3 flex items-center text-[12px] text-muted-foreground">
+          <div className="border-t bg-background px-2 sm:px-3 py-2 flex items-center gap-1 sm:gap-2">
+            <button className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-sm leading-none shrink-0">+</button>
+            <Tag className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
+            <div className="flex-1 min-w-0 h-8 rounded-full bg-muted px-3 flex items-center text-[12px] text-muted-foreground truncate">
               Digite uma mensagem
             </div>
-            <Smile className="w-4 h-4 text-muted-foreground" />
-            <Mic className="w-4 h-4 text-muted-foreground" />
-            <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
+            <Smile className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
+            <Mic className="w-4 h-4 text-muted-foreground shrink-0" />
+            <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center shrink-0">
               <Send className="w-3.5 h-3.5 text-primary-foreground" />
             </button>
           </div>
@@ -331,14 +324,17 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-              <Zap className="w-5 h-5 text-primary-foreground" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-base sm:text-lg truncate">Dominus Atendimento</span>
+            <span className="font-bold text-sm sm:text-lg truncate">
+              <span className="hidden sm:inline">Dominus Atendimento</span>
+              <span className="sm:hidden">Dominus</span>
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Button asChild variant="ghost" className="hidden md:inline-flex">
               <a href="#como-funciona">Como funciona</a>
             </Button>
@@ -388,7 +384,7 @@ export default function Landing() {
 
         {/* PROBLEMAS */}
         <section className="bg-muted/30 border-y">
-          <div className="max-w-6xl mx-auto px-6 py-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="max-w-3xl mx-auto text-center mb-10">
               <h2 className="text-2xl md:text-3xl font-bold mb-3">
                 Chega de perder clientes no WhatsApp.
@@ -411,7 +407,7 @@ export default function Landing() {
         </section>
 
         {/* BENEFÍCIOS */}
-        <section className="max-w-6xl mx-auto px-6 py-16">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">Tudo o que sua equipe precisa</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -434,7 +430,7 @@ export default function Landing() {
 
         {/* COMO FUNCIONA */}
         <section id="como-funciona" className="bg-muted/30 border-y">
-          <div className="max-w-6xl mx-auto px-6 py-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="text-center mb-10">
               <h2 className="text-2xl md:text-3xl font-bold mb-3">Como o Dominus ajuda</h2>
               <p className="text-muted-foreground">Em quatro passos simples, sua empresa atende melhor.</p>
@@ -454,7 +450,7 @@ export default function Landing() {
         </section>
 
         {/* RECURSOS */}
-        <section className="max-w-6xl mx-auto px-6 py-16">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">Recursos do Dominus</h2>
             <p className="text-muted-foreground">
@@ -474,8 +470,8 @@ export default function Landing() {
         </section>
 
         {/* CTA FINAL */}
-        <section className="max-w-6xl mx-auto px-6 pb-20">
-          <div className="rounded-2xl gradient-primary text-primary-foreground p-10 md:p-14 text-center shadow-elevated">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+          <div className="rounded-2xl gradient-primary text-primary-foreground p-6 sm:p-10 md:p-14 text-center shadow-elevated">
             <h2 className="text-2xl md:text-4xl font-bold mb-3">
               Atenda melhor. Responda mais rápido. Não perca mais nenhum cliente.
             </h2>
@@ -495,7 +491,7 @@ export default function Landing() {
       </main>
 
       <footer className="border-t py-8">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md gradient-primary flex items-center justify-center">
               <Zap className="w-3.5 h-3.5 text-primary-foreground" />
