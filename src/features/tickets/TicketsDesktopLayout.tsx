@@ -165,6 +165,14 @@ function sameShortWindow(a?: string | null, b?: string | null) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= BODY_MATCH_WINDOW_MS;
 }
 
+function messageLifecycleAudit(phase: string, payload: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem("dominus.messageLifecycleAudit") !== "true") return;
+    console.debug("[MESSAGE_LIFECYCLE_AUDIT]", { phase, ...payload });
+  } catch { /* noop */ }
+}
+
 function realMatchesPending(
   pending: PendingMessage,
   real: MessageRow,
