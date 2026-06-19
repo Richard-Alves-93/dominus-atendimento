@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Filter,
@@ -230,6 +230,32 @@ export default function TicketsMobileLayout(props: Props) {
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  // F.2-fix #13 — auto-scroll: a mensagem otimista era anexada ao fim do
+  // container scrollável, mas em mobile (teclado aberto) o usuário continuava
+  // vendo a posição anterior. Forçamos scroll para o fim sempre que muda a
+  // quantidade de mensagens ou ao abrir/trocar de conversa.
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastCountRef = useRef(0);
+  const lastTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedId) return;
+    const ticketChanged = lastTicketRef.current !== selectedId;
+    const lengthIncreased = visibleMessages.length > lastCountRef.current;
+    if (ticketChanged || lengthIncreased) {
+      const c = messagesContainerRef.current;
+      if (c) {
+        requestAnimationFrame(() => {
+          c.scrollTop = c.scrollHeight;
+          messagesEndRef.current?.scrollIntoView({ block: "end" });
+        });
+      }
+    }
+    lastCountRef.current = visibleMessages.length;
+    lastTicketRef.current = selectedId;
+  }, [selectedId, visibleMessages.length]);
+
 
   const filterOptions = [
     { value: "open" as const, label: "Abertos" },
@@ -528,7 +554,7 @@ export default function TicketsMobileLayout(props: Props) {
         )}
 
         {/* Mensagens */}
-        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2">
+        <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2">
           {messagesLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -636,7 +662,9 @@ export default function TicketsMobileLayout(props: Props) {
               );
             })
           )}
+          <div ref={messagesEndRef} aria-hidden="true" />
         </div>
+
 
         {/* Composer mobile (F.2) — +menu, reply preview, quick replies, mic↔send */}
         <div className="border-t bg-background px-2 py-2 flex flex-col gap-1.5 shrink-0 w-full max-w-full min-w-0">
