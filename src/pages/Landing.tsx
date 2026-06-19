@@ -109,11 +109,25 @@ function Typewriter({ words }: { words: string[] }) {
 
 function MockChat() {
   const conversations = [
-    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true },
-    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0 },
-    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1 },
-    { name: "Auto Center RJ", msg: "Vou conferir e te respondo", time: "08:55", unread: 0 },
-    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0 },
+    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true, dept: "Vendas", resp: "Ana" },
+    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0, dept: "Suporte", resp: "Carlos" },
+    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1, dept: "Recepção", resp: "—" },
+    { name: "Auto Center RJ", msg: "Vou conferir e te respondo", time: "08:55", unread: 0, dept: "Vendas", resp: "Ana" },
+    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0, dept: "Financeiro", resp: "Marcos" },
+  ];
+
+  const navMain = [
+    { label: "Painel", icon: BarChart3 },
+    { label: "Atendimentos", icon: MessageSquare, active: true },
+    { label: "Contatos", icon: Users },
+    { label: "Mensagens Rápidas", icon: Tag },
+    { label: "Campanhas", icon: Megaphone },
+    { label: "Agendamentos", icon: CalendarClock },
+  ];
+  const navConfig = [
+    { label: "Conexões", icon: Building2 },
+    { label: "Setores", icon: Layers },
+    { label: "Equipe", icon: Users },
   ];
 
   return (
@@ -126,93 +140,128 @@ function MockChat() {
         <span className="ml-3 text-[11px] text-muted-foreground">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[180px_220px_1fr] h-[440px] text-sm">
+      <div className="grid grid-cols-[190px_240px_1fr] h-[460px] text-sm">
         {/* Sidebar */}
-        <aside className="bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] flex flex-col">
+        <aside className="bg-[#0b1220] text-slate-200 flex flex-col">
           <div className="flex items-center gap-2 px-3 h-12 border-b border-white/10">
             <div className="w-7 h-7 rounded-md gradient-primary flex items-center justify-center">
               <Zap className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-[13px]">Dominus</span>
+            <span className="font-bold text-[13px] tracking-tight">Dominus</span>
           </div>
-          <nav className="flex-1 px-2 py-3 space-y-1 text-[12px]">
-            <div className="px-2 py-1.5 rounded-md opacity-70">Painel</div>
-            <div className="px-2 py-1.5 rounded-md bg-primary/20 text-primary-foreground flex items-center gap-2">
-              <MessageSquare className="w-3.5 h-3.5" /> Atendimentos
+          <nav className="flex-1 px-2 py-3 text-[12px] overflow-hidden">
+            <div className="px-2 pb-1 text-[9.5px] uppercase tracking-wider text-slate-400/70">Menu</div>
+            <div className="space-y-0.5 mb-3">
+              {navMain.map((i) => (
+                <div
+                  key={i.label}
+                  className={`px-2 py-1.5 rounded-md flex items-center gap-2 ${
+                    i.active
+                      ? "bg-primary/20 text-white font-medium"
+                      : "text-slate-300/80 hover:bg-white/5"
+                  }`}
+                >
+                  <i.icon className="w-3.5 h-3.5" /> {i.label}
+                </div>
+              ))}
             </div>
-            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
-              <Users className="w-3.5 h-3.5" /> Contatos
-            </div>
-            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
-              <Layers className="w-3.5 h-3.5" /> Setores
-            </div>
-            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
-              <CalendarClock className="w-3.5 h-3.5" /> Agendamentos
-            </div>
-            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
-              <Tag className="w-3.5 h-3.5" /> Mensagens rápidas
-            </div>
-            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
-              <Building2 className="w-3.5 h-3.5" /> Conexões
+            <div className="px-2 pb-1 text-[9.5px] uppercase tracking-wider text-slate-400/70">Configuração</div>
+            <div className="space-y-0.5">
+              {navConfig.map((i) => (
+                <div key={i.label} className="px-2 py-1.5 rounded-md flex items-center gap-2 text-slate-300/80">
+                  <i.icon className="w-3.5 h-3.5" /> {i.label}
+                </div>
+              ))}
             </div>
           </nav>
-          <div className="px-3 py-2 border-t border-white/10 text-[11px] opacity-70">
-            Rives Atendimento
+          <div className="px-3 py-2 border-t border-white/10 flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-primary/30 text-white flex items-center justify-center text-[10px] font-semibold">A</div>
+            <div className="leading-tight">
+              <div className="text-[11px] font-medium">Ana Lima</div>
+              <div className="text-[9.5px] text-slate-400">Rives Atendimento</div>
+            </div>
           </div>
         </aside>
 
         {/* Conversation list */}
         <div className="border-r flex flex-col bg-background">
-          <div className="h-12 border-b px-3 flex items-center gap-2">
-            <Search className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-[12px] text-muted-foreground">Buscar conversas</span>
+          <div className="px-3 pt-2.5 pb-1.5 flex items-center justify-between">
+            <span className="text-[13px] font-semibold">Atendimentos</span>
+            <span className="text-[10px] text-muted-foreground">{conversations.length} ativos</span>
           </div>
-          <div className="px-2 py-2 flex gap-1 border-b">
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary text-primary-foreground">Abertos</span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Pendentes</span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Fechados</span>
+          <div className="px-3 pb-2 flex items-center gap-1.5">
+            <div className="flex-1 h-7 rounded-md border bg-muted/40 flex items-center gap-1.5 px-2">
+              <Search className="w-3 h-3 text-muted-foreground" />
+              <span className="text-[11px] text-muted-foreground">Buscar atendimentos...</span>
+            </div>
+            <button className="w-7 h-7 rounded-md gradient-primary flex items-center justify-center shrink-0">
+              <span className="text-primary-foreground text-sm leading-none">+</span>
+            </button>
           </div>
-          <div className="px-2 py-1.5 border-b flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Filter className="w-3 h-3" /> Setor: Vendas
+          <div className="px-2 pb-1.5 flex gap-1 border-b">
+            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-primary text-primary-foreground">Abertos</span>
+            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Pendentes</span>
+            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Fechados</span>
+          </div>
+          <div className="px-2 py-1.5 border-b flex items-center gap-1 text-[10.5px] text-muted-foreground">
+            <Filter className="w-3 h-3" /> Todos os setores
           </div>
           <div className="flex-1 overflow-hidden">
-            {conversations.map((c) => (
-              <div
-                key={c.name}
-                className={`px-3 py-2 border-b cursor-pointer ${c.active ? "bg-primary/5" : ""}`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-[12.5px] truncate">{c.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{c.time}</span>
+            {conversations.map((c) => {
+              const initials = c.name.split(" ").slice(0, 2).map((n) => n[0]).join("");
+              return (
+                <div
+                  key={c.name}
+                  className={`px-2.5 py-2 border-b cursor-pointer flex gap-2 ${c.active ? "bg-primary/5" : ""}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-[12px] truncate">{c.name}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{c.time}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-[11px] text-muted-foreground truncate pr-2">{c.msg}</span>
+                      {c.unread > 0 && (
+                        <span className="text-[9.5px] min-w-[15px] h-[15px] px-1 rounded-full bg-success text-white flex items-center justify-center shrink-0">
+                          {c.unread}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[9px] px-1.5 py-[1px] rounded-full bg-muted text-muted-foreground">{c.dept}</span>
+                      <span className="text-[9px] text-muted-foreground">· {c.resp}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-[11.5px] text-muted-foreground truncate pr-2">{c.msg}</span>
-                  {c.unread > 0 && (
-                    <span className="text-[10px] min-w-[16px] h-4 px-1 rounded-full bg-success text-white flex items-center justify-center">
-                      {c.unread}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Chat */}
         <section className="flex flex-col bg-[hsl(var(--muted))]/30">
-          <div className="h-12 border-b px-4 flex items-center justify-between bg-background">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-semibold">
+          <div className="h-14 border-b px-4 flex items-center justify-between bg-background">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-semibold">
                 MS
               </div>
               <div className="leading-tight">
-                <div className="text-[13px] font-medium">Mariana Souza</div>
-                <div className="text-[10.5px] text-muted-foreground">Vendas · Responsável: Ana</div>
+                <div className="text-[13px] font-semibold">Mariana Souza</div>
+                <div className="text-[10.5px] text-muted-foreground">
+                  +55 21 99876-5432 · Vendas · Responsável: Ana
+                </div>
               </div>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium">
-              Aberto
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium">
+                Aberto
+              </span>
+              <Search className="w-3.5 h-3.5 text-muted-foreground" />
+              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
           </div>
 
           <div className="flex-1 px-4 py-4 space-y-2 overflow-hidden">
