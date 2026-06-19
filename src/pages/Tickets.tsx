@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search,
   Send,
@@ -1972,6 +1972,9 @@ const Tickets = () => {
                     className={`flex items-start gap-3 px-3 py-3 cursor-pointer border-b transition-colors hover:bg-secondary/50 ${selectedId === t.id ? "bg-secondary" : ""}`}
                   >
                     <Avatar className="h-10 w-10 flex-shrink-0">
+                      {t.contact?.avatar_url && (
+                        <AvatarImage src={t.contact.avatar_url} alt={t.contact?.name ?? ""} />
+                      )}
                       <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                         {initialsOf(t.contact?.name, t.contact?.phone_number)}
                       </AvatarFallback>
@@ -2071,6 +2074,9 @@ const Tickets = () => {
             <div className="h-auto py-2 flex items-center justify-between px-4 border-b bg-card gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <Avatar className="h-9 w-9">
+                  {selected.contact?.avatar_url && (
+                    <AvatarImage src={selected.contact.avatar_url} alt={selected.contact?.name ?? ""} />
+                  )}
                   <AvatarFallback className="bg-primary/10 text-primary text-sm">
                     {initialsOf(selected.contact?.name, selected.contact?.phone_number)}
                   </AvatarFallback>
