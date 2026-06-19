@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2 } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -214,9 +214,18 @@ export default function Conexoes() {
   return (
     <AppLayout title="Conexões">
       <div className="p-6">
-        <p className="text-muted-foreground mb-6">
+        <p className="text-muted-foreground mb-4">
           Conecte os canais de atendimento da sua empresa. Sem configurações técnicas — basta clicar e escanear.
         </p>
+        <div className="mb-6 flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+          <p>
+            <span className="font-medium text-foreground">Observação:</span> ao abrir uma conversa no Dominus, o atendimento
+            é marcado como lido dentro do sistema. No momento a API envia o recibo de leitura das mensagens, mas pode não
+            sincronizar o estado visual de “não lida” no aplicativo WhatsApp/celular conectado. Essa é uma limitação conhecida
+            da integração nessa versão.
+          </p>
+        </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
           {CHANNEL_DEFS.map((def) => {
             const existing = channels.find((c) => c.channel_type === def.type);
