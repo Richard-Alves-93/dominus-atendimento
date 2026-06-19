@@ -226,25 +226,36 @@ Deno.serve(async (req) => {
             .select("id").single();
           if (insErr) throw new Error(insErr.message);
 
-          const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
-          const evoRes = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-            body: JSON.stringify({ number: phone, text }),
-          });
-          const evoText = await evoRes.text();
-          let evoData: any = {};
-          try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+          // 1) try native forward (preserves "Forwarded" tag on WhatsApp)
+          const nativeRes = await tryNativeForward(src);
+          let evoRes: Response | null = null;
+          let evoData: any = null;
+          let mode: "native" | "fallback" = "fallback";
 
-          if (!evoRes.ok) {
+          if (nativeRes && nativeRes.ok) {
+            evoData = nativeRes.data;
+            mode = "native";
+          } else {
+            const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
+            evoRes = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+              body: JSON.stringify({ number: phone, text }),
+            });
+            const evoText = await evoRes.text();
+            try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+          }
+
+          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
-              failure_reason: `evolution_${evoRes.status}`,
-              raw: { ...forwardedMeta, evo: evoData },
+              failure_reason: `evolution_${status}`,
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${evoRes.status}` });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -252,14 +263,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
         } else {
           // ── media forward ──
           const mediaType = src.msg_type as MediaType;
