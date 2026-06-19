@@ -1138,21 +1138,49 @@ const TicketsDesktopLayout = () => {
     setIsNearBottom(near);
   };
 
-  // Scroll inicial ao abrir conversa: espera mensagens carregarem.
+  // Scroll inicial ao abrir conversa: espera mensagens carregarem e cola no
+  // fim mesmo se mídias/imagens aumentarem a altura depois do primeiro paint.
   useEffect(() => {
     if (!selectedId) return;
     if (messagesQuery.isLoading) return;
     if (lastScrolledTicketRef.current === selectedId) return;
     lastScrolledTicketRef.current = selectedId;
     lastMessageCountRef.current = visibleMessages.length;
-    // Dois rAFs pra garantir que mídias/labels já reservaram altura.
+
+    const pin = () => {
+      const c = scrollContainerRef.current;
+      if (!c) return;
+      c.scrollTop = c.scrollHeight;
+      endRef.current?.scrollIntoView({ block: "end" });
+      setIsNearBottom(true);
+    };
+
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        scrollToBottom("auto");
-        setIsNearBottom(true);
-      });
+      requestAnimationFrame(pin);
     });
-  }, [selectedId, messagesQuery.isLoading, visibleMessages.length]);
+    const timers = [120, 400, 800, 1500].map((ms) =>
+      window.setTimeout(pin, ms),
+    );
+
+    // ResizeObserver: mídias que carregam tarde aumentam scrollHeight; durante
+    // a janela inicial, mantém colado no fim.
+    const c = scrollContainerRef.current;
+    let ro: ResizeObserver | null = null;
+    if (c && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => pin());
+      ro.observe(c);
+    }
+    const stop = window.setTimeout(() => {
+      ro?.disconnect();
+      ro = null;
+    }, 2000);
+
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.clearTimeout(stop);
+      ro?.disconnect();
+    };
+  }, [selectedId, messagesQuery.isLoading]);
 
   // Nova mensagem chegando: só rola se o usuário estava no fim.
   useEffect(() => {
