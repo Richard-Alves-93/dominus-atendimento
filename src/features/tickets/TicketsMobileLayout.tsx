@@ -982,12 +982,18 @@ export default function TicketsMobileLayout(props: Props) {
                     <div
                       role="button"
                       tabIndex={0}
-                      onTouchStart={() => startLongPress(m)}
+                      onTouchStart={() => { if (!selectionMode) startLongPress(m); }}
                       onTouchEnd={clearLongPress}
                       onTouchMove={clearLongPress}
                       onTouchCancel={clearLongPress}
+                      onClick={() => {
+                        if (!selectionMode) return;
+                        if (m._optimistic || m.source === "system") return;
+                        toggleSelectedMsg(m.id);
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault();
+                        if (selectionMode) return;
                         if (m._optimistic) return;
                         setActionMsg(m);
                       }}
@@ -995,7 +1001,9 @@ export default function TicketsMobileLayout(props: Props) {
                         isMine
                           ? "bg-success/15 border-success/20 text-foreground rounded-tr-sm"
                           : "bg-background border-border/60 text-foreground rounded-tl-sm"
-                      } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
+                      } ${m.status === "error" ? "ring-1 ring-destructive" : ""} ${
+                        selectionMode && selectedMsgIds.has(m.id) ? "ring-2 ring-primary bg-primary/10" : ""
+                      } ${selectionMode ? "cursor-pointer" : ""}`}
                     >
                       {hasReply && (
                         <div
