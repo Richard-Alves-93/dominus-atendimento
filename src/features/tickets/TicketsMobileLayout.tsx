@@ -175,6 +175,9 @@ interface Props {
   pinnedMessagePreview?: { sender: string; preview: string; found: boolean } | null;
   onTogglePinMessage?: (m: AnyMessage) => void | Promise<void>;
   onUnpinMessage?: () => void | Promise<void>;
+  // G.4 — favoritar mensagem por usuário
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (m: AnyMessage) => void | Promise<void>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
