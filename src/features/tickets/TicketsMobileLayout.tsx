@@ -687,7 +687,7 @@ export default function TicketsMobileLayout(props: Props) {
     <AppLayout title="Atendimentos" mobileFullScreen>
       <div className="flex h-svh w-full max-w-full min-w-0 overflow-hidden bg-[hsl(var(--muted))]/30">
         <MobileCompactSidebar />
-        <div className="flex flex-1 min-w-0 max-w-full flex-col overflow-x-hidden bg-[hsl(var(--muted))]/30">
+        <div className="flex flex-1 min-w-0 min-h-0 max-w-full flex-col overflow-hidden bg-[hsl(var(--muted))]/30">
         {/* Header */}
         <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0 min-w-0 max-w-full">
           <Button
@@ -825,7 +825,7 @@ export default function TicketsMobileLayout(props: Props) {
         )}
 
         {/* Mensagens */}
-        <div className="relative flex-1 min-h-0 min-w-0">
+        <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
