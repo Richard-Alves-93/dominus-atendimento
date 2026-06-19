@@ -250,31 +250,93 @@ Deno.serve(async (req) => {
       .map((id) => byId.get(id))
       .filter((r): r is any => !!r);
 
-    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string; mode?: string }> = [];
+    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string; mode?: string; fallback_reason?: string | null }> = [];
     const nowIso = () => new Date().toISOString();
 
-    // Try Evolution native forward endpoint. Returns { ok, status, data } or null when unsupported/no key.
-    async function tryNativeForward(src: any): Promise<{ ok: boolean; status: number; data: any } | null> {
-      const extId = src.external_id ?? src.provider_message_id ?? null;
+    // Try Evolution native forward endpoint with the most faithful WhatsApp key saved by the webhook.
+    async function tryNativeForward(src: any): Promise<NativeForwardResult> {
       const srcPhone = srcTicketPhone.get(src.ticket_id);
-      if (!extId || !srcPhone) return null;
-      const remoteJid = `${srcPhone}@s.whatsapp.net`;
-      const key = { remoteJid, fromMe: Boolean(src.from_me), id: extId };
+      const fallbackRemoteJid = srcPhone ? `${srcPhone}@s.whatsapp.net` : null;
+      const resolved = resolveOriginalMessage({ ...src, raw: src.raw ?? {}, raw_payload: src.raw_payload });
+      const key = resolved.key ?? keyFromCandidate(null, fallbackRemoteJid, Boolean(src.from_me), src.provider_message_id ?? src.external_id ?? null);
       const endpoint = `${evoBase()}/message/forwardMessage/${instance.instance_name}`;
+      const destinationRemoteJid = `${phone}@s.whatsapp.net`;
+      const fullMessagePayload = resolved.message ? { key, message: resolved.message } : { key };
+      const payload = { number: phone, message: fullMessagePayload };
+      const payloadShape = resolved.message ? "number+message.key+message.message" : "number+message.key";
+      if (!key) {
+        const audit = {
+          instance: instance.instance_name,
+          sourceMessageId: src.id,
+          sourceExternalId: src.external_id ?? null,
+          sourceProviderMessageId: src.provider_message_id ?? null,
+          sourceRemoteJid: null,
+          sourceFromMe: src.from_me,
+          sourceParticipant: null,
+          destinationNumber: maskPhone(phone),
+          destinationRemoteJid: maskJid(destinationRemoteJid),
+          endpointUsed: endpoint,
+          payloadShape,
+          evolutionStatus: null,
+          evolutionResponse: null,
+          forwardMode: "fallback",
+          fallbackReason: "missing_original_key",
+        };
+        console.log("[FORWARD_NATIVE_AUDIT]", audit);
+        return { attempted: false, ok: false, confirmed: false, status: null, data: null, endpointUsed: endpoint, payloadShape, fallbackReason: "missing_original_key" };
+      }
       try {
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-          body: JSON.stringify({ number: phone, message: { key } }),
+          body: JSON.stringify(payload),
         });
         const txt = await res.text();
         let data: any = {};
         try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 300) }; }
-        // Treat 404 / "not found" as "endpoint unsupported" → caller falls back
-        if (res.status === 404) return null;
-        return { ok: res.ok, status: res.status, data };
-      } catch (_e) {
-        return null;
+        const responseSummary = summarizeEvoResponse(data);
+        const confirmed = res.ok && responseSummary.hasForwardMarker;
+        const fallbackReason = confirmed ? null : res.ok ? "native_forward_not_confirmed" : `evolution_${res.status}`;
+        console.log("[FORWARD_NATIVE_AUDIT]", {
+          instance: instance.instance_name,
+          sourceMessageId: src.id,
+          sourceExternalId: src.external_id ?? null,
+          sourceProviderMessageId: src.provider_message_id ?? null,
+          sourceRemoteJid: maskJid(key.remoteJid),
+          sourceFromMe: key.fromMe,
+          sourceParticipant: maskJid(key.participant),
+          sourceKeySource: resolved.keySource ?? "fallback_fields",
+          destinationNumber: maskPhone(phone),
+          destinationRemoteJid: maskJid(destinationRemoteJid),
+          endpointUsed: endpoint,
+          payloadShape,
+          evolutionStatus: res.status,
+          evolutionResponse: responseSummary,
+          forwardMode: confirmed ? "native" : "fallback",
+          fallbackReason,
+        });
+        return { attempted: true, ok: res.ok, confirmed, status: res.status, data, endpointUsed: endpoint, payloadShape, fallbackReason, key, keySource: resolved.keySource ?? "fallback_fields" };
+      } catch (e) {
+        const fallbackReason = `native_forward_exception:${String((e as Error)?.message ?? e).slice(0, 120)}`;
+        console.log("[FORWARD_NATIVE_AUDIT]", {
+          instance: instance.instance_name,
+          sourceMessageId: src.id,
+          sourceExternalId: src.external_id ?? null,
+          sourceProviderMessageId: src.provider_message_id ?? null,
+          sourceRemoteJid: maskJid(key.remoteJid),
+          sourceFromMe: key.fromMe,
+          sourceParticipant: maskJid(key.participant),
+          sourceKeySource: resolved.keySource ?? "fallback_fields",
+          destinationNumber: maskPhone(phone),
+          destinationRemoteJid: maskJid(destinationRemoteJid),
+          endpointUsed: endpoint,
+          payloadShape,
+          evolutionStatus: null,
+          evolutionResponse: null,
+          forwardMode: "fallback",
+          fallbackReason,
+        });
+        return { attempted: true, ok: false, confirmed: false, status: null, data: null, endpointUsed: endpoint, payloadShape, fallbackReason, key, keySource: resolved.keySource ?? "fallback_fields" };
       }
     }
 
