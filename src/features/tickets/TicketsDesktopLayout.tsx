@@ -1009,6 +1009,21 @@ const TicketsDesktopLayout = () => {
     return orderedMessages([...real, ...unresolvedOptimistic]);
   }, [messagesQuery.data, pendingForSelected]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    const real = (messagesQuery.data ?? []) as MessageRow[];
+    messageLifecycleAudit("render_visible", {
+      ticketId: selectedId,
+      selectedId,
+      realMessagesLength: real.length,
+      pendingMessagesLength: pendingForSelected.length,
+      visibleMessagesLength: visibleMessages.length,
+      cacheMessagesLength: (qc.getQueryData<MessageRow[]>(["messages", selectedId]) ?? []).length,
+      lastVisibleIds: visibleMessages.slice(-5).map((m) => m.id),
+      lastVisibleBodies: visibleMessages.slice(-5).map((m) => m.raw_body ?? m.body ?? m.media_caption ?? ""),
+    });
+  }, [selectedId, messagesQuery.data, pendingForSelected.length, visibleMessages, qc]);
+
   // ─── Smart scroll ──────────────────────────────────────────────────
   // • Abrir conversa → rola direto pro fim (instant) assim que mensagens
   //   chegarem; usa requestAnimationFrame pra esperar o layout estabilizar.
