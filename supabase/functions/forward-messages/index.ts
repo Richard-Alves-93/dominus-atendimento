@@ -131,12 +131,27 @@ Deno.serve(async (req) => {
     // ── fetch source messages (filter by company_id explicitly) ──
     const { data: srcRows, error: srcErr } = await admin
       .from("messages")
-      .select("id, company_id, ticket_id, msg_type, body, media_storage_path, media_mime_type, media_file_name, media_caption")
+      .select("id, company_id, ticket_id, msg_type, body, from_me, external_id, provider_message_id, raw, media_storage_path, media_mime_type, media_file_name, media_caption")
       .in("id", message_ids)
       .eq("company_id", company_id);
 
     if (srcErr) return fail("src_fetch", srcErr.message);
     if (!srcRows || srcRows.length === 0) return fail("src_empty", "Nenhuma mensagem encontrada");
+
+    // Resolve source ticket → contact phone (remoteJid) for native forward payload
+    const srcTicketIds = Array.from(new Set(srcRows.map((r: any) => r.ticket_id).filter(Boolean)));
+    const srcTicketPhone = new Map<string, string>();
+    if (srcTicketIds.length > 0) {
+      const { data: srcTickets } = await admin
+        .from("tickets")
+        .select("id, contact:contacts(phone_number)")
+        .in("id", srcTicketIds)
+        .eq("company_id", company_id);
+      for (const t of (srcTickets ?? []) as any[]) {
+        const p = (t.contact?.phone_number ?? "").replace(/\D/g, "");
+        if (p) srcTicketPhone.set(t.id, p);
+      }
+    }
 
     // Preserve original order from message_ids array
     const byId = new Map(srcRows.map((r: any) => [r.id, r]));
@@ -144,8 +159,33 @@ Deno.serve(async (req) => {
       .map((id) => byId.get(id))
       .filter((r): r is any => !!r);
 
-    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string }> = [];
+    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string; mode?: string }> = [];
     const nowIso = () => new Date().toISOString();
+
+    // Try Evolution native forward endpoint. Returns { ok, status, data } or null when unsupported/no key.
+    async function tryNativeForward(src: any): Promise<{ ok: boolean; status: number; data: any } | null> {
+      const extId = src.external_id ?? src.provider_message_id ?? null;
+      const srcPhone = srcTicketPhone.get(src.ticket_id);
+      if (!extId || !srcPhone) return null;
+      const remoteJid = `${srcPhone}@s.whatsapp.net`;
+      const key = { remoteJid, fromMe: Boolean(src.from_me), id: extId };
+      const endpoint = `${evoBase()}/message/forwardMessage/${instance.instance_name}`;
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+          body: JSON.stringify({ number: phone, message: { key } }),
+        });
+        const txt = await res.text();
+        let data: any = {};
+        try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 300) }; }
+        // Treat 404 / "not found" as "endpoint unsupported" → caller falls back
+        if (res.status === 404) return null;
+        return { ok: res.ok, status: res.status, data };
+      } catch (_e) {
+        return null;
+      }
+    }
 
     for (const src of orderedSources) {
       const forwardedMeta = {
