@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   MessageSquare,
@@ -62,6 +63,49 @@ const resources = [
   { icon: Megaphone, title: "Campanhas e prospecção" },
   { icon: BarChart3, title: "Relatórios de atendimento" },
 ];
+
+function Typewriter({ words }: { words: string[] }) {
+  const [index, setIndex] = useState(0);
+  const [text, setText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const current = words[index];
+    let timeout: number;
+    if (!deleting && text === current) {
+      timeout = window.setTimeout(() => setDeleting(true), 1200);
+    } else if (deleting && text === "") {
+      setDeleting(false);
+      setIndex((i) => (i + 1) % words.length);
+    } else {
+      timeout = window.setTimeout(
+        () => {
+          setText(
+            deleting
+              ? current.slice(0, text.length - 1)
+              : current.slice(0, text.length + 1),
+          );
+        },
+        deleting ? 40 : 70,
+      );
+    }
+    return () => clearTimeout(timeout);
+  }, [text, deleting, index, words]);
+
+  const longest = words.reduce((a, b) => (a.length > b.length ? a : b), "");
+
+  return (
+    <span className="relative inline-block align-baseline">
+      <span className="invisible whitespace-pre" aria-hidden>
+        {longest}
+      </span>
+      <span className="absolute left-0 top-0 text-primary font-semibold whitespace-pre">
+        {text}
+        <span className="inline-block w-[2px] h-[1em] align-[-2px] bg-primary ml-0.5 animate-pulse" />
+      </span>
+    </span>
+  );
+}
 
 function MockChat() {
   const conversations = [
@@ -254,7 +298,9 @@ export default function Landing() {
                 Organize todos os atendimentos da sua empresa em um só lugar.
               </h1>
               <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
-                Com o Dominus, sua equipe atende pelo WhatsApp com mais organização, histórico,
+                Com o Dominus, sua equipe atende pelo{" "}
+                <Typewriter words={["WhatsApp", "Instagram", "Facebook", "E-mail", "seus canais"]} />{" "}
+                com mais organização, histórico,
                 setores, responsáveis e acompanhamento em tempo real.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
