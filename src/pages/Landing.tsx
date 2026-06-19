@@ -107,12 +107,13 @@ function Typewriter({ words }: { words: string[] }) {
 
 function MockChat() {
   const conversations = [
-    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true, dept: "Vendas", resp: "Ana" },
-    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0, dept: "Suporte", resp: "Carlos" },
-    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1, dept: "Recepção", resp: "—" },
-    { name: "Auto Center RJ", msg: "Vou conferir e te respondo", time: "08:55", unread: 0, dept: "Vendas", resp: "Ana" },
-    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0, dept: "Financeiro", resp: "Marcos" },
+    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true, dept: "Vendas", resp: "Ana", avatar: "https://i.pravatar.cc/80?img=47" },
+    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0, dept: "Suporte", resp: "Carlos", avatar: "https://i.pravatar.cc/80?img=12" },
+    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1, dept: "Recepção", resp: "—", avatar: "https://i.pravatar.cc/80?img=32" },
+    { name: "Gabriel Cezimbra", msg: "Vou conferir e te respondo", time: "08:55", unread: 0, dept: "Vendas", resp: "Ana", avatar: "https://i.pravatar.cc/80?img=15" },
+    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0, dept: "Financeiro", resp: "Marcos", avatar: "https://i.pravatar.cc/80?img=49" },
   ];
+
 
   const navMain = [
     { label: "Painel", icon: BarChart3 },
@@ -129,16 +130,17 @@ function MockChat() {
   ];
 
   return (
-    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden">
+    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden w-full max-w-full">
       {/* Top window bar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/40">
-        <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
-        <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
-        <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
-        <span className="ml-3 text-[11px] text-muted-foreground">painel.crmdominus.com.br/app/tickets</span>
+        <span className="w-2.5 h-2.5 rounded-full bg-destructive/70 shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-warning/70 shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-success/70 shrink-0" />
+        <span className="ml-3 text-[11px] text-muted-foreground truncate">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[190px_240px_1fr] h-[460px] text-sm">
+      <div className="grid grid-cols-[80px_140px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[420px] sm:h-[440px] lg:h-[460px] text-sm">
+
         {/* Sidebar */}
         <aside className="bg-[#0b1220] text-slate-200 flex flex-col">
           <div className="flex items-center gap-2 px-3 h-12 border-b border-white/10">
@@ -159,15 +161,16 @@ function MockChat() {
                       : "text-slate-300/80 hover:bg-white/5"
                   }`}
                 >
-                  <i.icon className="w-3.5 h-3.5" /> {i.label}
+                  <i.icon className="w-3.5 h-3.5 shrink-0" />{" "}
+                  <span className="hidden sm:inline truncate">{i.label}</span>
                 </div>
               ))}
             </div>
-            <div className="px-2 pb-1 text-[9.5px] uppercase tracking-wider text-slate-400/70">Configuração</div>
-            <div className="space-y-0.5">
+            <div className="px-2 pb-1 text-[9.5px] uppercase tracking-wider text-slate-400/70 hidden sm:block">Configuração</div>
+            <div className="space-y-0.5 hidden sm:block">
               {navConfig.map((i) => (
                 <div key={i.label} className="px-2 py-1.5 rounded-md flex items-center gap-2 text-slate-300/80">
-                  <i.icon className="w-3.5 h-3.5" /> {i.label}
+                  <i.icon className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{i.label}</span>
                 </div>
               ))}
             </div>
@@ -212,8 +215,16 @@ function MockChat() {
                   key={c.name}
                   className={`px-2.5 py-2 border-b cursor-pointer flex gap-2 ${c.active ? "bg-primary/5" : ""}`}
                 >
-                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">
-                    {initials}
+                  <div className="h-8 w-8 rounded-full overflow-hidden bg-primary/15 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">
+                    <img
+                      src={c.avatar}
+                      alt={c.name}
+                      className="h-8 w-8 rounded-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                        (e.currentTarget.parentElement as HTMLElement).innerText = initials;
+                      }}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -242,13 +253,17 @@ function MockChat() {
         {/* Chat */}
         <section className="flex flex-col bg-[hsl(var(--muted))]/30">
           <div className="h-14 border-b px-4 flex items-center justify-between bg-background">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-semibold">
-                MS
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 bg-primary/15">
+                <img
+                  src="https://i.pravatar.cc/80?img=47"
+                  alt="Mariana Souza"
+                  className="h-9 w-9 rounded-full object-cover"
+                />
               </div>
-              <div className="leading-tight">
-                <div className="text-[13px] font-semibold">Mariana Souza</div>
-                <div className="text-[10.5px] text-muted-foreground">
+              <div className="leading-tight min-w-0">
+                <div className="text-[13px] font-semibold truncate">Mariana Souza</div>
+                <div className="text-[10.5px] text-muted-foreground truncate">
                   +55 21 99876-5432 · Vendas · Responsável: Ana
                 </div>
               </div>
@@ -314,22 +329,22 @@ function MockChat() {
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-40">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
               <Zap className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg">Dominus Atendimento</span>
+            <span className="font-bold text-base sm:text-lg truncate">Dominus Atendimento</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" className="hidden sm:inline-flex">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <Button asChild variant="ghost" className="hidden md:inline-flex">
               <a href="#como-funciona">Como funciona</a>
             </Button>
-            <Button asChild variant="ghost"><Link to="/auth">Entrar</Link></Button>
-            <Button asChild className="gradient-primary text-primary-foreground">
-              <Link to="/cadastro">Começar agora</Link>
+            <Button asChild variant="ghost" size="sm"><Link to="/auth">Entrar</Link></Button>
+            <Button asChild size="sm" className="gradient-primary text-primary-foreground">
+              <Link to="/cadastro">Começar</Link>
             </Button>
           </div>
         </div>
@@ -337,10 +352,10 @@ export default function Landing() {
 
       <main>
         {/* HERO */}
-        <section className="max-w-6xl mx-auto px-6 pt-16 pb-12 md:pt-24 md:pb-16">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-12 md:pt-24 md:pb-16 overflow-hidden">
           <div className="grid lg:grid-cols-2 gap-10 items-center">
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1]">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1] break-words">
                 Organize todos os atendimentos da sua empresa em um só lugar.
               </h1>
               <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
@@ -362,11 +377,14 @@ export default function Landing() {
               </p>
             </div>
 
-            <div className="lg:pl-4">
-              <MockChat />
+            <div className="lg:pl-4 w-full max-w-full">
+              <div className="w-full max-w-[560px] mx-auto">
+                <MockChat />
+              </div>
             </div>
           </div>
         </section>
+
 
         {/* PROBLEMAS */}
         <section className="bg-muted/30 border-y">
