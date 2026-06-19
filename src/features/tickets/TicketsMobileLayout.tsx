@@ -148,6 +148,12 @@ interface Props {
   onStartRecording?: () => void;
   onCancelRecording?: () => void;
   onStopAndSendRecording?: () => void;
+  // F.3 — ações de mensagem mobile
+  profileId?: string | null;
+  onToggleReaction?: (m: AnyMessage, emoji: string) => void | Promise<void>;
+  onCopyMessage?: (m: AnyMessage) => void | Promise<void>;
+  onReplyMessage?: (m: AnyMessage) => void;
+  onComingSoonAction?: (label: string) => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
