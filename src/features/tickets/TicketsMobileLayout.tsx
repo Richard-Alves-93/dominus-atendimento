@@ -1,4 +1,4 @@
-import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle } from "lucide-react";
+import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle, MoreVertical, RotateCcw, Clock, CheckCircle2, Building2, UserPlus, Copy } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
@@ -21,6 +28,7 @@ type AnyTicket = {
   unread_count: number;
   last_message_at: string | null;
   department_id: string | null;
+  protocol_number?: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
   department: { id: string; name: string } | null;
   assignee?: { id: string; full_name: string | null; email: string | null } | null;
@@ -81,6 +89,16 @@ interface Props {
   setDeptFilter: (id: string) => void;
   // E.1 — read-only extras
   reactionsByMsg?: Map<string, ReactionRow[]>;
+  // F.1 — ações do atendimento (handlers/permissions do desktop)
+  canEditSelected?: boolean;
+  canAcceptSelected?: boolean;
+  canTakeOverSelected?: boolean;
+  acceptLoading?: boolean;
+  onAccept?: () => void;
+  onTakeOver?: () => void;
+  onChangeStatus?: (status: "open" | "pending" | "closed") => void;
+  onOpenAssignDept?: () => void;
+  onCopyProtocol?: () => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -138,6 +156,15 @@ export default function TicketsMobileLayout(props: Props) {
     deptFilter,
     setDeptFilter,
     reactionsByMsg,
+    canEditSelected = false,
+    canAcceptSelected = false,
+    canTakeOverSelected = false,
+    acceptLoading = false,
+    onAccept,
+    onTakeOver,
+    onChangeStatus,
+    onOpenAssignDept,
+    onCopyProtocol,
   } = props;
 
   const filterOptions = [
@@ -335,6 +362,61 @@ export default function TicketsMobileLayout(props: Props) {
               {selected.status === "open" ? "Aberto" : selected.status === "pending" ? "Pendente" : "Fechado"}
             </span>
           )}
+          {canAcceptSelected && (
+            <Button
+              size="sm"
+              className="h-8 px-2.5 text-[11px] gradient-primary text-primary-foreground shrink-0"
+              onClick={() => onAccept?.()}
+              disabled={acceptLoading}
+              aria-label="Aceitar atendimento"
+            >
+              {acceptLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Aceitar"}
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" aria-label="Mais opções">
+                <MoreVertical className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {canTakeOverSelected && (
+                <DropdownMenuItem onClick={() => onTakeOver?.()}>
+                  <UserPlus className="w-4 h-4 mr-2" /> Assumir atendimento
+                </DropdownMenuItem>
+              )}
+              {onOpenAssignDept && (
+                <DropdownMenuItem onClick={() => onOpenAssignDept()} disabled={!canEditSelected}>
+                  <Building2 className="w-4 h-4 mr-2" />
+                  {selected?.department_id ? "Transferir setor" : "Definir setor"}
+                </DropdownMenuItem>
+              )}
+              {(canTakeOverSelected || onOpenAssignDept) && <DropdownMenuSeparator />}
+              {selected?.status !== "open" && (
+                <DropdownMenuItem onClick={() => onChangeStatus?.("open")} disabled={!canEditSelected}>
+                  <RotateCcw className="w-4 h-4 mr-2" /> Reabrir atendimento
+                </DropdownMenuItem>
+              )}
+              {selected?.status !== "pending" && (
+                <DropdownMenuItem onClick={() => onChangeStatus?.("pending")} disabled={!canEditSelected}>
+                  <Clock className="w-4 h-4 mr-2" /> Marcar como pendente
+                </DropdownMenuItem>
+              )}
+              {selected?.status !== "closed" && (
+                <DropdownMenuItem onClick={() => onChangeStatus?.("closed")} disabled={!canEditSelected}>
+                  <CheckCircle2 className="w-4 h-4 mr-2" /> Fechar atendimento
+                </DropdownMenuItem>
+              )}
+              {selected?.protocol_number && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onCopyProtocol?.()}>
+                    <Copy className="w-4 h-4 mr-2" /> Copiar protocolo
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Quick-switch carousel */}

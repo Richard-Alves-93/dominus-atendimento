@@ -1799,6 +1799,19 @@ const TicketsDesktopLayout = () => {
         deptFilter={deptFilter}
         setDeptFilter={setDeptFilter}
         reactionsByMsg={reactionsByMsg}
+        canEditSelected={canEditSelected}
+        canAcceptSelected={canAcceptSelected}
+        canTakeOverSelected={canTakeOverSelected}
+        acceptLoading={acceptMutation.isPending}
+        onAccept={() => acceptMutation.mutate()}
+        onTakeOver={() => setTakeOverOpen(true)}
+        onChangeStatus={changeStatus}
+        onOpenAssignDept={() => setAssignDeptOpen(true)}
+        onCopyProtocol={() => {
+          if (!selected?.protocol_number) return;
+          navigator.clipboard?.writeText(selected.protocol_number).catch(() => {});
+          toast({ title: "Protocolo copiado", description: selected.protocol_number });
+        }}
       />
     );
   }
