@@ -80,7 +80,7 @@ import { EventModal } from "@/components/events/EventModal";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import TicketsMobileLayout from "@/features/tickets/TicketsMobileLayout";
-import { MediaContent, formatBytes as _sharedFormatBytes, formatDuration as _sharedFormatDuration } from "@/features/tickets/MediaContent";
+import { MediaContent } from "@/features/tickets/MediaContent";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
