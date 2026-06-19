@@ -2528,8 +2528,11 @@ const TicketsDesktopLayout = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm text-foreground truncate">{name}</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-medium text-sm text-foreground truncate flex items-center gap-1">
+                          {t.pinned && <Pin className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                          <span className="truncate">{name}</span>
+                        </span>
                         <span className="text-xs text-muted-foreground flex-shrink-0">
                           {fmtTime(t.last_message_at)}
                         </span>
@@ -2562,11 +2565,30 @@ const TicketsDesktopLayout = () => {
                         )}
                       </div>
                     </div>
-                    {t.unread_count > 0 && (
-                      <Badge className="gradient-primary text-primary-foreground text-[10px] h-5 min-w-5 flex items-center justify-center rounded-full px-1.5">
-                        {t.unread_count}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {t.unread_count > 0 && (
+                        <Badge className="gradient-primary text-primary-foreground text-[10px] h-5 min-w-5 flex items-center justify-center rounded-full px-1.5">
+                          {t.unread_count}
+                        </Badge>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            aria-label="Ações da conversa"
+                            className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground opacity-0 group-hover/ticket:opacity-100 hover:bg-muted transition-opacity"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => togglePinTicket(t.id, t.company_id)}>
+                            <Pin className="w-4 h-4 mr-2" />
+                            {t.pinned ? "Desafixar conversa" : "Fixar conversa"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 );
               })
