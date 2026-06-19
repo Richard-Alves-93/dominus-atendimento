@@ -1441,7 +1441,7 @@ const TicketsDesktopLayout = () => {
   };
 
   const sendMutation = useMutation({
-    mutationFn: async (vars: { body: string; tempId: string; ticketId: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
+    mutationFn: async (vars: { body: string; tempId: string; ticketId: string; createdAt: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
       // Ensure we have a current session before invoking
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1473,34 +1473,21 @@ const TicketsDesktopLayout = () => {
       }
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
-    onSuccess: async (res) => {
-      // Garante que a mensagem real esteja no cache ANTES de remover a otimista.
-      // Sem isso, se o realtime atrasar/falhar, a bolha some sem nada no lugar.
-      try {
-        await qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
-      } catch {}
-      const hasReal = () => {
-        const cur = (qc.getQueryData<MessageRow[]>(["messages", res.ticketId]) ?? []) as MessageRow[];
-        const body = (((res as any).data?.body ?? "") as string).trim();
-        // Considera real a mensagem mais recente from_me com body equivalente,
-        // ou qualquer linha cujo provider_message_id bata com a resposta.
-        const pid = (res as any).data?.provider_message_id ?? (res as any).data?.message_id ?? null;
-        return cur.some((m) => {
-          if (m.id.startsWith("tmp_")) return false;
-          if (pid && (m.provider_message_id === pid || m.external_id === pid)) return true;
-          if (m.from_me && body && (m.body ?? "").trim() === body) return true;
-          return false;
-        });
+    onSuccess: async (res, vars) => {
+      const data = (res as any).data ?? {};
+      const pending: PendingMessage = {
+        tempId: vars.tempId,
+        ticketId: vars.ticketId,
+        body: vars.body,
+        createdAt: vars.createdAt,
+        status: "sending",
       };
-      const drop = () => setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
-      // Tenta até 6s; depois remove de qualquer jeito para não travar a UI.
-      let tries = 0;
-      const tick = () => {
-        if (hasReal() || tries >= 12) return drop();
-        tries++;
-        window.setTimeout(tick, 500);
-      };
-      tick();
+      await ensureRealMessageBeforeDrop({
+        pending,
+        realId: data?.message_id ?? null,
+        providerId: data?.provider_message_id ?? data?.external_id ?? null,
+        phase: "text_send_success",
+      });
     },
     onError: (e: any, vars) => {
       setPendingMessages((prev) =>
@@ -1523,6 +1510,7 @@ const TicketsDesktopLayout = () => {
     if (!v || !selected) return;
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const ticketId = selected.id;
+    const createdAt = new Date().toISOString();
     const replySnapshot = replyingTo ? buildReplyPayload(replyingTo) : null;
     setPendingMessages((prev) => [
       ...prev,
@@ -1530,7 +1518,7 @@ const TicketsDesktopLayout = () => {
         tempId,
         ticketId,
         body: v,
-        createdAt: new Date().toISOString(),
+        createdAt,
         status: "sending",
         reply: replySnapshot,
       } as PendingMessage & { reply?: ReturnType<typeof buildReplyPayload> | null },
@@ -1538,7 +1526,7 @@ const TicketsDesktopLayout = () => {
     setText("");
     setReplyingTo(null);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
-    sendMutation.mutate({ body: v, tempId, ticketId, reply: replySnapshot });
+    sendMutation.mutate({ body: v, tempId, ticketId, createdAt, reply: replySnapshot });
   };
 
   // ── Envio de mídia ─────────────────────────────────────────────
