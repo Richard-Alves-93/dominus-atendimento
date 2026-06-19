@@ -837,14 +837,20 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
 
     // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
-    const editInfo = extractEditInfo(m);
+    let editInfo = extractEditInfo(m);
+    if (!editInfo) {
+      const sameProviderEdit = await detectSameProviderContentEdit(admin, inst, m);
+      if (sameProviderEdit.editInfo) editInfo = sameProviderEdit.editInfo;
+    }
     const technicalEvent = isTechnicalWhatsAppEvent(m);
     if (detectMsgType(m) === "other") auditOtherMessage(inst, m, source);
     if (editInfo || m?.message?.protocolMessage || m?.message?.editedMessage || m?.message?.secretEncryptedMessage) {
       auditEditDetection(inst, source, m, editInfo);
+      auditEditPayloadStructure(inst, source, m, editInfo);
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, m, editInfo, source);
+      auditEditEventSequence(inst, source, m, editInfo, true, true);
       auditTechnicalEventSkipped(inst, source, m, technicalEvent.reason ?? editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
@@ -857,6 +863,8 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     }
     if (technicalEvent.technical) {
       auditEditDetection(inst, source, m, null);
+      auditEditPayloadStructure(inst, source, m, null);
+      auditEditEventSequence(inst, source, m, null, false, true);
       auditTechnicalEventSkipped(inst, source, m, technicalEvent.reason, null);
       continue;
     }
