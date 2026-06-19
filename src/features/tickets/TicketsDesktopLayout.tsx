@@ -2910,14 +2910,6 @@ const TicketsDesktopLayout = () => {
                                   {emo}
                                 </button>
                               ))}
-                              <button
-                                type="button"
-                                onClick={() => toast({ title: "Em breve", description: "Seletor completo de emojis em breve." })}
-                                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-slate-500"
-                                aria-label="Mais emojis"
-                              >
-                                <Plus className="w-4 h-4" />
-                              </button>
                             </DropdownMenuContent>
                           </DropdownMenu>
 

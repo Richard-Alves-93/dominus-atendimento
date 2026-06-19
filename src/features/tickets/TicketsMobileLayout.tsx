@@ -1024,13 +1024,6 @@ export default function TicketsMobileLayout(props: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => showComing("Seletor completo de emojis")}
-                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
-                  >
-                    <Smile className="w-4 h-4 text-muted-foreground" /> Reagir
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => showComing("Encaminhamento")}
                     className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
                   >
