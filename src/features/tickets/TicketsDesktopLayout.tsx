@@ -2401,6 +2401,8 @@ const TicketsDesktopLayout = () => {
           onCopyMessage={handleCopyMessage}
           onReplyMessage={handleReplyClick}
           onComingSoonAction={(label) => toast({ title: "Em breve", description: `${label} será implementado em próxima etapa.` })}
+          pinnedIds={pinnedIds}
+          onTogglePinTicket={togglePinTicket}
         />
         {sharedModals}
       </>
