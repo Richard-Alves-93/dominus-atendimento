@@ -1560,10 +1560,22 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      setTimeout(() => {
+      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
+      const dropMedia = () => {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         URL.revokeObjectURL(previewUrl);
-      }, 1500);
+      };
+      const hasReal = () => {
+        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
+        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
+      };
+      let tries = 0;
+      const tick = () => {
+        if (hasReal() || tries >= 16) return dropMedia();
+        tries++;
+        window.setTimeout(tick, 500);
+      };
+      tick();
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
       toast({ title: "Não foi possível enviar o arquivo.", description: e?.message, variant: "destructive" });
