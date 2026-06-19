@@ -2599,6 +2599,8 @@ const TicketsDesktopLayout = () => {
           pinnedMessagePreview={pinnedMessagePreview}
           onTogglePinMessage={togglePinMessage}
           onUnpinMessage={unpinMessage}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={toggleFavorite}
         />
         {sharedModals}
       </>
