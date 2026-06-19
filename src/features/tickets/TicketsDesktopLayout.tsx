@@ -2812,8 +2812,11 @@ const TicketsDesktopLayout = () => {
                 }}>
                   <CornerUpLeft className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Favoritar" onClick={() => { toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." }); setSelectedMessageId(null); }}>
-                  <Star className="w-5 h-5" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={selectedMessageId && favoriteIds.has(selectedMessageId) ? "Desfavoritar" : "Favoritar"} onClick={() => {
+                  const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                  if (m) { toggleFavorite(m); setSelectedMessageId(null); }
+                }}>
+                  <Star className={`w-5 h-5 ${selectedMessageId && favoriteIds.has(selectedMessageId) ? "fill-amber-400 text-amber-400" : ""}`} />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={pinnedMessageId === selectedMessageId ? "Desafixar" : "Fixar"} onClick={() => {
                   const m = visibleMessages.find((x) => x.id === selectedMessageId);
