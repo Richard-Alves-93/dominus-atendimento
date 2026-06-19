@@ -355,10 +355,113 @@ function extractBody(m: any): string | null {
   );
 }
 
+function extractEditedBodyFromMessage(msg: any): string | null {
+  if (!msg) return null;
+  return (
+    msg.conversation ??
+    msg.extendedTextMessage?.text ??
+    msg.imageMessage?.caption ??
+    msg.videoMessage?.caption ??
+    msg.documentMessage?.caption ??
+    msg.editedMessage?.conversation ??
+    msg.editedMessage?.extendedTextMessage?.text ??
+    msg.editedMessage?.imageMessage?.caption ??
+    msg.editedMessage?.videoMessage?.caption ??
+    msg.editedMessage?.documentMessage?.caption ??
+    msg.editedMessage?.message?.conversation ??
+    msg.editedMessage?.message?.extendedTextMessage?.text ??
+    msg.editedMessage?.message?.imageMessage?.caption ??
+    msg.editedMessage?.message?.videoMessage?.caption ??
+    msg.editedMessage?.message?.documentMessage?.caption ??
+    null
+  );
+}
+
+function extractEditedBodyCandidate(m: any): { body: string | null; source: string | null; editedMessage: any } {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  const candidates: Array<[string, any]> = [
+    ["protocolMessage.editedMessage", proto?.editedMessage],
+    ["protocolMessage.editedMessage.message", proto?.editedMessage?.message],
+    ["message.editedMessage", msg.editedMessage],
+    ["message.editedMessage.message", msg.editedMessage?.message],
+    ["secretEncryptedMessage.editedMessage", msg.secretEncryptedMessage?.editedMessage],
+    ["secretEncryptedMessage.editedMessage.message", msg.secretEncryptedMessage?.editedMessage?.message],
+    ["message", msg],
+  ];
+  for (const [source, candidate] of candidates) {
+    const body = extractEditedBodyFromMessage(candidate);
+    if (typeof body === "string" && body.length > 0) return { body, source, editedMessage: candidate };
+  }
+  return { body: null, source: null, editedMessage: proto?.editedMessage ?? msg.editedMessage ?? null };
+}
+
+function resolveEditTargetId(m: any): string | null {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  return (
+    msg.secretEncryptedMessage?.targetMessageKey?.id ??
+    proto?.key?.id ??
+    proto?.messageKey?.id ??
+    msg.editedMessage?.key?.id ??
+    msg.editedMessage?.message?.key?.id ??
+    m?.update?.key?.id ??
+    m?.key?.id ??
+    null
+  );
+}
+
+function auditEditPayloadStructure(inst: any, source: string, m: any, editInfo: ReturnType<typeof extractEditInfo>) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  const edited = proto?.editedMessage ?? msg.editedMessage ?? msg.editedMessage?.message ?? null;
+  console.log("[WHATSAPP_EDIT_PAYLOAD_STRUCTURE]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    event_type: source,
+    message_type: detectMsgType({ message: msg }),
+    has_protocolMessage: !!proto,
+    has_editedMessage: !!msg.editedMessage || !!proto?.editedMessage,
+    has_secretEncryptedMessage: !!msg.secretEncryptedMessage,
+    secretEncType: msg.secretEncryptedMessage?.secretEncType ?? null,
+    has_encPayload: !!msg.secretEncryptedMessage?.encPayload,
+    has_encIv: !!msg.secretEncryptedMessage?.encIv,
+    has_targetMessageKey: !!msg.secretEncryptedMessage?.targetMessageKey,
+    target_message_id_present: !!resolveEditTargetId(m),
+    available_message_keys: Object.keys(msg),
+    available_edited_message_keys: edited ? Object.keys(edited) : [],
+    has_conversation: !!msg.conversation || !!edited?.conversation || !!edited?.message?.conversation,
+    has_extendedTextMessage: !!msg.extendedTextMessage || !!edited?.extendedTextMessage || !!edited?.message?.extendedTextMessage,
+    has_imageMessage_caption: !!msg.imageMessage?.caption || !!edited?.imageMessage?.caption || !!edited?.message?.imageMessage?.caption,
+    has_documentMessage_caption: !!msg.documentMessage?.caption || !!edited?.documentMessage?.caption || !!edited?.message?.documentMessage?.caption,
+    contains_new_text: !!editInfo?.new_body,
+    edited_text_source: editInfo?.new_body_source ?? null,
+  });
+}
+
+function auditEditEventSequence(inst: any, source: string, m: any, editInfo: ReturnType<typeof extractEditInfo>, handledAsEdit: boolean, skippedAsTechnical: boolean) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  console.log("[WHATSAPP_EDIT_EVENT_SEQUENCE]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    target_message_id: editInfo?.original_provider_id ?? resolveEditTargetId(m),
+    event_type: source,
+    message_type: detectMsgType({ message: msg }),
+    message_key_id: m?.key?.id ?? m?.update?.key?.id ?? m?.id ?? null,
+    contains_new_text: !!editInfo?.new_body,
+    handled_as_edit: handledAsEdit,
+    skipped_as_technical: skippedAsTechnical,
+  });
+}
+
 function isTechnicalWhatsAppEvent(m: any): { technical: boolean; reason: string | null } {
   const msg = m?.message ?? m?.update?.message ?? {};
   const keys = Object.keys(msg);
   if (!keys.length) return { technical: false, reason: null };
+
+  const editTargetId = resolveEditTargetId(m);
+  const editedBody = extractEditedBodyCandidate(m);
+  if (editTargetId && editedBody.body) return { technical: false, reason: null };
 
   if (msg.secretEncryptedMessage) return { technical: true, reason: "secretEncryptedMessage" };
   if (msg.protocolMessage) return { technical: true, reason: "protocolMessage" };
