@@ -1906,6 +1906,9 @@ const TicketsDesktopLayout = () => {
         search={search}
         setSearch={setSearch}
         canSeeGeneralQueue={canSeeGeneralQueue}
+        activeDepts={activeDepts}
+        deptFilter={deptFilter}
+        setDeptFilter={setDeptFilter}
       />
     );
   }
