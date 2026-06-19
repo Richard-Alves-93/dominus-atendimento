@@ -99,6 +99,7 @@ interface TicketRow {
   department_id: string | null;
   assigned_user_id: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
+  channel: { id: string; channel_type: string; status: string } | null;
   department: { id: string; name: string } | null;
   assignee?: { id: string; full_name: string | null; email: string | null } | null;
 }
@@ -525,7 +526,7 @@ const Tickets = () => {
       let q = (supabase as any)
         .from("tickets")
         .select(
-          "id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, protocol_number, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url), department:departments(id, name)",
+          "id, company_id, contact_id, channel_id, status, unread_count, last_message_at, subject, protocol_number, department_id, assigned_user_id, contact:contacts(id, name, phone_number, avatar_url), channel:channels(id, channel_type, status), department:departments(id, name)",
         )
         .eq("company_id", activeCompanyId!)
         .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -775,9 +776,16 @@ const Tickets = () => {
       }
     })();
     // Marca como lido no WhatsApp/Evolution — não bloqueia UI, falha silenciosa.
+    if (current.channel?.channel_type !== "whatsapp" || !current.channel_id || !current.contact?.id) return;
     const guardKey = `${selectedId}:${prev}`;
     if (!evoMarkReadGuardRef.current.has(guardKey)) {
       evoMarkReadGuardRef.current.add(guardKey);
+      console.log("[WHATSAPP_MARK_READ_CLIENT_CALL]", {
+        ticket_id: selectedId,
+        company_id: activeCompanyId,
+        channel_id: current.channel_id,
+        unread_count: prev,
+      });
       supabase.functions
         .invoke("mark-whatsapp-chat-read", {
           body: { ticket_id: selectedId, company_id: activeCompanyId },
