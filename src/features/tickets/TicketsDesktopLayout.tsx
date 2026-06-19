@@ -79,6 +79,7 @@ import { toast } from "@/hooks/use-toast";
 import { EventModal } from "@/components/events/EventModal";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { useIsMobile } from "@/hooks/use-mobile";
+import TicketsMobileLayout from "@/features/tickets/TicketsMobileLayout";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
@@ -1881,6 +1882,33 @@ const TicketsDesktopLayout = () => {
     setAssignUserOpen(false);
     setPendingUserId("");
   };
+
+  // Fase B — Shell mobile mínimo.
+  // Em telas pequenas renderiza um layout dedicado que reaproveita os mesmos
+  // estados/handlers desta página (zero duplicação de regra de negócio).
+  // O JSX desktop abaixo continua intacto.
+  if (isMobile) {
+    return (
+      <TicketsMobileLayout
+        tickets={tickets}
+        ticketsLoading={ticketsQuery.isLoading}
+        ticketsError={ticketsQuery.isError}
+        selectedId={selectedId}
+        setSelectedId={setSelectedId}
+        selected={selected}
+        visibleMessages={visibleMessages}
+        messagesLoading={messagesQuery.isLoading}
+        text={text}
+        setText={setText}
+        handleSend={handleSend}
+        filter={filter}
+        setFilter={setFilter}
+        search={search}
+        setSearch={setSearch}
+        canSeeGeneralQueue={canSeeGeneralQueue}
+      />
+    );
+  }
 
   return (
     <AppLayout title="Atendimentos">
