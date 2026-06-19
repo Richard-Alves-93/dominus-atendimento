@@ -297,11 +297,13 @@ function MockChat() {
 
           {/* Composer */}
           <div className="border-t bg-background px-3 py-2 flex items-center gap-2">
-            <Paperclip className="w-4 h-4 text-muted-foreground" />
+            <button className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-sm leading-none">+</button>
+            <Tag className="w-4 h-4 text-muted-foreground" />
             <div className="flex-1 h-8 rounded-full bg-muted px-3 flex items-center text-[12px] text-muted-foreground">
               Digite uma mensagem
             </div>
             <Smile className="w-4 h-4 text-muted-foreground" />
+            <Mic className="w-4 h-4 text-muted-foreground" />
             <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
               <Send className="w-3.5 h-3.5 text-primary-foreground" />
             </button>
