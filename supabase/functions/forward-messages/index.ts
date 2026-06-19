@@ -388,6 +388,8 @@ Deno.serve(async (req) => {
           if (nativeRes.confirmed) {
             evoData = nativeRes.data;
             mode = "native";
+          } else if (nativeRes.ok && nativeRes.fallbackReason === "native_forward_not_confirmed") {
+            evoData = nativeRes.data;
           } else {
             const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
             evoRes = await fetch(endpoint, {
@@ -488,6 +490,8 @@ Deno.serve(async (req) => {
           if (nativeRes.confirmed) {
             evoData = nativeRes.data;
             mode = "native";
+          } else if (nativeRes.ok && nativeRes.fallbackReason === "native_forward_not_confirmed") {
+            evoData = nativeRes.data;
           } else {
             let endpoint: string;
             let body: Record<string, unknown>;
