@@ -90,17 +90,10 @@ function Typewriter({ words }: { words: string[] }) {
     return () => clearTimeout(timeout);
   }, [text, deleting, index, words]);
 
-  const longest = words.reduce((a, b) => (a.length > b.length ? a : b), "");
-
   return (
-    <span className="relative inline-block align-baseline">
-      <span className="invisible whitespace-pre" aria-hidden>
-        {longest}
-      </span>
-      <span className="absolute left-0 top-0 text-primary font-semibold whitespace-pre">
-        {text}
-        <span className="inline-block w-[2px] h-[1em] align-[-2px] bg-primary ml-0.5 animate-pulse" />
-      </span>
+    <span className="text-primary font-semibold inline-baseline break-words">
+      {text}
+      <span className="inline-block w-[2px] h-[1em] align-[-2px] bg-primary ml-0.5 animate-pulse" />
     </span>
   );
 }
