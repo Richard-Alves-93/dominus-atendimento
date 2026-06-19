@@ -385,7 +385,7 @@ Deno.serve(async (req) => {
           let evoData: any = null;
           let mode: "native" | "fallback" = "fallback";
 
-          if (nativeRes && nativeRes.ok) {
+          if (nativeRes.confirmed) {
             evoData = nativeRes.data;
             mode = "native";
           } else {
@@ -399,16 +399,17 @@ Deno.serve(async (req) => {
             try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
           }
 
-          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          const fallbackReason = nativeRes.fallbackReason;
+          const status = mode === "native" ? (nativeRes.status ?? 200) : (evoRes?.status ?? 0);
           if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
               failure_reason: `evolution_${status}`,
-              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: fallbackReason },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode, fallback_reason: fallbackReason });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -416,14 +417,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: mode === "fallback" ? fallbackReason : null },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode, fallback_reason: mode === "fallback" ? fallbackReason : null });
         } else {
           // ── media forward ──
           const mediaType = src.msg_type as MediaType;
@@ -484,7 +485,7 @@ Deno.serve(async (req) => {
           let evoData: any = null;
           let mode: "native" | "fallback" = "fallback";
 
-          if (nativeRes && nativeRes.ok) {
+          if (nativeRes.confirmed) {
             evoData = nativeRes.data;
             mode = "native";
           } else {
@@ -513,16 +514,17 @@ Deno.serve(async (req) => {
             try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
           }
 
-          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          const fallbackReason = nativeRes.fallbackReason;
+          const status = mode === "native" ? (nativeRes.status ?? 200) : (evoRes?.status ?? 0);
           if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
               failure_reason: `evolution_${status}`,
-              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: fallbackReason },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode, fallback_reason: fallbackReason });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -530,14 +532,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: mode === "fallback" ? fallbackReason : null },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode, fallback_reason: mode === "fallback" ? fallbackReason : null });
         }
       } catch (e) {
         results.push({ source_id: src.id, ok: false, error: String((e as Error)?.message ?? e).slice(0, 200) });
