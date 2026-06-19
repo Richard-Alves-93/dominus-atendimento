@@ -308,13 +308,15 @@ export default function TicketsMobileLayout(props: Props) {
     try {
       await Promise.resolve(onToggleReaction(snapshot, emoji));
       // Mantém o Sheet aberto por enquanto para isolar o fluxo de toque/mutation.
-    } catch (err) {
+    } catch (err: any) {
       console.error("[MOBILE_REACTION_ERROR]", err);
-      toast({
-        title: "Falha ao reagir",
-        description: err instanceof Error ? err.message : String(err),
-        variant: "destructive",
-      });
+      if (!err?.__reactionToastShown) {
+        toast({
+          title: "Falha ao reagir",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      }
     }
   };
 
