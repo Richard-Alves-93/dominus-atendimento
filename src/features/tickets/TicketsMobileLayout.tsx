@@ -662,7 +662,9 @@ export default function TicketsMobileLayout(props: Props) {
               );
             })
           )}
+          <div ref={messagesEndRef} aria-hidden="true" />
         </div>
+
 
         {/* Composer mobile (F.2) — +menu, reply preview, quick replies, mic↔send */}
         <div className="border-t bg-background px-2 py-2 flex flex-col gap-1.5 shrink-0 w-full max-w-full min-w-0">
