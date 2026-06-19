@@ -554,6 +554,46 @@ const TicketsDesktopLayout = () => {
     },
   });
 
+  // G.2 — conversas fixadas pelo usuário atual nesta empresa
+  const pinnedTicketsQuery = useQuery({
+    queryKey: ["pinned-tickets", activeCompanyId, profile?.id],
+    enabled: !!activeCompanyId && !!profile?.id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pinned_tickets")
+        .select("ticket_id")
+        .eq("company_id", activeCompanyId)
+        .eq("user_id", profile!.id);
+      if (error) throw error;
+      return new Set<string>(((data ?? []) as Array<{ ticket_id: string }>).map((r) => r.ticket_id));
+    },
+  });
+  const pinnedIds = pinnedTicketsQuery.data ?? new Set<string>();
+
+  const togglePinTicket = async (ticketId: string, companyId: string) => {
+    if (!profile?.id) return;
+    const isPinned = pinnedIds.has(ticketId);
+    try {
+      if (isPinned) {
+        const { error } = await (supabase as any)
+          .from("pinned_tickets")
+          .delete()
+          .eq("user_id", profile.id)
+          .eq("ticket_id", ticketId);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("pinned_tickets")
+          .insert({ user_id: profile.id, ticket_id: ticketId, company_id: companyId });
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["pinned-tickets", activeCompanyId, profile.id] });
+    } catch (e: any) {
+      toast({ title: "Não foi possível fixar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+
   // Candidatos a "atendimento parado" na lista: status=open e com responsável.
   const stalledCandidateIds = useMemo(() => {
     return (ticketsQuery.data ?? [])
