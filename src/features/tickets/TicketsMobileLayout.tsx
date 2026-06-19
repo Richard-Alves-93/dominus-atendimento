@@ -246,6 +246,7 @@ export default function TicketsMobileLayout(props: Props) {
               })
             )}
           </div>
+          </div>
         </div>
       </AppLayout>
     );
