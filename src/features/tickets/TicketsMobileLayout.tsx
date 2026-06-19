@@ -58,8 +58,10 @@ import {
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
+import ForwardDialog from "@/features/tickets/ForwardDialog";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { toast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 const ATTACH_DOC_ACCEPT =
   ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv";
@@ -335,6 +337,9 @@ export default function TicketsMobileLayout(props: Props) {
     setSelectedMsgIds(new Set());
   };
   useEffect(() => { clearSelection(); }, [selectedId]);
+  // G.6 — encaminhamento (mobile)
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const qcMobile = useQueryClient();
 
 
   const mobileReactionAudit = (label: string, payload: Record<string, unknown>) => {
@@ -931,12 +936,25 @@ export default function TicketsMobileLayout(props: Props) {
               <Button variant="ghost" size="icon" className="h-9 w-9" onClick={bulkFav} disabled={count === 0} aria-label="Favoritar">
                 <Star className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { onShowComingSoon?.("Encaminhamento será implementado na G.6"); }} disabled={count === 0} aria-label="Encaminhar">
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setForwardOpen(true)} disabled={count === 0} aria-label="Encaminhar">
                 <Forward className="w-5 h-5" />
               </Button>
             </div>
           );
         })()}
+        <ForwardDialog
+          open={forwardOpen}
+          onOpenChange={setForwardOpen}
+          tickets={tickets as any}
+          messageIds={Array.from(selectedMsgIds)}
+          currentTicketId={selectedId}
+          companyId={selected?.company_id ?? null}
+          onSuccess={() => {
+            clearSelection();
+            qcMobile.invalidateQueries({ queryKey: ["messages"] });
+            qcMobile.invalidateQueries({ queryKey: ["tickets"] });
+          }}
+        />
 
         {/* Mensagens */}
         <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
@@ -1037,6 +1055,13 @@ export default function TicketsMobileLayout(props: Props) {
                           </div>
                         </div>
                       )}
+
+                      {((m as any).raw?.forwarded === true) && (
+                        <div className="flex items-center gap-1 text-[11px] italic mb-0.5 text-muted-foreground">
+                          <Forward className="w-3 h-3" /> Encaminhada
+                        </div>
+                      )}
+
 
                       {isMedia && (
                         <div className="mb-1 min-w-0">
