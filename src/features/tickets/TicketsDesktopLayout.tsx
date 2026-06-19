@@ -935,9 +935,7 @@ const TicketsDesktopLayout = () => {
           const key = ["messages", row.ticket_id] as const;
           const cached = qc.getQueryData<MessageRow[]>(key as any);
           if (cached) {
-            if (!cached.some((m) => m.id === row.id)) {
-              qc.setQueryData<MessageRow[]>(key as any, [...cached, row]);
-            }
+            qc.setQueryData<MessageRow[]>(key as any, upsertMessage(cached, row));
           } else {
             // No cache yet → ensure next open refetches fresh.
             qc.invalidateQueries({ queryKey: ["messages", row.ticket_id] });
@@ -953,7 +951,7 @@ const TicketsDesktopLayout = () => {
           const key = ["messages", row.ticket_id] as const;
           const cached = qc.getQueryData<MessageRow[]>(key as any);
           if (cached) {
-            qc.setQueryData<MessageRow[]>(key as any, cached.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+            qc.setQueryData<MessageRow[]>(key as any, upsertMessage(cached, row));
           }
         },
       )
