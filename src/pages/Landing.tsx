@@ -499,8 +499,9 @@ export default function Landing() {
             </div>
 
             <div className="w-full max-w-full overflow-hidden px-0 sm:px-4 lg:px-0 lg:pl-4 min-w-0">
-              <div className="w-full max-w-[360px] sm:max-w-[520px] lg:max-w-none mx-auto min-w-0">
-                <MockChat />
+              <div className="w-full max-w-[420px] sm:max-w-[520px] lg:max-w-none mx-auto min-w-0">
+                <div className="sm:hidden"><MockChatMobile /></div>
+                <div className="hidden sm:block"><MockChat /></div>
               </div>
             </div>
           </div>
