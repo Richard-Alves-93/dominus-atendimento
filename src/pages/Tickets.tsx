@@ -132,6 +132,8 @@ interface MessageRow {
   reply_to_preview?: string | null;
   reply_to_sender_name?: string | null;
   reply_to_message_type?: string | null;
+  is_edited?: boolean | null;
+  edited_at?: string | null;
   _optimistic?: boolean;
 }
 
@@ -919,7 +921,7 @@ const Tickets = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type")
+        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at")
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
@@ -2343,6 +2345,11 @@ const Tickets = () => {
                         <div
                           className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                         >
+                          {m.is_edited && (
+                            <span className="text-[10px] italic opacity-70" title={m.edited_at ? `Editada em ${fmtTime(m.edited_at)}` : "Editada"}>
+                              Editada
+                            </span>
+                          )}
                           <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
                           {m.from_me && (() => {
                             const ds = m._optimistic

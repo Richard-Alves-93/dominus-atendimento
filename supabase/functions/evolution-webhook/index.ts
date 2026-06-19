@@ -316,6 +316,106 @@ function extractBody(m: any): string | null {
   );
 }
 
+// Detect WhatsApp/Baileys "message edit" payloads.
+// Edits arrive in two shapes depending on Evolution event:
+//  - messages.upsert with message.protocolMessage { type: 14 (MESSAGE_EDIT), key.id: <originalId>, editedMessage: { ... } }
+//  - messages.update with update.message.editedMessage or update.message.protocolMessage
+// Returns null when it is not an edit.
+function extractEditInfo(m: any): {
+  original_provider_id: string;
+  new_body: string | null;
+  edited_message: any;
+} | null {
+  const msg = m?.message ?? m?.update?.message ?? null;
+  if (!msg) return null;
+  // Shape A: protocolMessage type 14
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  if (proto && (proto.type === 14 || proto.type === "MESSAGE_EDIT" || proto.editedMessage)) {
+    const origId = proto?.key?.id ?? null;
+    const edited = proto.editedMessage ?? null;
+    if (origId) {
+      const newBody =
+        edited?.conversation ??
+        edited?.extendedTextMessage?.text ??
+        edited?.imageMessage?.caption ??
+        edited?.videoMessage?.caption ??
+        edited?.documentMessage?.caption ??
+        null;
+      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited };
+    }
+  }
+  // Shape B: top-level editedMessage with separate key.id reference (fallback)
+  const editedTop = msg.editedMessage ?? null;
+  const refId = m?.key?.id ?? m?.update?.key?.id ?? null;
+  if (editedTop && refId && (editedTop.conversation || editedTop.extendedTextMessage)) {
+    const newBody = editedTop.conversation ?? editedTop.extendedTextMessage?.text ?? null;
+    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop };
+  }
+  return null;
+}
+
+async function applyMessageEdit(
+  admin: any,
+  inst: any,
+  m: any,
+  edit: { original_provider_id: string; new_body: string | null },
+  source: string,
+): Promise<boolean> {
+  const remoteJid: string | null = m?.key?.remoteJid ?? m?.update?.key?.remoteJid ?? null;
+  const remoteJidMasked = remoteJid ? remoteJid.slice(0, 4) + "***" : null;
+
+  const { data: original } = await admin
+    .from("messages")
+    .select("id, body, original_body, ticket_id, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .or(`provider_message_id.eq.${edit.original_provider_id},external_id.eq.${edit.original_provider_id}`)
+    .limit(1)
+    .maybeSingle();
+
+  if (!original) {
+    console.log("[WHATSAPP_EDIT_ORIGINAL_NOT_FOUND]", {
+      company_id: inst.company_id,
+      channel_id: inst.channel_id,
+      instance_name: inst.instance_name ?? null,
+      edited_message_id: edit.original_provider_id,
+      remote_jid_masked: remoteJidMasked,
+    });
+    return true; // swallow: do NOT insert a new "[other]" row
+  }
+
+  const editedAt = m?.messageTimestamp
+    ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
+    : new Date().toISOString();
+  const mediaTypes = ["image", "audio", "video", "document", "sticker"];
+  const isMedia = mediaTypes.includes(original.msg_type);
+  const patch: Record<string, unknown> = {
+    is_edited: true,
+    edited_at: editedAt,
+  };
+  if (edit.new_body !== null) {
+    if (isMedia) {
+      if (!original.original_body) patch.original_body = original.media_caption ?? original.body ?? null;
+      patch.media_caption = edit.new_body;
+    } else {
+      if (!original.original_body) patch.original_body = original.body ?? null;
+      patch.body = edit.new_body;
+    }
+  }
+  await admin.from("messages").update(patch).eq("id", original.id);
+
+  console.log("[WHATSAPP_EDIT_EVENT_AUDIT]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    instance_name: inst.instance_name ?? null,
+    event_type: source,
+    message_id: original.id,
+    remote_jid_masked: remoteJidMasked,
+    applied: true,
+  });
+  return true;
+}
+
 // Extract WhatsApp/Baileys quoted/reply contextInfo for inbound messages.
 function extractReplyContext(m: any): {
   provider_message_id: string | null;
@@ -426,6 +526,15 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     const externalId: string | null = key.id ?? null;
     const pushName = m?.pushName ?? m?.profileName ?? null;
     const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
+
+    // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
+    const editInfo = extractEditInfo(m);
+    if (editInfo) {
+      await applyMessageEdit(admin, inst, m, editInfo, source);
+      continue;
+    }
+
+
 
     // ── Outbound (fromMe): we already created this message in send-whatsapp-message.
     // Just patch the existing row by external_id / provider_message_id so we don't duplicate.
@@ -829,6 +938,13 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 async function handleMessageUpdate(admin: any, inst: any, payload: any, source = "message_update") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const u of dataArr) {
+    // Edit detection: messages.update can carry editedMessage/protocolMessage.
+    // Detect FIRST so we don't mistakenly treat an edit as a status update.
+    const editInfo = extractEditInfo(u);
+    if (editInfo) {
+      await applyMessageEdit(admin, inst, u, editInfo, source);
+      continue;
+    }
     const providerId: string | undefined =
       u?.keyId ?? u?.key?.id ?? u?.messageId ?? u?.id ?? u?.update?.key?.id;
     const statusRaw =

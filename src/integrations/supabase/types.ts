@@ -512,11 +512,13 @@ export type Database = {
           delivered_at: string | null
           delivery_status: string
           direction: Database["public"]["Enums"]["message_direction"]
+          edited_at: string | null
           external_id: string | null
           failed_at: string | null
           failure_reason: string | null
           from_me: boolean
           id: string
+          is_edited: boolean
           media_caption: string | null
           media_duration: number | null
           media_file_name: string | null
@@ -526,6 +528,7 @@ export type Database = {
           media_storage_path: string | null
           media_url: string | null
           msg_type: Database["public"]["Enums"]["message_type"]
+          original_body: string | null
           provider_message_id: string | null
           raw: Json
           raw_body: string | null
@@ -552,11 +555,13 @@ export type Database = {
           delivered_at?: string | null
           delivery_status?: string
           direction: Database["public"]["Enums"]["message_direction"]
+          edited_at?: string | null
           external_id?: string | null
           failed_at?: string | null
           failure_reason?: string | null
           from_me?: boolean
           id?: string
+          is_edited?: boolean
           media_caption?: string | null
           media_duration?: number | null
           media_file_name?: string | null
@@ -566,6 +571,7 @@ export type Database = {
           media_storage_path?: string | null
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
+          original_body?: string | null
           provider_message_id?: string | null
           raw?: Json
           raw_body?: string | null
@@ -592,11 +598,13 @@ export type Database = {
           delivered_at?: string | null
           delivery_status?: string
           direction?: Database["public"]["Enums"]["message_direction"]
+          edited_at?: string | null
           external_id?: string | null
           failed_at?: string | null
           failure_reason?: string | null
           from_me?: boolean
           id?: string
+          is_edited?: boolean
           media_caption?: string | null
           media_duration?: number | null
           media_file_name?: string | null
@@ -606,6 +614,7 @@ export type Database = {
           media_storage_path?: string | null
           media_url?: string | null
           msg_type?: Database["public"]["Enums"]["message_type"]
+          original_body?: string | null
           provider_message_id?: string | null
           raw?: Json
           raw_body?: string | null
