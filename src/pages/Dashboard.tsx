@@ -26,7 +26,7 @@ const Dashboard = () => {
       const [ticketsRes, contactsRes, profilesRes] = await Promise.all([
         supabase
           .from("tickets")
-          .select("created_at,status,assigned_to,updated_at")
+          .select("created_at,status,assigned_user_id,updated_at")
           .eq("company_id", activeCompanyId!)
           .gte("created_at", since),
         supabase
@@ -35,14 +35,26 @@ const Dashboard = () => {
           .eq("company_id", activeCompanyId!),
         supabase
           .from("company_users")
-          .select("user_id, profiles:profiles!company_users_user_id_fkey(full_name)")
+          .select("user_id")
           .eq("company_id", activeCompanyId!)
           .eq("status", "active"),
       ]);
+      const memberIds = (profilesRes.data ?? []).map((m: { user_id: string }) => m.user_id);
+      let members: Array<{ user_id: string; full_name: string | null }> = [];
+      if (memberIds.length > 0) {
+        const profRes = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", memberIds);
+        members = (profRes.data ?? []).map((p: { id: string; full_name: string | null }) => ({
+          user_id: p.id,
+          full_name: p.full_name,
+        }));
+      }
       return {
-        tickets: (ticketsRes.data ?? []) as (Row & { updated_at: string })[],
+        tickets: (ticketsRes.data ?? []) as Row[],
         contactsCount: contactsRes.count ?? 0,
-        members: (profilesRes.data ?? []) as Array<{ user_id: string; profiles: { full_name: string | null } | null }>,
+        members,
       };
     },
   });
