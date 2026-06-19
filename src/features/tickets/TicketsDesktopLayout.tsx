@@ -3148,9 +3148,9 @@ const TicketsDesktopLayout = () => {
                                 <Forward className="w-4 h-4 mr-2" /> Encaminhar
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => toast({ title: "Em breve", description: "Fixar mensagem será implementado em próxima etapa." })}
+                                onClick={() => togglePinMessage(m)}
                               >
-                                <Pin className="w-4 h-4 mr-2" /> Fixar
+                                <Pin className="w-4 h-4 mr-2" /> {pinnedMessageId === m.id ? "Desafixar" : "Fixar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." })}
