@@ -936,12 +936,25 @@ export default function TicketsMobileLayout(props: Props) {
               <Button variant="ghost" size="icon" className="h-9 w-9" onClick={bulkFav} disabled={count === 0} aria-label="Favoritar">
                 <Star className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { onShowComingSoon?.("Encaminhamento será implementado na G.6"); }} disabled={count === 0} aria-label="Encaminhar">
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setForwardOpen(true)} disabled={count === 0} aria-label="Encaminhar">
                 <Forward className="w-5 h-5" />
               </Button>
             </div>
           );
         })()}
+        <ForwardDialog
+          open={forwardOpen}
+          onOpenChange={setForwardOpen}
+          tickets={tickets as any}
+          messageIds={Array.from(selectedMsgIds)}
+          currentTicketId={selectedId}
+          companyId={selected?.company_id ?? null}
+          onSuccess={() => {
+            clearSelection();
+            qcMobile.invalidateQueries({ queryKey: ["messages"] });
+            qcMobile.invalidateQueries({ queryKey: ["tickets"] });
+          }}
+        />
 
         {/* Mensagens */}
         <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
