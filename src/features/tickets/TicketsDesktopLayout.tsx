@@ -173,6 +173,14 @@ function messageLifecycleAudit(phase: string, payload: Record<string, unknown>) 
   } catch { /* noop */ }
 }
 
+function mobileReactionAudit(label: string, payload: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem("dominus.mobileReactionAudit") !== "true") return;
+    console.debug(label, payload);
+  } catch { /* noop */ }
+}
+
 function realMatchesPending(
   pending: PendingMessage,
   real: MessageRow,
@@ -1361,21 +1369,49 @@ const TicketsDesktopLayout = () => {
   }, [reactionsQuery.data]);
 
   const toggleReaction = async (m: MessageRow, emoji: string) => {
-    if (!activeCompanyId || !profile?.id || m._optimistic) return;
+    mobileReactionAudit("[MOBILE_REACTION_CALL]", { messageId: m.id, emoji });
+    if (!activeCompanyId) throw new Error("Empresa não selecionada");
+    if (!profile?.id) throw new Error("Usuário não identificado");
+    if (m._optimistic || m.id.startsWith("tmp_")) throw new Error("Mensagem ainda não confirmada");
     const mine = (reactionsByMsg.get(m.id) ?? []).find((r) => r.user_id === profile.id);
+    const reactionKey = ["message-reactions", selectedId] as const;
     try {
+      let nextRows = reactionsQuery.data ?? [];
       if (mine && mine.emoji === emoji) {
-        await supabase.from("message_reactions").delete().eq("id", mine.id);
+        const { error } = await supabase.from("message_reactions").delete().eq("id", mine.id);
+        if (error) throw error;
+        nextRows = nextRows.filter((r) => r.id !== mine.id);
       } else if (mine) {
-        await supabase.from("message_reactions").update({ emoji }).eq("id", mine.id);
+        const { data, error } = await supabase
+          .from("message_reactions")
+          .update({ emoji })
+          .eq("id", mine.id)
+          .select("id, message_id, user_id, emoji")
+          .maybeSingle();
+        if (error) throw error;
+        nextRows = nextRows.map((r) => (r.id === mine.id ? ((data as ReactionRow | null) ?? { ...r, emoji }) : r));
       } else {
-        await supabase.from("message_reactions").insert({
-          company_id: activeCompanyId, message_id: m.id, user_id: profile.id, emoji,
-        });
+        const { data, error } = await supabase
+          .from("message_reactions")
+          .insert({ company_id: activeCompanyId, message_id: m.id, user_id: profile.id, emoji })
+          .select("id, message_id, user_id, emoji")
+          .single();
+        if (error) throw error;
+        if (data) nextRows = [...nextRows.filter((r) => !(r.message_id === m.id && r.user_id === profile.id)), data as ReactionRow];
       }
-      qc.invalidateQueries({ queryKey: ["message-reactions", selectedId] });
-    } catch (e: any) {
-      toast({ title: "Falha ao reagir", description: e?.message ?? String(e), variant: "destructive" });
+      qc.setQueryData<ReactionRow[]>(reactionKey, nextRows);
+      mobileReactionAudit("[MOBILE_REACTION_AFTER]", {
+        messageId: m.id,
+        emoji,
+        reactionsForMessage: nextRows.filter((r) => r.message_id === m.id),
+      });
+      qc.invalidateQueries({ queryKey: reactionKey });
+    } catch (e: unknown) {
+      const reactionError = e as Error & { __reactionToastShown?: boolean };
+      console.error("[MOBILE_REACTION_ERROR]", e);
+      toast({ title: "Falha ao reagir", description: reactionError?.message ?? String(e), variant: "destructive" });
+      reactionError.__reactionToastShown = true;
+      throw e;
     }
   };
 
@@ -2688,14 +2724,6 @@ const TicketsDesktopLayout = () => {
                               {emo}
                             </button>
                           ))}
-                          <button
-                            type="button"
-                            onClick={() => toast({ title: "Em breve", description: "Seletor completo de emojis em breve." })}
-                            className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-slate-500"
-                            aria-label="Mais emojis"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
                         </div>
                       )}
                       <div

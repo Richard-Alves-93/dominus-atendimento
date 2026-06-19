@@ -57,6 +57,7 @@ import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
+import { toast } from "@/hooks/use-toast";
 
 const ATTACH_DOC_ACCEPT =
   ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv";
@@ -270,6 +271,56 @@ export default function TicketsMobileLayout(props: Props) {
   };
   const closeActionSheet = () => setActionMsg(null);
   const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+  const mobileReactionAudit = (label: string, payload: Record<string, unknown>) => {
+    if (typeof window === "undefined") return;
+    try {
+      if (localStorage.getItem("dominus.mobileReactionAudit") !== "true") return;
+      console.debug(label, payload);
+    } catch { /* noop */ }
+  };
+
+  const handleMobileReaction = async (emoji: string) => {
+    const snapshot = actionMsg;
+    mobileReactionAudit("[MOBILE_REACTION_TAP]", {
+      emoji,
+      actionMsgId: snapshot?.id ?? null,
+      actionMsgOptimistic: snapshot?._optimistic ?? null,
+      onToggleReactionType: typeof onToggleReaction,
+      selectedId,
+      hasReactionsByMsg: !!reactionsByMsg,
+      messageHasReactionRows: !!(snapshot?.id && reactionsByMsg?.has(snapshot.id)),
+      reactionsForMessageCount: snapshot?.id ? (reactionsByMsg?.get(snapshot.id) ?? []).length : 0,
+    });
+
+    if (!snapshot?.id) {
+      toast({ title: "Não foi possível reagir", description: "Mensagem não encontrada.", variant: "destructive" });
+      return;
+    }
+    if (snapshot._optimistic || snapshot.id.startsWith("tmp_")) {
+      toast({ title: "Aguarde a mensagem salvar", description: "Só é possível reagir a mensagens já confirmadas.", variant: "destructive" });
+      return;
+    }
+    if (typeof onToggleReaction !== "function") {
+      toast({ title: "Não foi possível reagir", description: "Ação de reação indisponível.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await Promise.resolve(onToggleReaction(snapshot, emoji));
+      // Mantém o Sheet aberto por enquanto para isolar o fluxo de toque/mutation.
+    } catch (err: unknown) {
+      const reactionError = err as Error & { __reactionToastShown?: boolean };
+      console.error("[MOBILE_REACTION_ERROR]", err);
+      if (!reactionError.__reactionToastShown) {
+        toast({
+          title: "Falha ao reagir",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
 
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -940,42 +991,19 @@ export default function TicketsMobileLayout(props: Props) {
               <div className="px-3 pt-3 pb-4 flex flex-col gap-2">
                 {/* Linha rápida de reações */}
                 <div className="flex items-center justify-around bg-muted/60 rounded-full px-2 py-1.5">
-                  {QUICK_EMOJIS.map((emo) => {
-                    const fireReaction = (e: React.SyntheticEvent) => {
-                      e.stopPropagation();
-                      // Captura a mensagem ANTES de fechar o sheet para evitar
-                      // que o setState async limpe a referência usada na mutation.
-                      const snapshot = actionMsg;
-                      if (!snapshot?.id || snapshot._optimistic) {
-                        closeActionSheet();
-                        return;
-                      }
-                      // Dispara a mutation primeiro (síncrono no JS), depois
-                      // fecha o sheet num próximo frame — assim o Radix não
-                      // engole o handler durante a animação de saída.
-                      try {
-                        Promise.resolve(onToggleReaction?.(snapshot, emo)).catch(() => {});
-                      } finally {
-                        requestAnimationFrame(() => closeActionSheet());
-                      }
-                    };
-                    return (
-                      <button
-                        key={emo}
-                        type="button"
-                        // onClick é mais confiável dentro do Radix Dialog em
-                        // iOS/Android do que onPointerDown + preventDefault
-                        // (que cancelava a ativação do botão em alguns devices).
-                        onClick={fireReaction}
-                        className={`text-2xl px-3 py-2 rounded-full transition active:scale-90 touch-manipulation select-none ${
-                          myReaction === emo ? "bg-primary/15" : "hover:bg-background"
-                        }`}
-                        aria-label={`Reagir com ${emo}`}
-                      >
-                        {emo}
-                      </button>
-                    );
-                  })}
+                  {QUICK_EMOJIS.map((emo) => (
+                    <button
+                      key={emo}
+                      type="button"
+                      onClick={() => handleMobileReaction(emo)}
+                      className={`text-2xl px-3 py-2 rounded-full transition active:scale-90 touch-manipulation select-none ${
+                        myReaction === emo ? "bg-primary/15" : "hover:bg-background"
+                      }`}
+                      aria-label={`Reagir com ${emo}`}
+                    >
+                      {emo}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Ações */}
