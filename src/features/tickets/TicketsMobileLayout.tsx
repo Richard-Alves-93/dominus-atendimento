@@ -121,8 +121,14 @@ export default function TicketsMobileLayout(props: Props) {
         : activeDepts.find((d) => d.id === deptFilter)?.name ?? null;
 
     return (
-      <AppLayout title="Atendimentos">
-        <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background w-full max-w-full overflow-x-hidden min-w-0">
+      <AppLayout title="Atendimentos" mobileFullScreen>
+        <div className="flex h-svh w-full max-w-full min-w-0 flex-col overflow-x-hidden bg-background">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-3 min-w-0 max-w-full">
+            <h1 className="text-base font-semibold text-foreground truncate">Atendimentos</h1>
+            <span className="ml-2 shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              {tickets.length}
+            </span>
+          </div>
           <div className="p-3 space-y-2 border-b min-w-0 max-w-full">
             <Input
               placeholder="Buscar atendimentos..."
@@ -181,7 +187,7 @@ export default function TicketsMobileLayout(props: Props) {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
             {ticketsLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando...
@@ -249,8 +255,8 @@ export default function TicketsMobileLayout(props: Props) {
   const quickStrip = tickets.slice(0, 6);
 
   return (
-    <AppLayout title="Atendimentos">
-      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[hsl(var(--muted))]/30 w-full max-w-full overflow-x-hidden min-w-0">
+    <AppLayout title="Atendimentos" mobileFullScreen>
+      <div className="flex h-svh w-full max-w-full min-w-0 flex-col overflow-x-hidden bg-[hsl(var(--muted))]/30">
         {/* Header */}
         <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0 min-w-0 max-w-full">
           <Button
@@ -290,7 +296,7 @@ export default function TicketsMobileLayout(props: Props) {
 
         {/* Quick-switch carousel */}
         {quickStrip.length > 1 && (
-          <div className="border-b bg-background px-2 py-2 flex gap-2 overflow-x-auto scrollbar-thin shrink-0">
+          <div className="border-b bg-background px-2 py-2 flex gap-2 overflow-x-auto scrollbar-thin shrink-0 min-w-0 max-w-full">
             {quickStrip.map((t) => {
               const isActive = t.id === selectedId;
               const tName = firstName(t.contact?.name, t.contact?.phone_number);
@@ -333,7 +339,7 @@ export default function TicketsMobileLayout(props: Props) {
         )}
 
         {/* Mensagens */}
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2">
           {messagesLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
