@@ -1798,6 +1798,7 @@ const TicketsDesktopLayout = () => {
         activeDepts={activeDepts}
         deptFilter={deptFilter}
         setDeptFilter={setDeptFilter}
+        reactionsByMsg={reactionsByMsg}
       />
     );
   }
