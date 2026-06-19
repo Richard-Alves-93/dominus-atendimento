@@ -865,7 +865,7 @@ const TicketsDesktopLayout = () => {
         .from("messages")
         .select(MESSAGE_SELECT_FIELDS)
         .eq("ticket_id", selectedId!)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
       return orderedMessages((data ?? []) as MessageRow[]);
