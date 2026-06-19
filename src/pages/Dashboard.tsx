@@ -19,16 +19,46 @@ const Dashboard = () => {
     return d.toISOString();
   }, []);
 
+  const todayStartIso = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }, []);
+  const todayStart = useMemo(() => new Date(todayStartIso).getTime(), [todayStartIso]);
+
   const { data, isLoading } = useQuery({
     enabled: !!activeCompanyId,
-    queryKey: ["dashboard-tickets", activeCompanyId, since],
+    queryKey: ["dashboard-tickets", activeCompanyId, since, todayStartIso],
     queryFn: async () => {
-      const [ticketsRes, contactsRes, profilesRes] = await Promise.all([
+      const [
+        ticketsRes,
+        openRes,
+        pendingRes,
+        resolvedTodayRes,
+        contactsRes,
+        profilesRes,
+      ] = await Promise.all([
         supabase
           .from("tickets")
           .select("created_at,status,assigned_user_id,updated_at")
           .eq("company_id", activeCompanyId!)
           .gte("created_at", since),
+        supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", activeCompanyId!)
+          .eq("status", "open"),
+        supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", activeCompanyId!)
+          .eq("status", "pending"),
+        supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", activeCompanyId!)
+          .eq("status", "closed")
+          .gte("updated_at", todayStartIso),
         supabase
           .from("contacts")
           .select("id", { count: "exact", head: true })
@@ -53,6 +83,9 @@ const Dashboard = () => {
       }
       return {
         tickets: (ticketsRes.data ?? []) as Row[],
+        openCount: openRes.count ?? 0,
+        pendingCount: pendingRes.count ?? 0,
+        resolvedTodayCount: resolvedTodayRes.count ?? 0,
         contactsCount: contactsRes.count ?? 0,
         members,
       };
@@ -61,25 +94,14 @@ const Dashboard = () => {
 
   const tickets = data?.tickets ?? [];
 
-  const todayStart = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }, []);
-
   const stats = useMemo(() => {
-    const open = tickets.filter((t) => t.status === "open").length;
-    const pending = tickets.filter((t) => t.status === "pending").length;
-    const resolvedToday = tickets.filter(
-      (t) => t.status === "closed" && new Date(t.updated_at).getTime() >= todayStart
-    ).length;
     return [
-      { label: "Atendimentos Abertos", value: String(open), icon: MessageSquare, color: "text-primary" },
-      { label: "Pendentes", value: String(pending), icon: Clock, color: "text-warning" },
-      { label: "Resolvidos Hoje", value: String(resolvedToday), icon: CheckCircle, color: "text-success" },
-      { label: "Total Contatos", value: (data?.contactsCount ?? 0).toLocaleString("pt-BR"), icon: Users, color: "text-info" },
+      { label: "Atendimentos Abertos", value: String(data?.openCount ?? 0), icon: MessageSquare, color: "text-primary", hint: "Status aberto agora" },
+      { label: "Pendentes", value: String(data?.pendingCount ?? 0), icon: Clock, color: "text-warning", hint: "Aguardando resposta" },
+      { label: "Resolvidos Hoje", value: String(data?.resolvedTodayCount ?? 0), icon: CheckCircle, color: "text-success", hint: "Fechados hoje" },
+      { label: "Total Contatos", value: (data?.contactsCount ?? 0).toLocaleString("pt-BR"), icon: Users, color: "text-info", hint: "Base de contatos" },
     ];
-  }, [tickets, todayStart, data?.contactsCount]);
+  }, [data]);
 
   const chartData = useMemo(() => {
     const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
