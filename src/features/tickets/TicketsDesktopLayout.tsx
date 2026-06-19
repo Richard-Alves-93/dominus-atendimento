@@ -1046,14 +1046,31 @@ const TicketsDesktopLayout = () => {
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
-    // Fallback pro endRef caso o container ainda esteja calculando layout.
-    requestAnimationFrame(() => {
+    const jump = () => {
       const c = scrollContainerRef.current;
-      if (c) c.scrollTop = c.scrollHeight;
-      endRef.current?.scrollIntoView({ behavior, block: "end" });
+      if (!c) return;
+      if (behavior === "smooth" && typeof c.scrollTo === "function") {
+        c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
+      } else {
+        c.scrollTop = c.scrollHeight;
+      }
+    };
+    jump();
+    // Re-aplica em rAFs sucessivos para vencer layout tardio (mídias/labels).
+    requestAnimationFrame(() => {
+      jump();
+      requestAnimationFrame(jump);
     });
+    // Fallback final caso ainda exista padding/última bolha alta.
+    window.setTimeout(() => {
+      const c = scrollContainerRef.current;
+      if (!c) return;
+      c.scrollTop = c.scrollHeight;
+      endRef.current?.scrollIntoView({ block: "end" });
+      setIsNearBottom(true);
+    }, 250);
   };
+
 
   const handleScroll = () => {
     const el = scrollContainerRef.current;
