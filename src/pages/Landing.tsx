@@ -215,8 +215,16 @@ function MockChat() {
                   key={c.name}
                   className={`px-2.5 py-2 border-b cursor-pointer flex gap-2 ${c.active ? "bg-primary/5" : ""}`}
                 >
-                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">
-                    {initials}
+                  <div className="h-8 w-8 rounded-full overflow-hidden bg-primary/15 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">
+                    <img
+                      src={c.avatar}
+                      alt={c.name}
+                      className="h-8 w-8 rounded-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                        (e.currentTarget.parentElement as HTMLElement).innerText = initials;
+                      }}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
