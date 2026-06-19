@@ -886,6 +886,52 @@ const TicketsDesktopLayout = () => {
     };
   }, [activeCompanyId, qc]);
 
+  // Realtime backup: catch INSERTs/UPDATEs of messages for the whole company
+  // and route them to the matching per-ticket cache. This guarantees that a
+  // message arriving for ticket A while ticket B is open still lands in the
+  // cache of ticket A — fixing the case where notification appeared but the
+  // message was missing until F5.
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    const channel = supabase
+      .channel(`messages-company:${activeCompanyId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `company_id=eq.${activeCompanyId}` },
+        (payload) => {
+          const row = payload.new as MessageRow;
+          if (!row?.ticket_id) return;
+          const key = ["messages", row.ticket_id] as const;
+          const cached = qc.getQueryData<MessageRow[]>(key as any);
+          if (cached) {
+            if (!cached.some((m) => m.id === row.id)) {
+              qc.setQueryData<MessageRow[]>(key as any, [...cached, row]);
+            }
+          } else {
+            // No cache yet → ensure next open refetches fresh.
+            qc.invalidateQueries({ queryKey: ["messages", row.ticket_id] });
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `company_id=eq.${activeCompanyId}` },
+        (payload) => {
+          const row = payload.new as MessageRow;
+          if (!row?.ticket_id) return;
+          const key = ["messages", row.ticket_id] as const;
+          const cached = qc.getQueryData<MessageRow[]>(key as any);
+          if (cached) {
+            qc.setQueryData<MessageRow[]>(key as any, cached.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeCompanyId, qc]);
+
   const pendingForSelected = useMemo(
     () => pendingMessages.filter((p) => p.ticketId === selectedId),
     [pendingMessages, selectedId],
