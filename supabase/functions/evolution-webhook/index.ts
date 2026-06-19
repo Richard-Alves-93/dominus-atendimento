@@ -7,6 +7,47 @@ const EVO_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 const MEDIA_BUCKET = "message-media";
 
+// ── Evolution contact enrichment (v2.3.7) ──────────────────────────────────
+// Endpoints utilizados (confirmados na Evolution v2):
+//   POST /chat/findContacts/{instance}      body { where: { id: <jid> } }
+//   POST /chat/fetchProfilePictureUrl/{instance} body { number: <jid> }
+// Usados APENAS para enriquecer contato sem nome/foto em eventos fromMe.
+async function evoFetchContactInfo(instanceName: string, remoteJid: string): Promise<{ name: string | null; avatar: string | null }> {
+  const out = { name: null as string | null, avatar: null as string | null };
+  if (!EVO_URL || !EVO_KEY || !instanceName || !remoteJid) return out;
+  const base = EVO_URL.replace(/\/+$/, "");
+  const headers = { "Content-Type": "application/json", apikey: EVO_KEY };
+  try {
+    const r = await fetch(`${base}/chat/findContacts/${encodeURIComponent(instanceName)}`, {
+      method: "POST", headers, body: JSON.stringify({ where: { id: remoteJid } }),
+    });
+    if (r.ok) {
+      const data = await r.json().catch(() => null);
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.contacts) ? data.contacts : []);
+      const c = arr?.[0];
+      if (c) {
+        const nm = c.pushName ?? c.name ?? c.notify ?? c.verifiedName ?? null;
+        if (nm && typeof nm === "string" && nm.trim()) out.name = nm.trim();
+        const pic = c.profilePicUrl ?? c.profilePictureUrl ?? null;
+        if (pic && typeof pic === "string") out.avatar = pic;
+      }
+    }
+  } catch (e) { console.log("[CONTACT_ENRICHMENT] findContacts err", String(e)); }
+  if (!out.avatar) {
+    try {
+      const r = await fetch(`${base}/chat/fetchProfilePictureUrl/${encodeURIComponent(instanceName)}`, {
+        method: "POST", headers, body: JSON.stringify({ number: remoteJid }),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(() => null);
+        const pic = data?.profilePictureUrl ?? data?.profilePicUrl ?? null;
+        if (pic && typeof pic === "string") out.avatar = pic;
+      }
+    } catch (e) { console.log("[CONTACT_ENRICHMENT] fetchProfilePictureUrl err", String(e)); }
+  }
+  return out;
+}
+
 type MediaFetchResult = {
   base64: string | null;
   hasWebhookBase64: boolean;
