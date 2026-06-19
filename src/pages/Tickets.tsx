@@ -2074,6 +2074,9 @@ const Tickets = () => {
             <div className="h-auto py-2 flex items-center justify-between px-4 border-b bg-card gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <Avatar className="h-9 w-9">
+                  {selected.contact?.avatar_url && (
+                    <AvatarImage src={selected.contact.avatar_url} alt={selected.contact?.name ?? ""} />
+                  )}
                   <AvatarFallback className="bg-primary/10 text-primary text-sm">
                     {initialsOf(selected.contact?.name, selected.contact?.phone_number)}
                   </AvatarFallback>
