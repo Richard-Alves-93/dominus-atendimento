@@ -384,7 +384,7 @@ export default function Landing() {
 
         {/* PROBLEMAS */}
         <section className="bg-muted/30 border-y">
-          <div className="max-w-6xl mx-auto px-6 py-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="max-w-3xl mx-auto text-center mb-10">
               <h2 className="text-2xl md:text-3xl font-bold mb-3">
                 Chega de perder clientes no WhatsApp.
@@ -407,7 +407,7 @@ export default function Landing() {
         </section>
 
         {/* BENEFÍCIOS */}
-        <section className="max-w-6xl mx-auto px-6 py-16">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">Tudo o que sua equipe precisa</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
@@ -430,7 +430,7 @@ export default function Landing() {
 
         {/* COMO FUNCIONA */}
         <section id="como-funciona" className="bg-muted/30 border-y">
-          <div className="max-w-6xl mx-auto px-6 py-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="text-center mb-10">
               <h2 className="text-2xl md:text-3xl font-bold mb-3">Como o Dominus ajuda</h2>
               <p className="text-muted-foreground">Em quatro passos simples, sua empresa atende melhor.</p>
@@ -450,7 +450,7 @@ export default function Landing() {
         </section>
 
         {/* RECURSOS */}
-        <section className="max-w-6xl mx-auto px-6 py-16">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-3xl font-bold mb-3">Recursos do Dominus</h2>
             <p className="text-muted-foreground">
@@ -470,8 +470,8 @@ export default function Landing() {
         </section>
 
         {/* CTA FINAL */}
-        <section className="max-w-6xl mx-auto px-6 pb-20">
-          <div className="rounded-2xl gradient-primary text-primary-foreground p-10 md:p-14 text-center shadow-elevated">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+          <div className="rounded-2xl gradient-primary text-primary-foreground p-6 sm:p-10 md:p-14 text-center shadow-elevated">
             <h2 className="text-2xl md:text-4xl font-bold mb-3">
               Atenda melhor. Responda mais rápido. Não perca mais nenhum cliente.
             </h2>
@@ -491,7 +491,7 @@ export default function Landing() {
       </main>
 
       <footer className="border-t py-8">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md gradient-primary flex items-center justify-center">
               <Zap className="w-3.5 h-3.5 text-primary-foreground" />
