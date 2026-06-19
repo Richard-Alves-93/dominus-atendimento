@@ -314,6 +314,27 @@ export default function TicketsMobileLayout(props: Props) {
   const closeActionSheet = () => setActionMsg(null);
   const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+  // G.5 — modo de seleção múltipla (mobile)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
+  const enterSelection = (id: string) => {
+    setSelectionMode(true);
+    setSelectedMsgIds(new Set([id]));
+  };
+  const toggleSelectedMsg = (id: string) => {
+    setSelectedMsgIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => {
+    setSelectionMode(false);
+    setSelectedMsgIds(new Set());
+  };
+  useEffect(() => { clearSelection(); }, [selectedId]);
+
+
   const mobileReactionAudit = (label: string, payload: Record<string, unknown>) => {
     if (typeof window === "undefined") return;
     try {
