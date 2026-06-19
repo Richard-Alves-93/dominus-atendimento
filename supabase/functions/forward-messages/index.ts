@@ -62,6 +62,97 @@ function extractExternalId(evoData: any): string | null {
   );
 }
 
+type WaKey = { remoteJid: string; fromMe: boolean; id: string; participant?: string };
+type NativeForwardResult = {
+  attempted: boolean;
+  ok: boolean;
+  confirmed: boolean;
+  status: number | null;
+  data: any;
+  endpointUsed: string | null;
+  payloadShape: string;
+  fallbackReason: string | null;
+  key?: WaKey;
+  keySource?: string;
+};
+
+function maskPhone(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 6) return "***";
+  return `${digits.slice(0, 4)}***${digits.slice(-2)}`;
+}
+function maskJid(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const at = value.indexOf("@");
+  const local = at >= 0 ? value.slice(0, at) : value;
+  const suffix = at >= 0 ? value.slice(at) : "";
+  if (local.length <= 6) return `***${suffix}`;
+  return `${local.slice(0, 4)}***${local.slice(-2)}${suffix}`;
+}
+function truncateForLog(value: unknown, max = 500): string | null {
+  if (value === null || value === undefined) return null;
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+function keyFromCandidate(candidate: any, fallbackRemoteJid: string | null, fallbackFromMe: boolean, fallbackId: string | null): WaKey | null {
+  const id = typeof candidate?.id === "string" && candidate.id.trim() ? candidate.id : fallbackId;
+  const remoteJid = typeof candidate?.remoteJid === "string" && candidate.remoteJid.trim() ? candidate.remoteJid : fallbackRemoteJid;
+  if (!id || !remoteJid) return null;
+  const key: WaKey = {
+    remoteJid,
+    fromMe: typeof candidate?.fromMe === "boolean" ? candidate.fromMe : fallbackFromMe,
+    id,
+  };
+  if (typeof candidate?.participant === "string" && candidate.participant.trim()) key.participant = candidate.participant;
+  return key;
+}
+function resolveOriginalMessage(src: any): { key: WaKey | null; keySource: string | null; message: any | null } {
+  const raw = src.raw ?? {};
+  const rawPayload = src.raw_payload ?? raw?.raw_payload ?? raw?.rawPayload ?? raw?.payload ?? null;
+  const fallbackId = src.provider_message_id ?? src.external_id ?? null;
+  const fallbackRemoteJid = typeof raw?.key?.remoteJid === "string"
+    ? raw.key.remoteJid
+    : typeof rawPayload?.key?.remoteJid === "string"
+      ? rawPayload.key.remoteJid
+      : null;
+  const fallbackFromMe = typeof raw?.key?.fromMe === "boolean" ? raw.key.fromMe : Boolean(src.from_me);
+  const candidates: Array<[string, any]> = [
+    ["raw_payload.key", rawPayload?.key],
+    ["raw.key", raw?.key],
+    ["raw.data.key", raw?.data?.key],
+    ["raw.message.key", raw?.message?.key],
+    ["raw.message.message.key", raw?.message?.message?.key],
+  ];
+  for (const [source, candidate] of candidates) {
+    const key = keyFromCandidate(candidate, fallbackRemoteJid, fallbackFromMe, fallbackId);
+    if (key) {
+      const payload = source.startsWith("raw_payload") ? rawPayload : raw;
+      return { key, keySource: source, message: payload?.message ?? payload?.data?.message ?? null };
+    }
+  }
+  return { key: null, keySource: null, message: raw?.message ?? rawPayload?.message ?? null };
+}
+function hasNativeForwardMarker(value: any, depth = 0): boolean {
+  if (!value || depth > 8) return false;
+  if (Array.isArray(value)) return value.some((item) => hasNativeForwardMarker(item, depth + 1));
+  if (typeof value !== "object") return false;
+  if (value.isForwarded === true) return true;
+  if (Number(value.forwardingScore ?? value.forwarding_score ?? 0) > 0) return true;
+  if (value.forward && typeof value.forward === "object") return true;
+  return Object.values(value).some((item) => hasNativeForwardMarker(item, depth + 1));
+}
+function summarizeEvoResponse(data: any) {
+  const message = data?.message ?? data?.data?.message ?? data?.response?.message ?? null;
+  return {
+    externalId: extractExternalId(data),
+    topLevelKeys: data && typeof data === "object" ? Object.keys(data).slice(0, 12) : [],
+    messageKeys: message && typeof message === "object" ? Object.keys(message).slice(0, 12) : [],
+    hasForwardMarker: hasNativeForwardMarker(data),
+    error: truncateForLog(data?.error ?? (typeof message === "string" ? message : null)),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
