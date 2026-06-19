@@ -834,13 +834,19 @@ const TicketsDesktopLayout = () => {
             if (prev.some((m) => m.id === row.id)) return prev;
             return [...prev, row];
           });
-          // Drop any matching optimistic bubble for this ticket+body
+          // Drop any matching optimistic bubble for this ticket+body.
+          // Não casar quando algum lado tem body vazio (".includes('')" sempre true)
+          // — isso removia otimistas que não correspondiam à mensagem real.
           if (row.from_me) {
+            const realBody = (row.body ?? "").trim();
             setPendingMessages((prev) =>
-              prev.filter(
-                (p) =>
-                  !(p.ticketId === selectedId && (row.body ?? "").includes(p.body)),
-              ),
+              prev.filter((p) => {
+                if (p.ticketId !== selectedId) return true;
+                const pBody = (p.body ?? "").trim();
+                if (!pBody && !realBody) return false; // ambos vazios (mídia s/ caption)
+                if (!pBody || !realBody) return true;  // apenas um vazio → mantém
+                return !(realBody === pBody || realBody.includes(pBody));
+              }),
             );
           }
         },
@@ -1298,10 +1304,34 @@ const TicketsDesktopLayout = () => {
       }
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
-    onSuccess: (res) => {
-      setTimeout(() => {
-        setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
-      }, 1500);
+    onSuccess: async (res) => {
+      // Garante que a mensagem real esteja no cache ANTES de remover a otimista.
+      // Sem isso, se o realtime atrasar/falhar, a bolha some sem nada no lugar.
+      try {
+        await qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
+      } catch {}
+      const hasReal = () => {
+        const cur = (qc.getQueryData<MessageRow[]>(["messages", res.ticketId]) ?? []) as MessageRow[];
+        const body = (((res as any).data?.body ?? "") as string).trim();
+        // Considera real a mensagem mais recente from_me com body equivalente,
+        // ou qualquer linha cujo provider_message_id bata com a resposta.
+        const pid = (res as any).data?.provider_message_id ?? (res as any).data?.message_id ?? null;
+        return cur.some((m) => {
+          if (m.id.startsWith("tmp_")) return false;
+          if (pid && (m.provider_message_id === pid || m.external_id === pid)) return true;
+          if (m.from_me && body && (m.body ?? "").trim() === body) return true;
+          return false;
+        });
+      };
+      const drop = () => setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
+      // Tenta até 6s; depois remove de qualquer jeito para não travar a UI.
+      let tries = 0;
+      const tick = () => {
+        if (hasReal() || tries >= 12) return drop();
+        tries++;
+        window.setTimeout(tick, 500);
+      };
+      tick();
     },
     onError: (e: any, vars) => {
       setPendingMessages((prev) =>
@@ -1440,11 +1470,24 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      // Sucesso: webhook fromMe vai atualizar/dedup; remover otimista após pequena espera.
-      setTimeout(() => {
+      // Sucesso: força refetch para a mensagem real entrar no cache antes de
+      // remover a otimista. Sem isso, se o realtime atrasar, a bolha some.
+      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
+      const dropMedia = () => {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         URL.revokeObjectURL(previewUrl);
-      }, 1500);
+      };
+      const hasReal = () => {
+        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
+        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
+      };
+      let tries = 0;
+      const tick = () => {
+        if (hasReal() || tries >= 16) return dropMedia();
+        tries++;
+        window.setTimeout(tick, 500);
+      };
+      tick();
       closeAttachDialog();
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
@@ -1517,10 +1560,22 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      setTimeout(() => {
+      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
+      const dropMedia = () => {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         URL.revokeObjectURL(previewUrl);
-      }, 1500);
+      };
+      const hasReal = () => {
+        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
+        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
+      };
+      let tries = 0;
+      const tick = () => {
+        if (hasReal() || tries >= 16) return dropMedia();
+        tries++;
+        window.setTimeout(tick, 500);
+      };
+      tick();
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
       toast({ title: "Não foi possível enviar o arquivo.", description: e?.message, variant: "destructive" });
