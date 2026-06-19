@@ -130,7 +130,7 @@ export default function TicketsMobileLayout(props: Props) {
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 bg-secondary border-0"
             />
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
               <MobileFilterChips
                 value={filter}
                 onChange={setFilter}
