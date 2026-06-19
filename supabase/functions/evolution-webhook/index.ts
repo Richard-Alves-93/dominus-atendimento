@@ -462,6 +462,40 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         await admin.from("messages").update(patch).eq("id", existing.id);
         if (status) console.log("[WEBHOOK] msg_update_rows=", 1);
         auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, status ?? null, status ? 1 : 0);
+
+        // Enriquecimento de avatar/nome também quando a mensagem foi enviada pelo Dominus
+        // (fromMe via send-whatsapp-message). Sem isso, a foto só apareceria após o
+        // primeiro inbound do contato. NUNCA usar pushName em fromMe.
+        try {
+          const { data: c } = await admin
+            .from("contacts")
+            .select("id, name, avatar_url")
+            .eq("company_id", inst.company_id)
+            .eq("phone_number", phone)
+            .maybeSingle();
+          if (c && (!c.name || !c.avatar_url)) {
+            const info = await evoFetchContactInfo(inst.instance_name ?? "", remoteJid);
+            const cpatch: Record<string, unknown> = {};
+            if (!c.name && info.name) cpatch.name = info.name;
+            if (!c.avatar_url && info.avatar) cpatch.avatar_url = info.avatar;
+            if (Object.keys(cpatch).length) {
+              cpatch.updated_at = new Date().toISOString();
+              await admin.from("contacts").update(cpatch).eq("id", c.id);
+            }
+            console.log("[CONTACT_ENRICHMENT_AUDIT]", {
+              company_id: inst.company_id,
+              channel_id: inst.channel_id,
+              phone_masked: phone ? phone.slice(0, 4) + "***" + phone.slice(-2) : null,
+              from_me: true,
+              source: "fromMe_dominus_existing_message",
+              found_name: Boolean(cpatch.name),
+              found_avatar: Boolean(cpatch.avatar_url),
+            });
+          }
+        } catch (e) {
+          console.log("[CONTACT_ENRICHMENT_AUDIT] err", String(e));
+        }
+
       } else {
         // Mensagem enviada diretamente pelo WhatsApp (celular), não pelo Dominus.
         // Criar contato/ticket se necessário e inserir como from_me=true / source=whatsapp_device.
