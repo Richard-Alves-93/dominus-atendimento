@@ -1406,6 +1406,22 @@ const TicketsDesktopLayout = () => {
         reactionsForMessage: nextRows.filter((r) => r.message_id === m.id),
       });
       qc.invalidateQueries({ queryKey: reactionKey });
+
+      // Best-effort: relay reaction to WhatsApp via Evolution (Edge Function).
+      // Internal state already updated; on failure, show toast but keep DB record.
+      try {
+        const waEmoji = mine && mine.emoji === emoji ? "" : emoji;
+        const { data: waRes, error: waErr } = await supabase.functions.invoke("send-whatsapp-reaction", {
+          body: { company_id: activeCompanyId, ticket_id: selectedId, message_id: m.id, emoji: waEmoji },
+        });
+        if (waErr || (waRes && waRes.ok === false)) {
+          const desc = waErr?.message || (waRes as any)?.error || "Falha ao enviar reação ao WhatsApp";
+          toast({ title: "Reação não enviada ao WhatsApp", description: String(desc).slice(0, 200), variant: "destructive" });
+        }
+      } catch (relayErr) {
+        console.warn("[WA_REACTION_RELAY_FAIL]", relayErr);
+      }
+
     } catch (e: unknown) {
       const reactionError = e as Error & { __reactionToastShown?: boolean };
       console.error("[MOBILE_REACTION_ERROR]", e);
