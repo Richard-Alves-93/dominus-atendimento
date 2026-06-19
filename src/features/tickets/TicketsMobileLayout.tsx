@@ -231,6 +231,32 @@ export default function TicketsMobileLayout(props: Props) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
+  // F.2-fix #13 — auto-scroll: a mensagem otimista era anexada ao fim do
+  // container scrollável, mas em mobile (teclado aberto) o usuário continuava
+  // vendo a posição anterior. Forçamos scroll para o fim sempre que muda a
+  // quantidade de mensagens ou ao abrir/trocar de conversa.
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastCountRef = useRef(0);
+  const lastTicketRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedId) return;
+    const ticketChanged = lastTicketRef.current !== selectedId;
+    const lengthIncreased = visibleMessages.length > lastCountRef.current;
+    if (ticketChanged || lengthIncreased) {
+      const c = messagesContainerRef.current;
+      if (c) {
+        requestAnimationFrame(() => {
+          c.scrollTop = c.scrollHeight;
+          messagesEndRef.current?.scrollIntoView({ block: "end" });
+        });
+      }
+    }
+    lastCountRef.current = visibleMessages.length;
+    lastTicketRef.current = selectedId;
+  }, [selectedId, visibleMessages.length]);
+
+
   const filterOptions = [
     { value: "open" as const, label: "Abertos" },
     { value: "pending" as const, label: "Pendentes" },
