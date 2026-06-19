@@ -873,7 +873,7 @@ export default function TicketsMobileLayout(props: Props) {
               }, {});
 
               return (
-                <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div key={m.id} data-message-id={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                   <div className="relative max-w-[82%] min-w-0">
                     <div
                       role="button"
