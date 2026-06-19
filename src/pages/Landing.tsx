@@ -132,7 +132,7 @@ function MockChat() {
         <span className="ml-3 text-[11px] text-muted-foreground truncate">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[44px_120px_1fr] xs:grid-cols-[56px_140px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[400px] sm:h-[440px] lg:h-[460px] text-sm">
+      <div className="grid grid-cols-[52px_130px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[400px] sm:h-[440px] lg:h-[460px] text-sm">
 
         {/* Sidebar */}
         <aside className="bg-[#0b1220] text-slate-200 flex flex-col">
