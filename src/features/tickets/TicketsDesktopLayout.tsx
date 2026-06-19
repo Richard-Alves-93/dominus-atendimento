@@ -1582,7 +1582,8 @@ const TicketsDesktopLayout = () => {
     const ticketId = selected.id;
     const channelId = selected.channel_id ?? "ch";
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const previewUrl = attachPreviewUrl!;
+    const createdAt = new Date().toISOString();
+    const previewUrl = URL.createObjectURL(file);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
     const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const storagePath = `${activeCompanyId}/${channelId}/${ticketId}/temp_${uuid}/${safeName}`;
@@ -1594,9 +1595,9 @@ const TicketsDesktopLayout = () => {
       {
         tempId, ticketId,
         body: caption ?? "",
-        createdAt: new Date().toISOString(),
+        createdAt,
         status: "sending",
-        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption, storagePath },
       },
     ]);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -1627,25 +1628,23 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      // Sucesso: força refetch para a mensagem real entrar no cache antes de
-      // remover a otimista. Sem isso, se o realtime atrasar, a bolha some.
-      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
-      const dropMedia = () => {
-        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
-        URL.revokeObjectURL(previewUrl);
-      };
-      const hasReal = () => {
-        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
-        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
-      };
-      let tries = 0;
-      const tick = () => {
-        if (hasReal() || tries >= 16) return dropMedia();
-        tries++;
-        window.setTimeout(tick, 500);
-      };
-      tick();
       closeAttachDialog();
+      void ensureRealMessageBeforeDrop({
+        pending: {
+          tempId,
+          ticketId,
+          body: caption ?? "",
+          createdAt,
+          status: "sending",
+          media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption, storagePath },
+        },
+        realId: d?.message_id ?? null,
+        providerId: d?.provider_message_id ?? d?.external_id ?? null,
+        phase: "media_send_success",
+        maxAttempts: 24,
+      }).then((dropped) => {
+        if (dropped) URL.revokeObjectURL(previewUrl);
+      });
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
       toast({
