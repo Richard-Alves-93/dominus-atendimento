@@ -611,7 +611,7 @@ async function detectSameProviderContentEdit(admin: any, inst: any, m: any): Pro
     .select("id, body, media_caption, msg_type")
     .eq("company_id", inst.company_id)
     .eq("channel_id", inst.channel_id)
-    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId},raw->key->>id.eq.${providerId}`)
+    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`)
     .limit(1)
     .maybeSingle();
   if (!existing) return { editInfo: null, foundExisting: false };
