@@ -288,7 +288,8 @@ export default function TicketsMobileLayout(props: Props) {
       actionMsgOptimistic: snapshot?._optimistic ?? null,
       onToggleReactionType: typeof onToggleReaction,
       selectedId,
-      hasReactionsByMsg: !!(snapshot?.id && reactionsByMsg?.has(snapshot.id)),
+      hasReactionsByMsg: !!reactionsByMsg,
+      messageHasReactionRows: !!(snapshot?.id && reactionsByMsg?.has(snapshot.id)),
       reactionsForMessageCount: snapshot?.id ? (reactionsByMsg?.get(snapshot.id) ?? []).length : 0,
     });
 
