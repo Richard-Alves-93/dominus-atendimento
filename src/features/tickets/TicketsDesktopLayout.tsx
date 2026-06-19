@@ -968,7 +968,7 @@ const TicketsDesktopLayout = () => {
   );
 
   const visibleMessages = useMemo<MessageRow[]>(() => {
-    const real = (messagesQuery.data ?? []) as MessageRow[];
+    const real = orderedMessages((messagesQuery.data ?? []) as MessageRow[]);
     const optimistic: MessageRow[] = pendingForSelected.map((p) => {
       const r = (p as any).reply as { message_id?: string; provider_message_id?: string | null; preview?: string; sender_name?: string; message_type?: string } | null | undefined;
       return {
@@ -995,7 +995,11 @@ const TicketsDesktopLayout = () => {
         _optimistic: true,
       };
     });
-    return [...real, ...optimistic];
+    const unresolvedOptimistic = optimistic.filter((o) => {
+      const pending = pendingForSelected.find((p) => p.tempId === o.id);
+      return pending ? !real.some((m) => realMatchesPending(pending, m)) : true;
+    });
+    return orderedMessages([...real, ...unresolvedOptimistic]);
   }, [messagesQuery.data, pendingForSelected]);
 
   // ─── Smart scroll ──────────────────────────────────────────────────
