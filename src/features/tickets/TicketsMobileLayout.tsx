@@ -166,6 +166,9 @@ interface Props {
   onCopyMessage?: (m: AnyMessage) => void | Promise<void>;
   onReplyMessage?: (m: AnyMessage) => void;
   onComingSoonAction?: (label: string) => void;
+  // G.2 — fixar conversa na lista
+  pinnedIds?: Set<string>;
+  onTogglePinTicket?: (ticketId: string, companyId: string) => void | Promise<void>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
