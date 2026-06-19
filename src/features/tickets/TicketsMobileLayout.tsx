@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Filter,
@@ -25,7 +25,17 @@ import {
   User as UserIcon,
   BarChart3,
   CalendarPlus,
+  CornerUpLeft,
+  Smile,
+  Forward,
+  Pin,
+  Star,
+  SquareCheck,
 } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+} from "@/components/ui/sheet";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -148,6 +158,12 @@ interface Props {
   onStartRecording?: () => void;
   onCancelRecording?: () => void;
   onStopAndSendRecording?: () => void;
+  // F.3 — ações de mensagem mobile
+  profileId?: string | null;
+  onToggleReaction?: (m: AnyMessage, emoji: string) => void | Promise<void>;
+  onCopyMessage?: (m: AnyMessage) => void | Promise<void>;
+  onReplyMessage?: (m: AnyMessage) => void;
+  onComingSoonAction?: (label: string) => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -224,7 +240,36 @@ export default function TicketsMobileLayout(props: Props) {
     onStartRecording,
     onCancelRecording,
     onStopAndSendRecording,
+    profileId = null,
+    onToggleReaction,
+    onCopyMessage,
+    onReplyMessage,
+    onComingSoonAction,
   } = props;
+
+  // F.3 — long-press → bottom sheet de ações da mensagem
+  const [actionMsg, setActionMsg] = useState<AnyMessage | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+  const startLongPress = (m: AnyMessage) => {
+    if (m._optimistic || m.source === "system") return;
+    clearLongPress();
+    longPressFiredRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      setActionMsg(m);
+      try { (navigator as any).vibrate?.(20); } catch { /* noop */ }
+    }, 450);
+  };
+  const closeActionSheet = () => setActionMsg(null);
+  const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
 
   const documentInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -590,7 +635,18 @@ export default function TicketsMobileLayout(props: Props) {
                 <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                   <div className="relative max-w-[82%] min-w-0">
                     <div
-                      className={`rounded-2xl px-3 py-2 text-[13px] border shadow-sm ${
+                      role="button"
+                      tabIndex={0}
+                      onTouchStart={() => startLongPress(m)}
+                      onTouchEnd={clearLongPress}
+                      onTouchMove={clearLongPress}
+                      onTouchCancel={clearLongPress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (m._optimistic) return;
+                        setActionMsg(m);
+                      }}
+                      className={`select-none rounded-2xl px-3 py-2 text-[13px] border shadow-sm ${
                         isMine
                           ? "bg-success/15 border-success/20 text-foreground rounded-tr-sm"
                           : "bg-background border-border/60 text-foreground rounded-tl-sm"
@@ -815,6 +871,105 @@ export default function TicketsMobileLayout(props: Props) {
         </div>
         </div>
       </div>
+
+      {/* F.3 — Bottom sheet de ações da mensagem (long-press) */}
+      <Sheet open={!!actionMsg} onOpenChange={(o) => { if (!o) closeActionSheet(); }}>
+        <SheetContent
+          side="bottom"
+          className="p-0 rounded-t-2xl max-h-[80vh] overflow-y-auto"
+        >
+          {actionMsg && (() => {
+            const myReaction = (reactionsByMsg?.get(actionMsg.id) ?? []).find((r) => r.user_id === profileId)?.emoji;
+            const showComing = (label: string) =>
+              (onComingSoonAction ?? onShowComingSoon)?.(label);
+            return (
+              <div className="px-3 pt-3 pb-4 flex flex-col gap-2">
+                {/* Linha rápida de reações */}
+                <div className="flex items-center justify-around bg-muted/60 rounded-full px-2 py-1.5">
+                  {QUICK_EMOJIS.map((emo) => (
+                    <button
+                      key={emo}
+                      type="button"
+                      onClick={() => {
+                        onToggleReaction?.(actionMsg, emo);
+                        closeActionSheet();
+                      }}
+                      className={`text-xl px-1.5 py-1 rounded-full transition active:scale-95 ${
+                        myReaction === emo ? "bg-primary/15" : "hover:bg-background"
+                      }`}
+                      aria-label={`Reagir com ${emo}`}
+                    >
+                      {emo}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Ações */}
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => { onReplyMessage?.(actionMsg); closeActionSheet(); }}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <CornerUpLeft className="w-4 h-4 text-muted-foreground" /> Responder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { onCopyMessage?.(actionMsg); closeActionSheet(); }}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Copy className="w-4 h-4 text-muted-foreground" /> Copiar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Seletor completo de emojis")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Smile className="w-4 h-4 text-muted-foreground" /> Reagir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Encaminhamento")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Forward className="w-4 h-4 text-muted-foreground" /> Encaminhar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Fixar mensagem")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Pin className="w-4 h-4 text-muted-foreground" /> Fixar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Favoritos")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Star className="w-4 h-4 text-muted-foreground" /> Favoritar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Seleção múltipla")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <SquareCheck className="w-4 h-4 text-muted-foreground" /> Selecionar
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeActionSheet}
+                  className="mt-1 mx-auto text-sm text-muted-foreground px-4 py-2"
+                >
+                  Cancelar
+                </button>
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
     </AppLayout>
   );
 }
+

@@ -2039,6 +2039,12 @@ const TicketsDesktopLayout = () => {
           onStartRecording={startRecording}
           onCancelRecording={cancelRecording}
           onStopAndSendRecording={stopAndSendRecording}
+          // F.3 — ações de mensagem mobile
+          profileId={profile?.id ?? null}
+          onToggleReaction={toggleReaction}
+          onCopyMessage={handleCopyMessage}
+          onReplyMessage={handleReplyClick}
+          onComingSoonAction={(label) => toast({ title: "Em breve", description: `${label} será implementado em próxima etapa.` })}
         />
         {sharedModals}
       </>
