@@ -160,7 +160,7 @@ const Dashboard = () => {
                     <stat.icon className="w-5 h-5" />
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground">Últimos 7 dias</div>
+                <div className="mt-3 text-xs text-muted-foreground">{stat.hint}</div>
               </CardContent>
             </Card>
           ))}
