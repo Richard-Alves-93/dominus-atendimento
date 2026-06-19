@@ -920,11 +920,27 @@ export default function TicketsMobileLayout(props: Props) {
                     <button
                       key={emo}
                       type="button"
-                      onClick={() => {
-                        onToggleReaction?.(actionMsg, emo);
+                      // F.3-fix #6/#7/#8: usar onPointerDown garante disparo
+                      // antes do Sheet começar a fechar em iOS/Android e
+                      // evita que o overlay engula o tap.
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const snapshot = actionMsg;
+                        // Fecha primeiro o sheet (visualmente) e dispara
+                        // a mutation logo em seguida — o invalidate do
+                        // desktop atualiza reactionsByMsg e o badge.
                         closeActionSheet();
+                        Promise.resolve(onToggleReaction?.(snapshot, emo)).catch(
+                          () => { /* erro já é tratado no handler */ }
+                        );
                       }}
-                      className={`text-xl px-1.5 py-1 rounded-full transition active:scale-95 ${
+                      onClick={(e) => {
+                        // Fallback para cliques não-touch (mouse no DevTools).
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className={`text-2xl px-2 py-1.5 rounded-full transition active:scale-90 touch-manipulation ${
                         myReaction === emo ? "bg-primary/15" : "hover:bg-background"
                       }`}
                       aria-label={`Reagir com ${emo}`}
