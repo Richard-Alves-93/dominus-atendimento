@@ -2809,12 +2809,13 @@ const TicketsDesktopLayout = () => {
             </div>
             )}
 
-            <div className="flex-1 relative">
+            <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="absolute inset-0 overflow-y-auto p-4 space-y-3 bg-secondary/30 scrollbar-thin"
+              className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-secondary/30 scrollbar-thin overscroll-contain"
             >
+              <div ref={messagesContentRef} className="min-h-full p-4 space-y-3">
               {messagesQuery.isLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -3085,9 +3086,10 @@ const TicketsDesktopLayout = () => {
                   </div>
                   );
                 })
-
               )}
-              <div ref={endRef} />
+              <div className="h-24 shrink-0" aria-hidden="true" />
+              <div ref={endRef} aria-hidden="true" />
+              </div>
             </div>
             {!isNearBottom && (
               <button
