@@ -1,4 +1,4 @@
-import { ArrowLeft, Filter, Loader2, Send } from "lucide-react";
+import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,9 @@ import {
 } from "@/components/ui/popover";
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
+import { MediaContent } from "@/features/tickets/MediaContent";
 
-// Fase C — Shell mobile com chips, filtro de setor e quick-switch.
+// Fase C/D/E.1 — Shell mobile + render visual read-only completo.
 // Continua sem duplicar regra de negócio: recebe estado/handlers via props.
 
 type AnyTicket = {
@@ -33,7 +34,26 @@ type AnyMessage = {
   sent_at: string;
   created_at: string;
   source?: string | null;
+  status?: string | null;
+  delivery_status?: string | null;
+  failure_reason?: string | null;
+  is_edited?: boolean | null;
+  edited_at?: string | null;
+  reply_to_message_id?: string | null;
+  reply_to_preview?: string | null;
+  reply_to_sender_name?: string | null;
+  reply_to_message_type?: string | null;
+  media_mime_type?: string | null;
+  media_file_name?: string | null;
+  media_size?: number | null;
+  media_duration?: number | null;
+  media_caption?: string | null;
+  media_storage_path?: string | null;
+  media_url?: string | null;
+  _optimistic?: boolean;
 };
+
+type ReactionRow = { id: string; message_id: string; user_id: string; emoji: string };
 
 type AnyDept = { id: string; name: string; status: string };
 
@@ -59,6 +79,8 @@ interface Props {
   activeDepts: AnyDept[];
   deptFilter: string;
   setDeptFilter: (id: string) => void;
+  // E.1 — read-only extras
+  reactionsByMsg?: Map<string, ReactionRow[]>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -83,6 +105,17 @@ function firstName(name?: string | null, phone?: string | null) {
   return s.split(/\s+/)[0].slice(0, 14);
 }
 
+function CheckIcon({ m }: { m: AnyMessage }) {
+  const ds = m._optimistic
+    ? (m.status === "error" ? "failed" : "sending")
+    : (m.delivery_status || m.status || "sent");
+  if (ds === "failed") return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
+  if (ds === "read") return <CheckCheck className="w-3.5 h-3.5 text-sky-500" aria-label="Lida" />;
+  if (ds === "sending") return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
+  if (ds === "delivered") return <CheckCheck className="w-3.5 h-3.5 opacity-80" aria-label="Entregue" />;
+  return <CheckCheck className="w-3.5 h-3.5 opacity-80" aria-label="Enviada" />;
+}
+
 export default function TicketsMobileLayout(props: Props) {
   const {
     tickets,
@@ -104,6 +137,7 @@ export default function TicketsMobileLayout(props: Props) {
     activeDepts,
     deptFilter,
     setDeptFilter,
+    reactionsByMsg,
   } = props;
 
   const filterOptions = [
@@ -259,6 +293,8 @@ export default function TicketsMobileLayout(props: Props) {
   // Quick-switch: top 6 tickets para troca rápida (inclui o atual).
   const quickStrip = tickets.slice(0, 6);
 
+  const MEDIA_TYPES = ["image", "audio", "video", "document", "sticker"];
+
   return (
     <AppLayout title="Atendimentos" mobileFullScreen>
       <div className="flex h-svh w-full max-w-full min-w-0 overflow-hidden bg-[hsl(var(--muted))]/30">
@@ -368,25 +404,87 @@ export default function TicketsMobileLayout(props: Props) {
                   </div>
                 );
               }
+
+              const isMedia = MEDIA_TYPES.includes(m.msg_type);
+              const caption = m.media_caption ?? (isMedia ? m.body : null);
+              const hasReply = !!(m.reply_to_message_id || m.reply_to_preview);
+              const reactions = reactionsByMsg?.get(m.id) ?? [];
+              const reactionCounts = reactions.reduce<Record<string, number>>((acc, r) => {
+                acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+                return acc;
+              }, {});
+
               return (
                 <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-[13px] shadow-card border ${
-                      isMine
-                        ? "bg-success/15 border-success/20 rounded-tr-sm"
-                        : "bg-background rounded-tl-sm"
-                    }`}
-                  >
-                    {m.body ? (
-                      <div className="whitespace-pre-wrap break-words">{m.body}</div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground italic">
-                        [mídia — abra no desktop nesta fase]
+                  <div className="relative max-w-[82%] min-w-0">
+                    <div
+                      className={`rounded-2xl px-3 py-2 text-[13px] border shadow-sm ${
+                        isMine
+                          ? "bg-success/15 border-success/20 text-foreground rounded-tr-sm"
+                          : "bg-background border-border/60 text-foreground rounded-tl-sm"
+                      } ${m.status === "error" ? "ring-1 ring-destructive" : ""}`}
+                    >
+                      {hasReply && (
+                        <div
+                          className={`mb-1.5 rounded-md px-2 py-1 border-l-2 ${
+                            isMine
+                              ? "bg-success/10 border-success/60"
+                              : "bg-muted border-primary/50"
+                          }`}
+                        >
+                          <div className={`text-[11px] font-medium ${isMine ? "text-success" : "text-primary"}`}>
+                            {m.reply_to_sender_name || "Mensagem"}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {m.reply_to_preview || "Mensagem original indisponível"}
+                          </div>
+                        </div>
+                      )}
+
+                      {isMedia && (
+                        <div className="mb-1 min-w-0">
+                          <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
+                        </div>
+                      )}
+
+                      {(isMedia ? caption : m.body) ? (
+                        <div className="whitespace-pre-wrap break-words">
+                          {isMedia ? caption : m.body}
+                        </div>
+                      ) : isMedia ? null : (
+                        <div className="text-xs text-muted-foreground italic">[{m.msg_type}]</div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-1 mt-1 text-muted-foreground">
+                        {m.is_edited && (
+                          <span
+                            className="text-[10px] italic opacity-70"
+                            title={m.edited_at ? `Editada em ${fmtTime(m.edited_at)}` : "Editada"}
+                          >
+                            Editada
+                          </span>
+                        )}
+                        <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
+                        {isMine && <CheckIcon m={m} />}
+                      </div>
+                    </div>
+
+                    {/* Reactions badge (read-only) */}
+                    {Object.keys(reactionCounts).length > 0 && (
+                      <div
+                        className={`mt-0.5 flex gap-1 flex-wrap ${isMine ? "justify-end" : "justify-start"}`}
+                      >
+                        {Object.entries(reactionCounts).map(([emoji, count]) => (
+                          <span
+                            key={emoji}
+                            className="inline-flex items-center gap-0.5 text-[11px] bg-background border border-border/60 rounded-full px-1.5 py-0.5 shadow-sm"
+                          >
+                            <span>{emoji}</span>
+                            {count > 1 && <span className="text-muted-foreground">{count}</span>}
+                          </span>
+                        ))}
                       </div>
                     )}
-                    <div className="text-[10px] text-muted-foreground text-right mt-0.5">
-                      {fmtTime(m.sent_at || m.created_at)}
-                    </div>
                   </div>
                 </div>
               );
