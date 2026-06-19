@@ -140,7 +140,6 @@ Deno.serve(async (req) => {
       .eq("company_id", companyId)
       .eq("direction", "inbound")
       .eq("from_me", false)
-      .not("external_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(50);
 
