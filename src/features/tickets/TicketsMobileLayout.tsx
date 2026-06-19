@@ -250,7 +250,30 @@ export default function TicketsMobileLayout(props: Props) {
     onCopyMessage,
     onReplyMessage,
     onComingSoonAction,
+    pinnedIds,
+    onTogglePinTicket,
   } = props;
+  const pinnedSet = pinnedIds ?? new Set<string>();
+
+  // G.2 — long press no item da lista abre o sheet de ações da conversa
+  const [ticketActionId, setTicketActionId] = useState<string | null>(null);
+  const ticketLongPressRef = useRef<number | null>(null);
+  const ticketLongPressFiredRef = useRef(false);
+  const startTicketLongPress = (ticketId: string) => {
+    if (ticketLongPressRef.current) window.clearTimeout(ticketLongPressRef.current);
+    ticketLongPressFiredRef.current = false;
+    ticketLongPressRef.current = window.setTimeout(() => {
+      ticketLongPressFiredRef.current = true;
+      setTicketActionId(ticketId);
+      try { (navigator as any).vibrate?.(20); } catch { /* noop */ }
+    }, 450);
+  };
+  const cancelTicketLongPress = () => {
+    if (ticketLongPressRef.current) {
+      window.clearTimeout(ticketLongPressRef.current);
+      ticketLongPressRef.current = null;
+    }
+  };
 
   // F.3 — long-press → bottom sheet de ações da mensagem
   const [actionMsg, setActionMsg] = useState<AnyMessage | null>(null);
