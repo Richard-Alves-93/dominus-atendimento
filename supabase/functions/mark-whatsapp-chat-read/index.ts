@@ -23,6 +23,24 @@ function maskJid(jid: string | null | undefined): string {
   return local.slice(0, 2) + "***" + local.slice(-2) + suffix;
 }
 
+function truncateForLog(value: unknown, max = 240): string {
+  const text = typeof value === "string" ? value : JSON.stringify(value ?? "");
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function isUsableOneToOneJid(jid: string | null | undefined): jid is string {
+  return !!jid && jid.endsWith("@s.whatsapp.net") && !jid.includes("@g.us") && !jid.includes("broadcast");
+}
+
+function keyFromRaw(raw: any) {
+  const key = raw?.key ?? raw?.data?.key ?? raw?.message?.key ?? null;
+  return {
+    remoteJid: typeof key?.remoteJid === "string" ? key.remoteJid : null,
+    fromMe: typeof key?.fromMe === "boolean" ? key.fromMe : null,
+    id: typeof key?.id === "string" ? key.id : null,
+  };
+}
+
 async function evoFetch(path: string, body: unknown) {
   const url = `${EVOLUTION_API_URL.replace(/\/+$/, "")}${path}`;
   const res = await fetch(url, {
@@ -110,30 +128,53 @@ Deno.serve(async (req) => {
 
     const { data: contact } = await admin
       .from("contacts")
-      .select("phone_number, remote_jid")
+      .select("phone_number, external_id, metadata")
       .eq("id", ticket.contact_id)
       .maybeSingle();
-    const phone = (contact as any)?.phone_number ?? null;
-    const remoteJid = (contact as any)?.remote_jid
-      ?? (phone ? `${String(phone).replace(/\D/g, "")}@s.whatsapp.net` : null);
-    if (!remoteJid) {
-      return new Response(JSON.stringify({ ok: true, skipped: "no_remote_jid" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
 
     // Fetch unread inbound message IDs for this ticket to mark each as read.
     const { data: unreadMsgs } = await admin
       .from("messages")
-      .select("external_id, from_me, status")
+      .select("id, external_id, provider_message_id, from_me, raw, created_at")
       .eq("ticket_id", ticketId)
       .eq("company_id", companyId)
       .eq("direction", "inbound")
+      .eq("from_me", false)
       .not("external_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(50);
 
+    const latestInboundKey = (unreadMsgs ?? [])
+      .map((m: any) => keyFromRaw(m.raw))
+      .find((k) => isUsableOneToOneJid(k.remoteJid));
+    const metadataRemoteJid = (contact as any)?.metadata?.remote_jid ?? (contact as any)?.metadata?.remoteJid ?? null;
+    const externalJid = (contact as any)?.external_id && String((contact as any).external_id).includes("@")
+      ? String((contact as any).external_id)
+      : null;
+    const phone = (contact as any)?.phone_number ?? null;
+    const phoneJid = phone ? `${String(phone).replace(/\D/g, "")}@s.whatsapp.net` : null;
+    const remoteJid = isUsableOneToOneJid(latestInboundKey?.remoteJid) ? latestInboundKey.remoteJid
+      : isUsableOneToOneJid(metadataRemoteJid) ? metadataRemoteJid
+      : isUsableOneToOneJid(externalJid) ? externalJid
+      : isUsableOneToOneJid(phoneJid) ? phoneJid
+      : null;
+    if (!remoteJid) {
+      return new Response(JSON.stringify({ ok: true, skipped: "no_remote_jid" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const readKeys = (unreadMsgs ?? [])
-      .filter((m: any) => !m.from_me && m.external_id)
-      .map((m: any) => ({ remoteJid, fromMe: false, id: m.external_id }));
+      .map((m: any) => {
+        const rawKey = keyFromRaw(m.raw);
+        const id = rawKey.id ?? m.provider_message_id ?? m.external_id;
+        return {
+          remoteJid: isUsableOneToOneJid(rawKey.remoteJid) ? rawKey.remoteJid : remoteJid,
+          fromMe: rawKey.fromMe ?? false,
+          id,
+          internal_uuid: m.id,
+        };
+      })
+      .filter((m: any) => m.fromMe === false && m.id && m.id !== m.internal_uuid && isUsableOneToOneJid(m.remoteJid))
+      .map(({ internal_uuid: _internal_uuid, ...m }: any) => m);
 
     let evoStatus: number | null = null;
     let evoOk = false;
