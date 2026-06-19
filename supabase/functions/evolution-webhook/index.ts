@@ -7,6 +7,47 @@ const EVO_URL = Deno.env.get("EVOLUTION_API_URL") ?? "";
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
 const MEDIA_BUCKET = "message-media";
 
+// ── Evolution contact enrichment (v2.3.7) ──────────────────────────────────
+// Endpoints utilizados (confirmados na Evolution v2):
+//   POST /chat/findContacts/{instance}      body { where: { id: <jid> } }
+//   POST /chat/fetchProfilePictureUrl/{instance} body { number: <jid> }
+// Usados APENAS para enriquecer contato sem nome/foto em eventos fromMe.
+async function evoFetchContactInfo(instanceName: string, remoteJid: string): Promise<{ name: string | null; avatar: string | null }> {
+  const out = { name: null as string | null, avatar: null as string | null };
+  if (!EVO_URL || !EVO_KEY || !instanceName || !remoteJid) return out;
+  const base = EVO_URL.replace(/\/+$/, "");
+  const headers = { "Content-Type": "application/json", apikey: EVO_KEY };
+  try {
+    const r = await fetch(`${base}/chat/findContacts/${encodeURIComponent(instanceName)}`, {
+      method: "POST", headers, body: JSON.stringify({ where: { id: remoteJid } }),
+    });
+    if (r.ok) {
+      const data = await r.json().catch(() => null);
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.contacts) ? data.contacts : []);
+      const c = arr?.[0];
+      if (c) {
+        const nm = c.pushName ?? c.name ?? c.notify ?? c.verifiedName ?? null;
+        if (nm && typeof nm === "string" && nm.trim()) out.name = nm.trim();
+        const pic = c.profilePicUrl ?? c.profilePictureUrl ?? null;
+        if (pic && typeof pic === "string") out.avatar = pic;
+      }
+    }
+  } catch (e) { console.log("[CONTACT_ENRICHMENT] findContacts err", String(e)); }
+  if (!out.avatar) {
+    try {
+      const r = await fetch(`${base}/chat/fetchProfilePictureUrl/${encodeURIComponent(instanceName)}`, {
+        method: "POST", headers, body: JSON.stringify({ number: remoteJid }),
+      });
+      if (r.ok) {
+        const data = await r.json().catch(() => null);
+        const pic = data?.profilePictureUrl ?? data?.profilePicUrl ?? null;
+        if (pic && typeof pic === "string") out.avatar = pic;
+      }
+    } catch (e) { console.log("[CONTACT_ENRICHMENT] fetchProfilePictureUrl err", String(e)); }
+  }
+  return out;
+}
+
 type MediaFetchResult = {
   base64: string | null;
   hasWebhookBase64: boolean;
@@ -434,21 +475,49 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         let contactId: string | null = null;
         const { data: existingContact } = await admin
           .from("contacts")
-          .select("id, name")
+          .select("id, name, avatar_url")
           .eq("company_id", inst.company_id)
           .eq("phone_number", phone)
           .maybeSingle();
         if (existingContact) {
           contactId = existingContact.id;
-          // não sobrescrever nome com pushName do fromMe
         } else {
           const { data: created } = await admin
             .from("contacts")
             .insert({ company_id: inst.company_id, phone_number: phone, name: null })
-            .select("id")
+            .select("id, name, avatar_url")
             .single();
           contactId = created?.id ?? null;
         }
+
+        // Enriquecimento seguro: se o contato não tem nome ou avatar, tentar
+        // buscar dados reais do destinatário na Evolution (NUNCA usar pushName fromMe).
+        let enrichedName: string | null = null;
+        let enrichedAvatar: string | null = null;
+        const hadNameBefore = Boolean(existingContact?.name);
+        const hadAvatarBefore = Boolean(existingContact?.avatar_url);
+        if (contactId && (!hadNameBefore || !hadAvatarBefore)) {
+          const info = await evoFetchContactInfo(inst.instance_name ?? "", remoteJid);
+          const patch: Record<string, unknown> = {};
+          if (!hadNameBefore && info.name) { patch.name = info.name; enrichedName = info.name; }
+          if (!hadAvatarBefore && info.avatar) { patch.avatar_url = info.avatar; enrichedAvatar = info.avatar; }
+          if (Object.keys(patch).length) {
+            patch.updated_at = new Date().toISOString();
+            await admin.from("contacts").update(patch).eq("id", contactId);
+          }
+          console.log("[CONTACT_ENRICHMENT_AUDIT]", {
+            company_id: inst.company_id,
+            channel_id: inst.channel_id,
+            remote_jid_masked: remoteJid.slice(0, 4) + "***",
+            phone_masked: phone ? phone.slice(0, 4) + "***" + phone.slice(-2) : null,
+            from_me: true,
+            had_name_before: hadNameBefore,
+            found_name: Boolean(enrichedName),
+            found_avatar: Boolean(enrichedAvatar),
+            source: "evolution_findContacts",
+          });
+        }
+
         console.log("[CONTACT_RESOLUTION_AUDIT]", {
           company_id: inst.company_id,
           channel_id: inst.channel_id,
@@ -456,7 +525,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
           phone_masked: phone ? phone.slice(0, 4) + "***" + phone.slice(-2) : null,
           existing_contact_id: existingContact?.id ?? null,
           created_contact_id: existingContact ? null : contactId,
-          name_source: "none_fromMe",
+          name_source: enrichedName ? "evolution_enrichment" : "none_fromMe",
         });
         if (!contactId) {
           auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, mappedStatus, 0);
