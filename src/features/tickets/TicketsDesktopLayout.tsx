@@ -1882,6 +1882,33 @@ const TicketsDesktopLayout = () => {
     setPendingUserId("");
   };
 
+  // Fase B — Shell mobile mínimo.
+  // Em telas pequenas renderiza um layout dedicado que reaproveita os mesmos
+  // estados/handlers desta página (zero duplicação de regra de negócio).
+  // O JSX desktop abaixo continua intacto.
+  if (isMobile) {
+    return (
+      <TicketsMobileLayout
+        tickets={tickets}
+        ticketsLoading={ticketsQuery.isLoading}
+        ticketsError={ticketsQuery.isError}
+        selectedId={selectedId}
+        setSelectedId={setSelectedId}
+        selected={selected}
+        visibleMessages={visibleMessages}
+        messagesLoading={messagesQuery.isLoading}
+        text={text}
+        setText={setText}
+        handleSend={handleSend}
+        filter={filter}
+        setFilter={setFilter}
+        search={search}
+        setSearch={setSearch}
+        canSeeGeneralQueue={canSeeGeneralQueue}
+      />
+    );
+  }
+
   return (
     <AppLayout title="Atendimentos">
       <div className="flex h-[calc(100vh-3.5rem)]">
