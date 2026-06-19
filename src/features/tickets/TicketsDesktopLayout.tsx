@@ -3000,6 +3000,54 @@ const TicketsDesktopLayout = () => {
                 </Button>
               </div>
             )}
+
+            {/* G.5 — Barra contextual de seleção múltipla */}
+            {selectionMode && (() => {
+              const selectedList = visibleMessages.filter((x) => selectedMessageIds.has(x.id));
+              const count = selectedList.length;
+              const MEDIA_DL = ["image", "audio", "video", "document", "sticker"];
+              const single = count === 1 ? selectedList[0] : null;
+              const canDownload = !!(single && MEDIA_DL.includes((single as any).msg_type) && ((single as any).media_url || (single as any).media_storage_path));
+              const label = count === 0 ? "Selecione mensagens" : count === 1 ? "1 selecionada" : `${count} mensagens selecionadas`;
+              const bulkFavorite = async () => {
+                for (const m of selectedList) {
+                  if (!favoriteIds.has(m.id)) {
+                    await toggleFavorite(m as MessageRow);
+                  }
+                }
+                clearSelection();
+              };
+              const downloadOne = () => {
+                if (!single) return;
+                const url = (single as any).media_url as string | null;
+                const path = (single as any).media_storage_path as string | null;
+                if (url) {
+                  window.open(url, "_blank", "noopener,noreferrer");
+                } else if (path) {
+                  toast({ title: "Download", description: "Abra a mídia na bolha para baixar." });
+                }
+              };
+              return (
+                <div className="px-3 py-2 border-b bg-card flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={clearSelection} aria-label="Cancelar seleção">
+                    <X className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm font-medium">{label}</span>
+                  <div className="flex-1" />
+                  {canDownload && (
+                    <Button variant="ghost" size="sm" onClick={downloadOne} className="gap-2">
+                      <Download className="w-4 h-4" /> Baixar
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={bulkFavorite} disabled={count === 0} className="gap-2">
+                    <Star className="w-4 h-4" /> Favoritar
+                  </Button>
+                  <Button variant="default" size="sm" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado na G.6." }); }} disabled={count === 0} className="gap-2">
+                    <Forward className="w-4 h-4" /> Encaminhar
+                  </Button>
+                </div>
+              );
+            })()}
             <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
