@@ -265,8 +265,11 @@ export default function TicketsMobileLayout(props: Props) {
     pinnedMessagePreview = null,
     onTogglePinMessage,
     onUnpinMessage,
+    favoriteIds,
+    onToggleFavorite,
   } = props;
   const pinnedSet = pinnedIds ?? new Set<string>();
+  const favSet = favoriteIds ?? new Set<string>();
 
   // G.2 — long press no item da lista abre o sheet de ações da conversa
   const [ticketActionId, setTicketActionId] = useState<string | null>(null);
