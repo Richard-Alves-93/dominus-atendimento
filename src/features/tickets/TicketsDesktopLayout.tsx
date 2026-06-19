@@ -2517,7 +2517,7 @@ const TicketsDesktopLayout = () => {
                   <div
                     key={t.id}
                     onClick={() => setSelectedId(t.id)}
-                    className={`flex items-start gap-3 px-3 py-3 cursor-pointer border-b transition-colors hover:bg-secondary/50 ${selectedId === t.id ? "bg-secondary" : ""}`}
+                    className={`group/ticket flex items-start gap-3 px-3 py-3 cursor-pointer border-b transition-colors hover:bg-secondary/50 ${selectedId === t.id ? "bg-secondary" : ""}`}
                   >
                     <Avatar className="h-10 w-10 flex-shrink-0">
                       {t.contact?.avatar_url && (
