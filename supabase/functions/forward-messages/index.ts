@@ -131,12 +131,27 @@ Deno.serve(async (req) => {
     // ── fetch source messages (filter by company_id explicitly) ──
     const { data: srcRows, error: srcErr } = await admin
       .from("messages")
-      .select("id, company_id, ticket_id, msg_type, body, media_storage_path, media_mime_type, media_file_name, media_caption")
+      .select("id, company_id, ticket_id, msg_type, body, from_me, external_id, provider_message_id, raw, media_storage_path, media_mime_type, media_file_name, media_caption")
       .in("id", message_ids)
       .eq("company_id", company_id);
 
     if (srcErr) return fail("src_fetch", srcErr.message);
     if (!srcRows || srcRows.length === 0) return fail("src_empty", "Nenhuma mensagem encontrada");
+
+    // Resolve source ticket → contact phone (remoteJid) for native forward payload
+    const srcTicketIds = Array.from(new Set(srcRows.map((r: any) => r.ticket_id).filter(Boolean)));
+    const srcTicketPhone = new Map<string, string>();
+    if (srcTicketIds.length > 0) {
+      const { data: srcTickets } = await admin
+        .from("tickets")
+        .select("id, contact:contacts(phone_number)")
+        .in("id", srcTicketIds)
+        .eq("company_id", company_id);
+      for (const t of (srcTickets ?? []) as any[]) {
+        const p = (t.contact?.phone_number ?? "").replace(/\D/g, "");
+        if (p) srcTicketPhone.set(t.id, p);
+      }
+    }
 
     // Preserve original order from message_ids array
     const byId = new Map(srcRows.map((r: any) => [r.id, r]));
@@ -144,8 +159,33 @@ Deno.serve(async (req) => {
       .map((id) => byId.get(id))
       .filter((r): r is any => !!r);
 
-    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string }> = [];
+    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string; mode?: string }> = [];
     const nowIso = () => new Date().toISOString();
+
+    // Try Evolution native forward endpoint. Returns { ok, status, data } or null when unsupported/no key.
+    async function tryNativeForward(src: any): Promise<{ ok: boolean; status: number; data: any } | null> {
+      const extId = src.external_id ?? src.provider_message_id ?? null;
+      const srcPhone = srcTicketPhone.get(src.ticket_id);
+      if (!extId || !srcPhone) return null;
+      const remoteJid = `${srcPhone}@s.whatsapp.net`;
+      const key = { remoteJid, fromMe: Boolean(src.from_me), id: extId };
+      const endpoint = `${evoBase()}/message/forwardMessage/${instance.instance_name}`;
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+          body: JSON.stringify({ number: phone, message: { key } }),
+        });
+        const txt = await res.text();
+        let data: any = {};
+        try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 300) }; }
+        // Treat 404 / "not found" as "endpoint unsupported" → caller falls back
+        if (res.status === 404) return null;
+        return { ok: res.ok, status: res.status, data };
+      } catch (_e) {
+        return null;
+      }
+    }
 
     for (const src of orderedSources) {
       const forwardedMeta = {
@@ -186,25 +226,36 @@ Deno.serve(async (req) => {
             .select("id").single();
           if (insErr) throw new Error(insErr.message);
 
-          const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
-          const evoRes = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-            body: JSON.stringify({ number: phone, text }),
-          });
-          const evoText = await evoRes.text();
-          let evoData: any = {};
-          try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+          // 1) try native forward (preserves "Forwarded" tag on WhatsApp)
+          const nativeRes = await tryNativeForward(src);
+          let evoRes: Response | null = null;
+          let evoData: any = null;
+          let mode: "native" | "fallback" = "fallback";
 
-          if (!evoRes.ok) {
+          if (nativeRes && nativeRes.ok) {
+            evoData = nativeRes.data;
+            mode = "native";
+          } else {
+            const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
+            evoRes = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+              body: JSON.stringify({ number: phone, text }),
+            });
+            const evoText = await evoRes.text();
+            try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+          }
+
+          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
-              failure_reason: `evolution_${evoRes.status}`,
-              raw: { ...forwardedMeta, evo: evoData },
+              failure_reason: `evolution_${status}`,
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${evoRes.status}` });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -212,14 +263,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
         } else {
           // ── media forward ──
           const mediaType = src.msg_type as MediaType;
@@ -274,40 +325,51 @@ Deno.serve(async (req) => {
             .select("id").single();
           if (insErr) throw new Error(insErr.message);
 
-          let endpoint: string;
-          let body: Record<string, unknown>;
-          if (mediaType === "audio") {
-            endpoint = `${evoBase()}/message/sendWhatsAppAudio/${instance.instance_name}`;
-            body = { number: phone, audio: base64 };
-          } else {
-            endpoint = `${evoBase()}/message/sendMedia/${instance.instance_name}`;
-            body = {
-              number: phone,
-              mediatype: mediaType,
-              mimetype: mime,
-              caption: caption ?? "",
-              media: base64,
-              fileName,
-            };
-          }
-          const evoRes = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-            body: JSON.stringify(body),
-          });
-          const evoText = await evoRes.text();
-          let evoData: any = {};
-          try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+          // 1) try native forward (preserves "Forwarded" tag on WhatsApp)
+          const nativeRes = await tryNativeForward(src);
+          let evoRes: Response | null = null;
+          let evoData: any = null;
+          let mode: "native" | "fallback" = "fallback";
 
-          if (!evoRes.ok) {
+          if (nativeRes && nativeRes.ok) {
+            evoData = nativeRes.data;
+            mode = "native";
+          } else {
+            let endpoint: string;
+            let body: Record<string, unknown>;
+            if (mediaType === "audio") {
+              endpoint = `${evoBase()}/message/sendWhatsAppAudio/${instance.instance_name}`;
+              body = { number: phone, audio: base64 };
+            } else {
+              endpoint = `${evoBase()}/message/sendMedia/${instance.instance_name}`;
+              body = {
+                number: phone,
+                mediatype: mediaType,
+                mimetype: mime,
+                caption: caption ?? "",
+                media: base64,
+                fileName,
+              };
+            }
+            evoRes = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
+              body: JSON.stringify(body),
+            });
+            const evoText = await evoRes.text();
+            try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
+          }
+
+          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
-              failure_reason: `evolution_${evoRes.status}`,
-              raw: { ...forwardedMeta, evo: evoData },
+              failure_reason: `evolution_${status}`,
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${evoRes.status}` });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -315,14 +377,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
         }
       } catch (e) {
         results.push({ source_id: src.id, ok: false, error: String((e as Error)?.message ?? e).slice(0, 200) });
