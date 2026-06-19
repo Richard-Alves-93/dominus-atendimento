@@ -3046,12 +3046,25 @@ const TicketsDesktopLayout = () => {
                   <Button variant="ghost" size="sm" onClick={bulkFavorite} disabled={count === 0} className="gap-2">
                     <Star className="w-4 h-4" /> Favoritar
                   </Button>
-                  <Button variant="default" size="sm" onClick={() => { toast({ title: "Em breve", description: "Encaminhamento será implementado na G.6." }); }} disabled={count === 0} className="gap-2">
+                  <Button variant="default" size="sm" onClick={() => setForwardOpen(true)} disabled={count === 0} className="gap-2">
                     <Forward className="w-4 h-4" /> Encaminhar
                   </Button>
                 </div>
               );
             })()}
+            <ForwardDialog
+              open={forwardOpen}
+              onOpenChange={setForwardOpen}
+              tickets={(ticketsQuery.data ?? []) as any}
+              messageIds={Array.from(selectedMessageIds)}
+              currentTicketId={selectedId}
+              companyId={activeCompanyId}
+              onSuccess={() => {
+                clearSelection();
+                qc.invalidateQueries({ queryKey: ["messages"] });
+                qc.invalidateQueries({ queryKey: ["tickets", activeCompanyId] });
+              }}
+            />
             <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
