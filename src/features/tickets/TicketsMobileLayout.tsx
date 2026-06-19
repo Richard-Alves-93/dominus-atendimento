@@ -636,7 +636,12 @@ export default function TicketsMobileLayout(props: Props) {
         )}
 
         {/* Mensagens */}
-        <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 pt-3 pb-6 space-y-2">
+        <div className="relative flex-1 min-h-0 min-w-0">
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden px-3 pt-3 pb-6 space-y-2"
+        >
           {messagesLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -757,6 +762,18 @@ export default function TicketsMobileLayout(props: Props) {
           )}
           <div ref={messagesEndRef} aria-hidden="true" />
         </div>
+        {!isNearBottom && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            aria-label="Ir para o fim da conversa"
+            className="absolute bottom-3 right-3 z-10 h-9 w-9 rounded-full bg-background/90 border border-border shadow-md backdrop-blur text-muted-foreground hover:text-foreground flex items-center justify-center"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        )}
+        </div>
+
 
 
         {/* Composer mobile (F.2) — +menu, reply preview, quick replies, mic↔send */}
