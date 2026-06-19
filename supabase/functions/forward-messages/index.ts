@@ -62,6 +62,97 @@ function extractExternalId(evoData: any): string | null {
   );
 }
 
+type WaKey = { remoteJid: string; fromMe: boolean; id: string; participant?: string };
+type NativeForwardResult = {
+  attempted: boolean;
+  ok: boolean;
+  confirmed: boolean;
+  status: number | null;
+  data: any;
+  endpointUsed: string | null;
+  payloadShape: string;
+  fallbackReason: string | null;
+  key?: WaKey;
+  keySource?: string;
+};
+
+function maskPhone(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 6) return "***";
+  return `${digits.slice(0, 4)}***${digits.slice(-2)}`;
+}
+function maskJid(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const at = value.indexOf("@");
+  const local = at >= 0 ? value.slice(0, at) : value;
+  const suffix = at >= 0 ? value.slice(at) : "";
+  if (local.length <= 6) return `***${suffix}`;
+  return `${local.slice(0, 4)}***${local.slice(-2)}${suffix}`;
+}
+function truncateForLog(value: unknown, max = 500): string | null {
+  if (value === null || value === undefined) return null;
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+function keyFromCandidate(candidate: any, fallbackRemoteJid: string | null, fallbackFromMe: boolean, fallbackId: string | null): WaKey | null {
+  const id = typeof candidate?.id === "string" && candidate.id.trim() ? candidate.id : fallbackId;
+  const remoteJid = typeof candidate?.remoteJid === "string" && candidate.remoteJid.trim() ? candidate.remoteJid : fallbackRemoteJid;
+  if (!id || !remoteJid) return null;
+  const key: WaKey = {
+    remoteJid,
+    fromMe: typeof candidate?.fromMe === "boolean" ? candidate.fromMe : fallbackFromMe,
+    id,
+  };
+  if (typeof candidate?.participant === "string" && candidate.participant.trim()) key.participant = candidate.participant;
+  return key;
+}
+function resolveOriginalMessage(src: any): { key: WaKey | null; keySource: string | null; message: any | null } {
+  const raw = src.raw ?? {};
+  const rawPayload = src.raw_payload ?? raw?.raw_payload ?? raw?.rawPayload ?? raw?.payload ?? null;
+  const fallbackId = src.provider_message_id ?? src.external_id ?? null;
+  const fallbackRemoteJid = typeof raw?.key?.remoteJid === "string"
+    ? raw.key.remoteJid
+    : typeof rawPayload?.key?.remoteJid === "string"
+      ? rawPayload.key.remoteJid
+      : null;
+  const fallbackFromMe = typeof raw?.key?.fromMe === "boolean" ? raw.key.fromMe : Boolean(src.from_me);
+  const candidates: Array<[string, any]> = [
+    ["raw_payload.key", rawPayload?.key],
+    ["raw.key", raw?.key],
+    ["raw.data.key", raw?.data?.key],
+    ["raw.message.key", raw?.message?.key],
+    ["raw.message.message.key", raw?.message?.message?.key],
+  ];
+  for (const [source, candidate] of candidates) {
+    const key = keyFromCandidate(candidate, fallbackRemoteJid, fallbackFromMe, fallbackId);
+    if (key) {
+      const payload = source.startsWith("raw_payload") ? rawPayload : raw;
+      return { key, keySource: source, message: payload?.message ?? payload?.data?.message ?? null };
+    }
+  }
+  return { key: null, keySource: null, message: raw?.message ?? rawPayload?.message ?? null };
+}
+function hasNativeForwardMarker(value: any, depth = 0): boolean {
+  if (!value || depth > 8) return false;
+  if (Array.isArray(value)) return value.some((item) => hasNativeForwardMarker(item, depth + 1));
+  if (typeof value !== "object") return false;
+  if (value.isForwarded === true) return true;
+  if (Number(value.forwardingScore ?? value.forwarding_score ?? 0) > 0) return true;
+  if (value.forward && typeof value.forward === "object") return true;
+  return Object.values(value).some((item) => hasNativeForwardMarker(item, depth + 1));
+}
+function summarizeEvoResponse(data: any) {
+  const message = data?.message ?? data?.data?.message ?? data?.response?.message ?? null;
+  return {
+    externalId: extractExternalId(data),
+    topLevelKeys: data && typeof data === "object" ? Object.keys(data).slice(0, 12) : [],
+    messageKeys: message && typeof message === "object" ? Object.keys(message).slice(0, 12) : [],
+    hasForwardMarker: hasNativeForwardMarker(data),
+    error: truncateForLog(data?.error ?? (typeof message === "string" ? message : null)),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -159,31 +250,93 @@ Deno.serve(async (req) => {
       .map((id) => byId.get(id))
       .filter((r): r is any => !!r);
 
-    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string; mode?: string }> = [];
+    const results: Array<{ source_id: string; ok: boolean; message_id?: string; error?: string; mode?: string; fallback_reason?: string | null }> = [];
     const nowIso = () => new Date().toISOString();
 
-    // Try Evolution native forward endpoint. Returns { ok, status, data } or null when unsupported/no key.
-    async function tryNativeForward(src: any): Promise<{ ok: boolean; status: number; data: any } | null> {
-      const extId = src.external_id ?? src.provider_message_id ?? null;
+    // Try Evolution native forward endpoint with the most faithful WhatsApp key saved by the webhook.
+    async function tryNativeForward(src: any): Promise<NativeForwardResult> {
       const srcPhone = srcTicketPhone.get(src.ticket_id);
-      if (!extId || !srcPhone) return null;
-      const remoteJid = `${srcPhone}@s.whatsapp.net`;
-      const key = { remoteJid, fromMe: Boolean(src.from_me), id: extId };
+      const fallbackRemoteJid = srcPhone ? `${srcPhone}@s.whatsapp.net` : null;
+      const resolved = resolveOriginalMessage({ ...src, raw: src.raw ?? {}, raw_payload: src.raw_payload });
+      const key = resolved.key ?? keyFromCandidate(null, fallbackRemoteJid, Boolean(src.from_me), src.provider_message_id ?? src.external_id ?? null);
       const endpoint = `${evoBase()}/message/forwardMessage/${instance.instance_name}`;
+      const destinationRemoteJid = `${phone}@s.whatsapp.net`;
+      const fullMessagePayload = resolved.message ? { key, message: resolved.message } : { key };
+      const payload = { number: phone, message: fullMessagePayload };
+      const payloadShape = resolved.message ? "number+message.key+message.message" : "number+message.key";
+      if (!key) {
+        const audit = {
+          instance: instance.instance_name,
+          sourceMessageId: src.id,
+          sourceExternalId: src.external_id ?? null,
+          sourceProviderMessageId: src.provider_message_id ?? null,
+          sourceRemoteJid: null,
+          sourceFromMe: src.from_me,
+          sourceParticipant: null,
+          destinationNumber: maskPhone(phone),
+          destinationRemoteJid: maskJid(destinationRemoteJid),
+          endpointUsed: endpoint,
+          payloadShape,
+          evolutionStatus: null,
+          evolutionResponse: null,
+          forwardMode: "fallback",
+          fallbackReason: "missing_original_key",
+        };
+        console.log("[FORWARD_NATIVE_AUDIT]", audit);
+        return { attempted: false, ok: false, confirmed: false, status: null, data: null, endpointUsed: endpoint, payloadShape, fallbackReason: "missing_original_key" };
+      }
       try {
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: EVO_KEY! },
-          body: JSON.stringify({ number: phone, message: { key } }),
+          body: JSON.stringify(payload),
         });
         const txt = await res.text();
         let data: any = {};
         try { data = JSON.parse(txt); } catch { data = { raw: txt.slice(0, 300) }; }
-        // Treat 404 / "not found" as "endpoint unsupported" → caller falls back
-        if (res.status === 404) return null;
-        return { ok: res.ok, status: res.status, data };
-      } catch (_e) {
-        return null;
+        const responseSummary = summarizeEvoResponse(data);
+        const confirmed = res.ok && responseSummary.hasForwardMarker;
+        const fallbackReason = confirmed ? null : res.ok ? "native_forward_not_confirmed" : `evolution_${res.status}`;
+        console.log("[FORWARD_NATIVE_AUDIT]", {
+          instance: instance.instance_name,
+          sourceMessageId: src.id,
+          sourceExternalId: src.external_id ?? null,
+          sourceProviderMessageId: src.provider_message_id ?? null,
+          sourceRemoteJid: maskJid(key.remoteJid),
+          sourceFromMe: key.fromMe,
+          sourceParticipant: maskJid(key.participant),
+          sourceKeySource: resolved.keySource ?? "fallback_fields",
+          destinationNumber: maskPhone(phone),
+          destinationRemoteJid: maskJid(destinationRemoteJid),
+          endpointUsed: endpoint,
+          payloadShape,
+          evolutionStatus: res.status,
+          evolutionResponse: responseSummary,
+          forwardMode: confirmed ? "native" : "fallback",
+          fallbackReason,
+        });
+        return { attempted: true, ok: res.ok, confirmed, status: res.status, data, endpointUsed: endpoint, payloadShape, fallbackReason, key, keySource: resolved.keySource ?? "fallback_fields" };
+      } catch (e) {
+        const fallbackReason = `native_forward_exception:${String((e as Error)?.message ?? e).slice(0, 120)}`;
+        console.log("[FORWARD_NATIVE_AUDIT]", {
+          instance: instance.instance_name,
+          sourceMessageId: src.id,
+          sourceExternalId: src.external_id ?? null,
+          sourceProviderMessageId: src.provider_message_id ?? null,
+          sourceRemoteJid: maskJid(key.remoteJid),
+          sourceFromMe: key.fromMe,
+          sourceParticipant: maskJid(key.participant),
+          sourceKeySource: resolved.keySource ?? "fallback_fields",
+          destinationNumber: maskPhone(phone),
+          destinationRemoteJid: maskJid(destinationRemoteJid),
+          endpointUsed: endpoint,
+          payloadShape,
+          evolutionStatus: null,
+          evolutionResponse: null,
+          forwardMode: "fallback",
+          fallbackReason,
+        });
+        return { attempted: true, ok: false, confirmed: false, status: null, data: null, endpointUsed: endpoint, payloadShape, fallbackReason, key, keySource: resolved.keySource ?? "fallback_fields" };
       }
     }
 
@@ -232,9 +385,11 @@ Deno.serve(async (req) => {
           let evoData: any = null;
           let mode: "native" | "fallback" = "fallback";
 
-          if (nativeRes && nativeRes.ok) {
+          if (nativeRes.confirmed) {
             evoData = nativeRes.data;
             mode = "native";
+          } else if (nativeRes.ok && nativeRes.fallbackReason === "native_forward_not_confirmed") {
+            evoData = nativeRes.data;
           } else {
             const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
             evoRes = await fetch(endpoint, {
@@ -246,16 +401,17 @@ Deno.serve(async (req) => {
             try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
           }
 
-          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          const fallbackReason = nativeRes.fallbackReason;
+          const status = mode === "native" ? (nativeRes.status ?? 200) : (evoRes?.status ?? 0);
           if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
               failure_reason: `evolution_${status}`,
-              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: fallbackReason },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode, fallback_reason: fallbackReason });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -263,14 +419,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: mode === "fallback" ? fallbackReason : null },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode, fallback_reason: mode === "fallback" ? fallbackReason : null });
         } else {
           // ── media forward ──
           const mediaType = src.msg_type as MediaType;
@@ -331,9 +487,11 @@ Deno.serve(async (req) => {
           let evoData: any = null;
           let mode: "native" | "fallback" = "fallback";
 
-          if (nativeRes && nativeRes.ok) {
+          if (nativeRes.confirmed) {
             evoData = nativeRes.data;
             mode = "native";
+          } else if (nativeRes.ok && nativeRes.fallbackReason === "native_forward_not_confirmed") {
+            evoData = nativeRes.data;
           } else {
             let endpoint: string;
             let body: Record<string, unknown>;
@@ -360,16 +518,17 @@ Deno.serve(async (req) => {
             try { evoData = JSON.parse(evoText); } catch { evoData = { raw: evoText.slice(0, 300) }; }
           }
 
-          const status = mode === "native" ? 200 : (evoRes?.status ?? 0);
+          const fallbackReason = nativeRes.fallbackReason;
+          const status = mode === "native" ? (nativeRes.status ?? 200) : (evoRes?.status ?? 0);
           if (mode === "fallback" && !(evoRes && evoRes.ok)) {
             await admin.from("messages").update({
               delivery_status: "failed",
               status: "failed",
               failed_at: nowIso(),
               failure_reason: `evolution_${status}`,
-              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+              raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: fallbackReason },
             }).eq("id", inserted.id);
-            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode });
+            results.push({ source_id: src.id, ok: false, error: `evolution_${status}`, mode, fallback_reason: fallbackReason });
             continue;
           }
           const externalId = extractExternalId(evoData);
@@ -377,14 +536,14 @@ Deno.serve(async (req) => {
             delivery_status: "sent",
             status: "sent",
             sent_at: nowIso(),
-            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode },
+            raw: { ...forwardedMeta, evo: evoData, forward_mode: mode, fallback_reason: mode === "fallback" ? fallbackReason : null },
           };
           if (externalId) {
             patch.external_id = externalId;
             patch.provider_message_id = externalId;
           }
           await admin.from("messages").update(patch).eq("id", inserted.id);
-          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode });
+          results.push({ source_id: src.id, ok: true, message_id: inserted.id, mode, fallback_reason: mode === "fallback" ? fallbackReason : null });
         }
       } catch (e) {
         results.push({ source_id: src.id, ok: false, error: String((e as Error)?.message ?? e).slice(0, 200) });
