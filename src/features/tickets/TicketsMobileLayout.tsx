@@ -250,9 +250,9 @@ export default function TicketsMobileLayout(props: Props) {
 
   return (
     <AppLayout title="Atendimentos">
-      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[hsl(var(--muted))]/30">
+      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[hsl(var(--muted))]/30 w-full max-w-full overflow-x-hidden min-w-0">
         {/* Header */}
-        <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0">
+        <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0 min-w-0 max-w-full">
           <Button
             size="icon"
             variant="ghost"
