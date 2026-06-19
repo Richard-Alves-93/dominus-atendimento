@@ -342,17 +342,14 @@ export default function Landing() {
         <section className="max-w-6xl mx-auto px-6 pt-16 pb-12 md:pt-24 md:pb-16">
           <div className="grid lg:grid-cols-2 gap-10 items-center">
             <div className="text-center lg:text-left">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 text-success text-xs font-medium mb-5">
-                <Sparkles className="w-3.5 h-3.5" /> Atendimento profissional pelo WhatsApp
-              </span>
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1]">
                 Organize todos os atendimentos da sua empresa em um só lugar.
               </h1>
               <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
-                Com o Dominus, sua equipe atende pelo{" "}
-                <Typewriter words={["WhatsApp", "Instagram", "Facebook", "E-mail", "seus canais"]} />{" "}
-                com mais organização, histórico,
-                setores, responsáveis e acompanhamento em tempo real.
+                Com o Dominus, sua equipe centraliza atendimentos de{" "}
+                <Typewriter words={["WhatsApp", "Instagram", "Facebook", "E-mail", "todos os seus canais"]} />{" "}
+                com mais organização, histórico, setores, responsáveis e
+                acompanhamento em tempo real.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
                 <Button asChild size="lg" className="gradient-primary text-primary-foreground w-full sm:w-auto">
