@@ -291,6 +291,23 @@ function jidToPhone(jid?: string | null): string | null {
   return String(jid).split("@")[0].split(":")[0] || null;
 }
 
+function maskJid(jid?: string | null): string | null {
+  if (!jid) return null;
+  const [localRaw, domain = ""] = String(jid).split("@");
+  const local = localRaw.split(":")[0];
+  const masked = local.length <= 4 ? "***" : `${local.slice(0, 2)}***${local.slice(-2)}`;
+  return domain ? `${masked}@${domain}` : masked;
+}
+
+function safeKeyAudit(key: any) {
+  return {
+    id: key?.id ?? null,
+    fromMe: typeof key?.fromMe === "boolean" ? key.fromMe : null,
+    remote_jid_masked: maskJid(key?.remoteJid ?? null),
+    participant_masked: maskJid(key?.participant ?? null),
+  };
+}
+
 function detectMsgType(m: any): string {
   const msg = m?.message ?? {};
   if (msg.conversation || msg.extendedTextMessage) return "text";
@@ -302,6 +319,28 @@ function detectMsgType(m: any): string {
   if (msg.locationMessage) return "location";
   if (msg.contactMessage) return "contact";
   return "other";
+}
+
+function auditOtherMessage(inst: any, m: any, source: string) {
+  const msg = m?.message ?? {};
+  const proto = msg.protocolMessage ?? null;
+  console.log("[WHATSAPP_OTHER_MESSAGE_AUDIT]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    instance_name: inst.instance_name ?? null,
+    event_type: source,
+    message_id: m?.key?.id ?? m?.id ?? null,
+    remote_jid_masked: maskJid(m?.key?.remoteJid ?? null),
+    has_protocolMessage: !!proto,
+    protocol_type: proto?.type ?? null,
+    has_editedMessage: !!msg.editedMessage,
+    has_conversation: !!msg.conversation,
+    has_extendedTextMessage: !!msg.extendedTextMessage,
+    has_imageMessage: !!msg.imageMessage,
+    has_documentMessage: !!msg.documentMessage,
+    raw_message_keys: Object.keys(msg),
+    key: safeKeyAudit(m?.key ?? {}),
+  });
 }
 
 function extractBody(m: any): string | null {
