@@ -291,6 +291,23 @@ function jidToPhone(jid?: string | null): string | null {
   return String(jid).split("@")[0].split(":")[0] || null;
 }
 
+function maskJid(jid?: string | null): string | null {
+  if (!jid) return null;
+  const [localRaw, domain = ""] = String(jid).split("@");
+  const local = localRaw.split(":")[0];
+  const masked = local.length <= 4 ? "***" : `${local.slice(0, 2)}***${local.slice(-2)}`;
+  return domain ? `${masked}@${domain}` : masked;
+}
+
+function safeKeyAudit(key: any) {
+  return {
+    id: key?.id ?? null,
+    fromMe: typeof key?.fromMe === "boolean" ? key.fromMe : null,
+    remote_jid_masked: maskJid(key?.remoteJid ?? null),
+    participant_masked: maskJid(key?.participant ?? null),
+  };
+}
+
 function detectMsgType(m: any): string {
   const msg = m?.message ?? {};
   if (msg.conversation || msg.extendedTextMessage) return "text";
@@ -302,6 +319,28 @@ function detectMsgType(m: any): string {
   if (msg.locationMessage) return "location";
   if (msg.contactMessage) return "contact";
   return "other";
+}
+
+function auditOtherMessage(inst: any, m: any, source: string) {
+  const msg = m?.message ?? {};
+  const proto = msg.protocolMessage ?? null;
+  console.log("[WHATSAPP_OTHER_MESSAGE_AUDIT]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    instance_name: inst.instance_name ?? null,
+    event_type: source,
+    message_id: m?.key?.id ?? m?.id ?? null,
+    remote_jid_masked: maskJid(m?.key?.remoteJid ?? null),
+    has_protocolMessage: !!proto,
+    protocol_type: proto?.type ?? null,
+    has_editedMessage: !!msg.editedMessage,
+    has_conversation: !!msg.conversation,
+    has_extendedTextMessage: !!msg.extendedTextMessage,
+    has_imageMessage: !!msg.imageMessage,
+    has_documentMessage: !!msg.documentMessage,
+    raw_message_keys: Object.keys(msg),
+    key: safeKeyAudit(m?.key ?? {}),
+  });
 }
 
 function extractBody(m: any): string | null {
@@ -325,9 +364,23 @@ function extractEditInfo(m: any): {
   original_provider_id: string;
   new_body: string | null;
   edited_message: any;
+  detection_source?: string;
 } | null {
   const msg = m?.message ?? m?.update?.message ?? null;
   if (!msg) return null;
+  // Shape 0: Evolution/Baileys encrypted edit notification.
+  // Real v2.3.7 payload observed: message.secretEncryptedMessage { secretEncType: 2, targetMessageKey: { id } }
+  // It does not expose edited plaintext, but it MUST NOT be inserted as a new "other" bubble.
+  const secret = msg.secretEncryptedMessage ?? null;
+  const secretTargetId = secret?.targetMessageKey?.id ?? null;
+  if (secret && Number(secret.secretEncType) === 2 && secretTargetId) {
+    return {
+      original_provider_id: String(secretTargetId),
+      new_body: null,
+      edited_message: secret,
+      detection_source: "secretEncryptedMessage.secretEncType=2",
+    };
+  }
   // Shape A: protocolMessage type 14
   const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
   if (proto && (proto.type === 14 || proto.type === "MESSAGE_EDIT" || proto.editedMessage)) {
@@ -341,7 +394,7 @@ function extractEditInfo(m: any): {
         edited?.videoMessage?.caption ??
         edited?.documentMessage?.caption ??
         null;
-      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited };
+      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited, detection_source: "protocolMessage" };
     }
   }
   // Shape B: top-level editedMessage with separate key.id reference (fallback)
@@ -349,9 +402,30 @@ function extractEditInfo(m: any): {
   const refId = m?.key?.id ?? m?.update?.key?.id ?? null;
   if (editedTop && refId && (editedTop.conversation || editedTop.extendedTextMessage)) {
     const newBody = editedTop.conversation ?? editedTop.extendedTextMessage?.text ?? null;
-    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop };
+    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop, detection_source: "editedMessage" };
   }
   return null;
+}
+
+function auditEditDetection(inst: any, source: string, m: any, editInfo: ReturnType<typeof extractEditInfo>) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  console.log(editInfo ? "[WHATSAPP_EDIT_DETECT_AUDIT]" : "[WHATSAPP_EDIT_DETECT_MISS]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    event_type: source,
+    detection_source: editInfo?.detection_source ?? null,
+    has_protocolMessage: !!proto,
+    protocol_type: proto?.type ?? null,
+    has_secretEncryptedMessage: !!msg.secretEncryptedMessage,
+    secret_enc_type: msg.secretEncryptedMessage?.secretEncType ?? null,
+    original_provider_id_present: !!editInfo?.original_provider_id,
+    edited_text_present: !!editInfo?.new_body,
+    edited_media_caption_present: false,
+    reason: editInfo ? null : "not_recognized_as_edit",
+    message_keys: Object.keys(msg),
+    key: safeKeyAudit(m?.key ?? m?.update?.key ?? {}),
+  });
 }
 
 async function applyMessageEdit(
@@ -362,26 +436,54 @@ async function applyMessageEdit(
   source: string,
 ): Promise<boolean> {
   const remoteJid: string | null = m?.key?.remoteJid ?? m?.update?.key?.remoteJid ?? null;
-  const remoteJidMasked = remoteJid ? remoteJid.slice(0, 4) + "***" : null;
+  const remoteJidMasked = maskJid(remoteJid);
 
-  const { data: original } = await admin
+  const { data: foundByProvider } = await admin
     .from("messages")
     .select("id, body, original_body, ticket_id, media_caption, msg_type")
     .eq("company_id", inst.company_id)
     .eq("channel_id", inst.channel_id)
-    .or(`provider_message_id.eq.${edit.original_provider_id},external_id.eq.${edit.original_provider_id}`)
+    .eq("provider_message_id", edit.original_provider_id)
     .limit(1)
     .maybeSingle();
+  const { data: foundByExternal } = foundByProvider ? { data: null } : await admin
+    .from("messages")
+    .select("id, body, original_body, ticket_id, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .eq("external_id", edit.original_provider_id)
+    .limit(1)
+    .maybeSingle();
+  const { data: foundByRawKey } = foundByProvider || foundByExternal ? { data: null } : await admin
+    .from("messages")
+    .select("id, body, original_body, ticket_id, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .eq("raw->key->>id", edit.original_provider_id)
+    .limit(1)
+    .maybeSingle();
+  const original = foundByProvider ?? foundByExternal ?? foundByRawKey;
+
+  console.log("[WHATSAPP_EDIT_LOOKUP_AUDIT]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    original_provider_id: edit.original_provider_id,
+    found_by_provider_message_id: !!foundByProvider,
+    found_by_external_id: !!foundByExternal,
+    found_by_raw_key_id: !!foundByRawKey,
+    found_message_id: original?.id ?? null,
+    found_ticket_id: original?.ticket_id ?? null,
+  });
 
   if (!original) {
     console.log("[WHATSAPP_EDIT_ORIGINAL_NOT_FOUND]", {
       company_id: inst.company_id,
       channel_id: inst.channel_id,
       instance_name: inst.instance_name ?? null,
-      edited_message_id: edit.original_provider_id,
+      original_provider_id: edit.original_provider_id,
       remote_jid_masked: remoteJidMasked,
     });
-    return true; // swallow: do NOT insert a new "[other]" row
+    return false; // caller still swallows: do NOT insert a new "[other]" row
   }
 
   const editedAt = m?.messageTimestamp
@@ -529,8 +631,18 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 
     // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
     const editInfo = extractEditInfo(m);
+    if (editInfo || m?.message?.protocolMessage || m?.message?.editedMessage || m?.message?.secretEncryptedMessage) {
+      auditEditDetection(inst, source, m, editInfo);
+    }
     if (editInfo) {
-      await applyMessageEdit(admin, inst, m, editInfo, source);
+      const editApplied = await applyMessageEdit(admin, inst, m, editInfo, source);
+      console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
+        company_id: inst.company_id,
+        channel_id: inst.channel_id,
+        original_provider_id_present: !!editInfo.original_provider_id,
+        edit_applied: editApplied,
+        skipped_insert: true,
+      });
       continue;
     }
 
@@ -703,6 +815,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         }
 
         const msgType = detectMsgType(m);
+        if (msgType === "other") auditOtherMessage(inst, m, source);
         const body = extractBody(m);
         const sentAt = m?.messageTimestamp
           ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
@@ -850,6 +963,10 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     if (!ticket) continue;
 
     const msgType = detectMsgType(m);
+    if (msgType === "other") {
+      auditEditDetection(inst, source, m, null);
+      auditOtherMessage(inst, m, source);
+    }
     const body = extractBody(m);
     const sentAt = m?.messageTimestamp
       ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
@@ -941,8 +1058,18 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
     // Edit detection: messages.update can carry editedMessage/protocolMessage.
     // Detect FIRST so we don't mistakenly treat an edit as a status update.
     const editInfo = extractEditInfo(u);
+    if (editInfo || u?.message?.protocolMessage || u?.message?.editedMessage || u?.message?.secretEncryptedMessage || u?.update?.message?.protocolMessage || u?.update?.message?.editedMessage || u?.update?.message?.secretEncryptedMessage) {
+      auditEditDetection(inst, source, u, editInfo);
+    }
     if (editInfo) {
-      await applyMessageEdit(admin, inst, u, editInfo, source);
+      const editApplied = await applyMessageEdit(admin, inst, u, editInfo, source);
+      console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
+        company_id: inst.company_id,
+        channel_id: inst.channel_id,
+        original_provider_id_present: !!editInfo.original_provider_id,
+        edit_applied: editApplied,
+        skipped_insert: true,
+      });
       continue;
     }
     const providerId: string | undefined =
