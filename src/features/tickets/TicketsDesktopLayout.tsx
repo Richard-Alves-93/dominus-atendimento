@@ -3087,7 +3087,7 @@ const TicketsDesktopLayout = () => {
                   );
                 })
               )}
-              <div className="h-24 shrink-0" aria-hidden="true" />
+              <div className="h-3 shrink-0" aria-hidden="true" />
               <div ref={endRef} aria-hidden="true" />
               </div>
             </div>

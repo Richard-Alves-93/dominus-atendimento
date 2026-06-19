@@ -950,7 +950,7 @@ export default function TicketsMobileLayout(props: Props) {
               );
             })
           )}
-          <div className="h-28 shrink-0" aria-hidden="true" />
+          <div className="h-3 shrink-0" aria-hidden="true" />
           <div ref={messagesEndRef} aria-hidden="true" />
           </div>
         </div>
