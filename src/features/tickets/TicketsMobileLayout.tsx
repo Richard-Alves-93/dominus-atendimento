@@ -258,6 +258,10 @@ export default function TicketsMobileLayout(props: Props) {
     onComingSoonAction,
     pinnedIds,
     onTogglePinTicket,
+    pinnedMessageId = null,
+    pinnedMessagePreview = null,
+    onTogglePinMessage,
+    onUnpinMessage,
   } = props;
   const pinnedSet = pinnedIds ?? new Set<string>();
 
