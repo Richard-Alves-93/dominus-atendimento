@@ -137,6 +137,17 @@ interface Props {
   onChangeStatus?: (status: "open" | "pending" | "closed") => void;
   onOpenAssignDept?: () => void;
   onCopyProtocol?: () => void;
+  // F.2 — composer mobile (reusa handlers do desktop)
+  onFileSelected?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  replyPreview?: { sender: string; preview: string } | null;
+  onCancelReply?: () => void;
+  onOpenEvent?: () => void;
+  onShowComingSoon?: (label: string) => void;
+  isRecording?: boolean;
+  recSeconds?: number;
+  onStartRecording?: () => void;
+  onCancelRecording?: () => void;
+  onStopAndSendRecording?: () => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
