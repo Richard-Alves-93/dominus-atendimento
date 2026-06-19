@@ -618,7 +618,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     let contactId: string | null = null;
     const { data: existingContact } = await admin
       .from("contacts")
-      .select("id, name")
+      .select("id, name, avatar_url")
       .eq("company_id", inst.company_id)
       .eq("phone_number", phone)
       .maybeSingle();
@@ -653,11 +653,34 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       const { data: created } = await admin
         .from("contacts")
         .insert({ company_id: inst.company_id, phone_number: phone, name: pushName })
-        .select("id")
+        .select("id, avatar_url")
         .single();
       contactId = created?.id ?? null;
     }
     if (!contactId) continue;
+
+    // Enriquecimento de avatar inbound: só busca quando o contato ainda não tem foto.
+    // Nunca sobrescreve avatar existente com valor vazio.
+    try {
+      const hadAvatarBefore = Boolean(existingContact?.avatar_url);
+      if (!hadAvatarBefore) {
+        const info = await evoFetchContactInfo(inst.instance_name ?? "", remoteJid);
+        if (info.avatar) {
+          await admin.from("contacts")
+            .update({ avatar_url: info.avatar, updated_at: new Date().toISOString() })
+            .eq("id", contactId);
+        }
+        console.log("[CONTACT_AVATAR_AUDIT]", {
+          company_id: inst.company_id,
+          channel_id: inst.channel_id,
+          contact_id: contactId,
+          remote_jid_masked: remoteJid.slice(0, 4) + "***",
+          had_avatar_before: hadAvatarBefore,
+          found_avatar: Boolean(info.avatar),
+          source: "inbound_evolution_findContacts",
+        });
+      }
+    } catch (e) { console.log("[CONTACT_AVATAR_AUDIT] err", String(e)); }
 
     let { data: ticket } = await admin
       .from("tickets")
