@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -3091,8 +3092,23 @@ const TicketsDesktopLayout = () => {
                       : (m.reply_to_preview ?? null);
                   const hasReply = !!(m.reply_to_message_id || m.reply_to_preview);
                   const replyUnavailable = hasReply && !replyPreview;
+                  const isSelectable = selectionMode && !m._optimistic && m.source !== "system";
                   return (
-                  <div key={m.id} data-message-id={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"} transition-shadow`}>
+                  <div
+                    key={m.id}
+                    data-message-id={m.id}
+                    className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"} ${selectionMode ? "items-center gap-2" : ""} transition-shadow`}
+                    onClick={isSelectable ? () => toggleSelected(m.id) : undefined}
+                  >
+                    {isSelectable && (
+                      <Checkbox
+                        checked={selectedMessageIds.has(m.id)}
+                        onCheckedChange={() => toggleSelected(m.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0"
+                        aria-label="Selecionar mensagem"
+                      />
+                    )}
                     <div className="relative max-w-[70%]">
                       {/* Mobile reaction strip when selected */}
                       {isMobile && selectedMessageId === m.id && !m._optimistic && m.source !== "system" && (

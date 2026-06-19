@@ -41,6 +41,7 @@ import {
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Popover,
@@ -976,8 +977,23 @@ export default function TicketsMobileLayout(props: Props) {
                 return acc;
               }, {});
 
+              const isSelectable = selectionMode && !m._optimistic && m.source !== "system";
               return (
-                <div key={m.id} data-message-id={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div
+                  key={m.id}
+                  data-message-id={m.id}
+                  className={`flex ${isMine ? "justify-end" : "justify-start"} ${selectionMode ? "items-center gap-2" : ""}`}
+                  onClick={isSelectable ? () => toggleSelectedMsg(m.id) : undefined}
+                >
+                  {isSelectable && (
+                    <Checkbox
+                      checked={selectedMsgIds.has(m.id)}
+                      onCheckedChange={() => toggleSelectedMsg(m.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0"
+                      aria-label="Selecionar mensagem"
+                    />
+                  )}
                   <div className="relative max-w-[82%] min-w-0">
                     <div
                       role="button"
