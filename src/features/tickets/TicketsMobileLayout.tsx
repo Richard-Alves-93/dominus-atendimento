@@ -1,4 +1,31 @@
-import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle, MoreVertical, RotateCcw, Clock, CheckCircle2, Building2, UserPlus, Copy } from "lucide-react";
+import { useRef } from "react";
+import {
+  ArrowLeft,
+  Filter,
+  Loader2,
+  Send,
+  Check,
+  CheckCheck,
+  AlertCircle,
+  MoreVertical,
+  RotateCcw,
+  Clock,
+  CheckCircle2,
+  Building2,
+  UserPlus,
+  Copy,
+  Plus,
+  X,
+  Mic,
+  Trash2,
+  FileText,
+  Image as ImageIcon,
+  Camera,
+  Music,
+  User as UserIcon,
+  BarChart3,
+  CalendarPlus,
+} from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +45,17 @@ import {
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
+import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
+
+const ATTACH_DOC_ACCEPT =
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv";
+
+function formatRecTime(sec: number) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
 
 // Fase C/D/E.1 — Shell mobile + render visual read-only completo.
 // Continua sem duplicar regra de negócio: recebe estado/handlers via props.
@@ -99,6 +137,17 @@ interface Props {
   onChangeStatus?: (status: "open" | "pending" | "closed") => void;
   onOpenAssignDept?: () => void;
   onCopyProtocol?: () => void;
+  // F.2 — composer mobile (reusa handlers do desktop)
+  onFileSelected?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  replyPreview?: { sender: string; preview: string } | null;
+  onCancelReply?: () => void;
+  onOpenEvent?: () => void;
+  onShowComingSoon?: (label: string) => void;
+  isRecording?: boolean;
+  recSeconds?: number;
+  onStartRecording?: () => void;
+  onCancelRecording?: () => void;
+  onStopAndSendRecording?: () => void;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -165,7 +214,22 @@ export default function TicketsMobileLayout(props: Props) {
     onChangeStatus,
     onOpenAssignDept,
     onCopyProtocol,
+    onFileSelected,
+    replyPreview,
+    onCancelReply,
+    onOpenEvent,
+    onShowComingSoon,
+    isRecording = false,
+    recSeconds = 0,
+    onStartRecording,
+    onCancelRecording,
+    onStopAndSendRecording,
   } = props;
+
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const filterOptions = [
     { value: "open" as const, label: "Abertos" },
@@ -574,24 +638,152 @@ export default function TicketsMobileLayout(props: Props) {
           )}
         </div>
 
-        {/* Composer mínimo (apenas texto nesta fase) */}
-        <div className="border-t bg-background px-2 py-2 flex items-end gap-2 shrink-0 w-full max-w-full min-w-0">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Digite..."
-            rows={1}
-            className="flex-1 min-w-0 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-muted border-0 px-3 py-2 text-sm"
+        {/* Composer mobile (F.2) — +menu, reply preview, quick replies, mic↔send */}
+        <div className="border-t bg-background px-2 py-2 flex flex-col gap-1.5 shrink-0 w-full max-w-full min-w-0">
+          {replyPreview && (
+            <div className="flex items-start gap-2 rounded-md border-l-2 border-primary/60 bg-muted/60 px-2.5 py-1.5 min-w-0">
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-medium text-primary truncate">
+                  Respondendo {replyPreview.sender}
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate">
+                  {replyPreview.preview}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={() => onCancelReply?.()}
+                aria-label="Cancelar resposta"
+              >
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+
+          {/* Hidden file inputs — usam handleFileSelected do desktop via prop */}
+          <input ref={documentInputRef} type="file" accept={ATTACH_DOC_ACCEPT} className="hidden" onChange={onFileSelected} />
+          <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={onFileSelected} />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            {...({ capture: "environment" } as any)}
+            className="hidden"
+            onChange={onFileSelected}
           />
-          <Button
-            size="icon"
-            className="h-10 w-10 rounded-full gradient-primary text-primary-foreground shrink-0"
-            onClick={handleSend}
-            disabled={!text.trim()}
-            aria-label="Enviar"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+          <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={onFileSelected} />
+
+          {isRecording ? (
+            <div className="flex items-center gap-2 w-full min-w-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-full shrink-0 text-destructive"
+                onClick={() => onCancelRecording?.()}
+                aria-label="Cancelar gravação"
+              >
+                <Trash2 className="w-5 h-5" />
+              </Button>
+              <div className="flex-1 h-10 rounded-full bg-secondary px-3 flex items-center gap-2 text-sm min-w-0">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-destructive animate-pulse shrink-0" />
+                <span className="text-muted-foreground truncate">Gravando…</span>
+                <span className="ml-auto tabular-nums font-medium">{formatRecTime(recSeconds)}</span>
+              </div>
+              <Button
+                type="button"
+                onClick={() => onStopAndSendRecording?.()}
+                size="icon"
+                className="gradient-primary text-primary-foreground h-10 w-10 rounded-full shrink-0"
+                aria-label="Enviar gravação"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-end gap-1.5 w-full min-w-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-full shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label="Anexar"
+                    disabled={!onFileSelected}
+                  >
+                    <Plus className="w-5 h-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" className="w-56">
+                  <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
+                    <FileText className="w-4 h-4 mr-2" /> Documento
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => mediaInputRef.current?.click()}>
+                    <ImageIcon className="w-4 h-4 mr-2" /> Fotos e vídeos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
+                    <Camera className="w-4 h-4 mr-2" /> Câmera
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => audioInputRef.current?.click()}>
+                    <Music className="w-4 h-4 mr-2" /> Áudio
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onShowComingSoon?.("Contato")}>
+                    <UserIcon className="w-4 h-4 mr-2" /> Contato
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onShowComingSoon?.("Enquete")}>
+                    <BarChart3 className="w-4 h-4 mr-2" /> Enquete
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onOpenEvent?.()} disabled={!selected || !onOpenEvent}>
+                    <CalendarPlus className="w-4 h-4 mr-2" /> Evento
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <QuickRepliesPopover
+                disabled={!selected}
+                contactName={selected?.contact?.name ?? null}
+                protocol={selected?.protocol_number ?? null}
+                onInsert={(snippet) =>
+                  setText(text.trim().length === 0 ? snippet : `${text}\n${snippet}`)
+                }
+              />
+
+              <Textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Digite..."
+                rows={1}
+                className="flex-1 min-w-0 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-secondary border-0 px-3 py-2 text-sm"
+              />
+
+              {text.trim().length === 0 ? (
+                <Button
+                  type="button"
+                  onClick={() => onStartRecording?.()}
+                  size="icon"
+                  className="gradient-primary text-primary-foreground h-10 w-10 rounded-full shrink-0"
+                  aria-label="Gravar áudio"
+                  disabled={!onStartRecording}
+                >
+                  <Mic className="w-4 h-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSend}
+                  size="icon"
+                  className="gradient-primary text-primary-foreground h-10 w-10 rounded-full shrink-0"
+                  aria-label="Enviar"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
         </div>
       </div>
