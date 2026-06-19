@@ -185,10 +185,26 @@ Deno.serve(async (req) => {
       });
       evoStatus = r.status;
       evoOk = r.ok;
+      console.log("[WHATSAPP_MARK_READ_RESPONSE]", {
+        company_id: companyId,
+        ticket_id: ticketId,
+        instance_name: instance.instance_name,
+        remote_jid_masked: maskJid(remoteJid),
+        message_ids_count: readKeys.length,
+        http_status: r.status,
+        response_ok: r.ok,
+        response_body_truncated: truncateForLog(r.json ?? r.text),
+      });
       if (!r.ok) {
         console.error("[WHATSAPP_MARK_READ_ERROR]", {
-          company_id: companyId, ticket_id: ticketId,
-          error_code: r.status, error_message: (r.json?.message ?? r.text ?? "").toString().slice(0, 240),
+          company_id: companyId,
+          ticket_id: ticketId,
+          instance_name: instance.instance_name,
+          remote_jid_masked: maskJid(remoteJid),
+          payload_shape: { readMessages: readKeys.map((k: any) => ({ remoteJid: maskJid(k.remoteJid), fromMe: k.fromMe, id_prefix: String(k.id).slice(0, 6), id_length: String(k.id).length })) },
+          http_status: r.status,
+          error_message: truncateForLog(r.json?.message ?? r.text),
+          response_body_truncated: truncateForLog(r.json ?? r.text),
         });
       }
     }
