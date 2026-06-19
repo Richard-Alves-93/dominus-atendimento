@@ -527,6 +527,15 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     const pushName = m?.pushName ?? m?.profileName ?? null;
     const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
 
+    // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
+    const editInfo = extractEditInfo(m);
+    if (editInfo) {
+      await applyMessageEdit(admin, inst, m, editInfo, source);
+      continue;
+    }
+
+
+
     // ── Outbound (fromMe): we already created this message in send-whatsapp-message.
     // Just patch the existing row by external_id / provider_message_id so we don't duplicate.
     if (fromMe) {
