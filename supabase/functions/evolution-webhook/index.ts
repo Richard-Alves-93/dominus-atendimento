@@ -1119,6 +1119,7 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, u, editInfo, source);
+      auditTechnicalEventSkipped(inst, source, u, editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
         channel_id: inst.channel_id,
@@ -1126,6 +1127,12 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
         edit_applied: editApplied,
         skipped_insert: true,
       });
+      continue;
+    }
+    const technicalEvent = isTechnicalWhatsAppEvent(u);
+    if (technicalEvent.technical) {
+      auditEditDetection(inst, source, u, null);
+      auditTechnicalEventSkipped(inst, source, u, technicalEvent.reason, null);
       continue;
     }
     const providerId: string | undefined =
