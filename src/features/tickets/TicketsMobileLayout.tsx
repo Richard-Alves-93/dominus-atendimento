@@ -214,7 +214,22 @@ export default function TicketsMobileLayout(props: Props) {
     onChangeStatus,
     onOpenAssignDept,
     onCopyProtocol,
+    onFileSelected,
+    replyPreview,
+    onCancelReply,
+    onOpenEvent,
+    onShowComingSoon,
+    isRecording = false,
+    recSeconds = 0,
+    onStartRecording,
+    onCancelRecording,
+    onStopAndSendRecording,
   } = props;
+
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const filterOptions = [
     { value: "open" as const, label: "Abertos" },
