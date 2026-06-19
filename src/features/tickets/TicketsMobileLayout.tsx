@@ -283,6 +283,7 @@ export default function TicketsMobileLayout(props: Props) {
   // terminam de carregar e alteram a altura da lista.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
   const lastMessageId = visibleMessages.length
     ? visibleMessages[visibleMessages.length - 1].id
     : null;
@@ -295,8 +296,16 @@ export default function TicketsMobileLayout(props: Props) {
       requestAnimationFrame(() => {
         c.scrollTop = c.scrollHeight;
         messagesEndRef.current?.scrollIntoView({ block: "end" });
+        setIsNearBottom(true);
       });
     });
+  };
+
+  const handleMessagesScroll = () => {
+    const c = messagesContainerRef.current;
+    if (!c) return;
+    const distanceFromBottom = c.scrollHeight - c.scrollTop - c.clientHeight;
+    setIsNearBottom(distanceFromBottom < 120);
   };
 
   useEffect(() => {
