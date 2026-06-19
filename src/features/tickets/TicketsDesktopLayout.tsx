@@ -204,6 +204,7 @@ interface PendingMessage {
     size: number;
     previewUrl: string; // local blob URL
     caption: string | null;
+    storagePath?: string;
   };
 }
 
