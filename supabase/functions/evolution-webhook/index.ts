@@ -631,8 +631,18 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 
     // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
     const editInfo = extractEditInfo(m);
+    if (editInfo || m?.message?.protocolMessage || m?.message?.editedMessage || m?.message?.secretEncryptedMessage) {
+      auditEditDetection(inst, source, m, editInfo);
+    }
     if (editInfo) {
-      await applyMessageEdit(admin, inst, m, editInfo, source);
+      const editApplied = await applyMessageEdit(admin, inst, m, editInfo, source);
+      console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
+        company_id: inst.company_id,
+        channel_id: inst.channel_id,
+        original_provider_id_present: !!editInfo.original_provider_id,
+        edit_applied: editApplied,
+        skipped_insert: true,
+      });
       continue;
     }
 
@@ -805,6 +815,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         }
 
         const msgType = detectMsgType(m);
+        if (msgType === "other") auditOtherMessage(inst, m, source);
         const body = extractBody(m);
         const sentAt = m?.messageTimestamp
           ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
@@ -952,6 +963,10 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     if (!ticket) continue;
 
     const msgType = detectMsgType(m);
+    if (msgType === "other") {
+      auditEditDetection(inst, source, m, null);
+      auditOtherMessage(inst, m, source);
+    }
     const body = extractBody(m);
     const sentAt = m?.messageTimestamp
       ? new Date(Number(m.messageTimestamp) * 1000).toISOString()
@@ -1043,8 +1058,18 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
     // Edit detection: messages.update can carry editedMessage/protocolMessage.
     // Detect FIRST so we don't mistakenly treat an edit as a status update.
     const editInfo = extractEditInfo(u);
+    if (editInfo || u?.message?.protocolMessage || u?.message?.editedMessage || u?.message?.secretEncryptedMessage || u?.update?.message?.protocolMessage || u?.update?.message?.editedMessage || u?.update?.message?.secretEncryptedMessage) {
+      auditEditDetection(inst, source, u, editInfo);
+    }
     if (editInfo) {
-      await applyMessageEdit(admin, inst, u, editInfo, source);
+      const editApplied = await applyMessageEdit(admin, inst, u, editInfo, source);
+      console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
+        company_id: inst.company_id,
+        channel_id: inst.channel_id,
+        original_provider_id_present: !!editInfo.original_provider_id,
+        edit_applied: editApplied,
+        skipped_insert: true,
+      });
       continue;
     }
     const providerId: string | undefined =
