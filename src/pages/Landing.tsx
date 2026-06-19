@@ -13,7 +13,6 @@ import {
   Send,
   Search,
   Filter,
-  Sparkles,
   ArrowRight,
   BarChart3,
   CalendarClock,
@@ -21,7 +20,6 @@ import {
   Tag,
   ShieldCheck,
   Building2,
-  Paperclip,
   Smile,
   Mic,
 } from "lucide-react";
