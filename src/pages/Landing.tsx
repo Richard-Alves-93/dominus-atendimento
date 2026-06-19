@@ -169,10 +169,10 @@ function MockChat() {
             </div>
           </nav>
           <div className="px-3 py-2 border-t border-white/10 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary/30 text-white flex items-center justify-center text-[10px] font-semibold">A</div>
-            <div className="leading-tight">
-              <div className="text-[11px] font-medium">Ana Lima</div>
-              <div className="text-[9.5px] text-slate-400">Rives Atendimento</div>
+            <div className="w-6 h-6 rounded-full bg-primary/30 text-white flex items-center justify-center text-[10px] font-semibold shrink-0">A</div>
+            <div className="leading-tight hidden sm:block min-w-0">
+              <div className="text-[11px] font-medium truncate">Ana Lima</div>
+              <div className="text-[9.5px] text-slate-400 truncate">Rives Atendimento</div>
             </div>
           </div>
         </aside>
