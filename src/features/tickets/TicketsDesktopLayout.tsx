@@ -374,6 +374,8 @@ const TicketsDesktopLayout = () => {
     setSelectionMode(false);
     setSelectedMessageIds(new Set());
   };
+  // G.6 — encaminhamento
+  const [forwardOpen, setForwardOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const clearLongPress = () => {
     if (longPressTimerRef.current) {
