@@ -362,6 +362,61 @@ export default function TicketsMobileLayout(props: Props) {
               {selected.status === "open" ? "Aberto" : selected.status === "pending" ? "Pendente" : "Fechado"}
             </span>
           )}
+          {canAcceptSelected && (
+            <Button
+              size="sm"
+              className="h-8 px-2.5 text-[11px] gradient-primary text-primary-foreground shrink-0"
+              onClick={() => onAccept?.()}
+              disabled={acceptLoading}
+              aria-label="Aceitar atendimento"
+            >
+              {acceptLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Aceitar"}
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" aria-label="Mais opções">
+                <MoreVertical className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {canTakeOverSelected && (
+                <DropdownMenuItem onClick={() => onTakeOver?.()}>
+                  <UserPlus className="w-4 h-4 mr-2" /> Assumir atendimento
+                </DropdownMenuItem>
+              )}
+              {onOpenAssignDept && (
+                <DropdownMenuItem onClick={() => onOpenAssignDept()} disabled={!canEditSelected}>
+                  <Building2 className="w-4 h-4 mr-2" />
+                  {selected?.department_id ? "Transferir setor" : "Definir setor"}
+                </DropdownMenuItem>
+              )}
+              {(canTakeOverSelected || onOpenAssignDept) && <DropdownMenuSeparator />}
+              {selected?.status !== "open" && (
+                <DropdownMenuItem onClick={() => onChangeStatus?.("open")} disabled={!canEditSelected}>
+                  <RotateCcw className="w-4 h-4 mr-2" /> Reabrir atendimento
+                </DropdownMenuItem>
+              )}
+              {selected?.status !== "pending" && (
+                <DropdownMenuItem onClick={() => onChangeStatus?.("pending")} disabled={!canEditSelected}>
+                  <Clock className="w-4 h-4 mr-2" /> Marcar como pendente
+                </DropdownMenuItem>
+              )}
+              {selected?.status !== "closed" && (
+                <DropdownMenuItem onClick={() => onChangeStatus?.("closed")} disabled={!canEditSelected}>
+                  <CheckCircle2 className="w-4 h-4 mr-2" /> Fechar atendimento
+                </DropdownMenuItem>
+              )}
+              {selected?.protocol_number && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onCopyProtocol?.()}>
+                    <Copy className="w-4 h-4 mr-2" /> Copiar protocolo
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Quick-switch carousel */}
