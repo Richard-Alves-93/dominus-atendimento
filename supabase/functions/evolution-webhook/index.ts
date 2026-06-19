@@ -475,21 +475,49 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         let contactId: string | null = null;
         const { data: existingContact } = await admin
           .from("contacts")
-          .select("id, name")
+          .select("id, name, avatar_url")
           .eq("company_id", inst.company_id)
           .eq("phone_number", phone)
           .maybeSingle();
         if (existingContact) {
           contactId = existingContact.id;
-          // não sobrescrever nome com pushName do fromMe
         } else {
           const { data: created } = await admin
             .from("contacts")
             .insert({ company_id: inst.company_id, phone_number: phone, name: null })
-            .select("id")
+            .select("id, name, avatar_url")
             .single();
           contactId = created?.id ?? null;
         }
+
+        // Enriquecimento seguro: se o contato não tem nome ou avatar, tentar
+        // buscar dados reais do destinatário na Evolution (NUNCA usar pushName fromMe).
+        let enrichedName: string | null = null;
+        let enrichedAvatar: string | null = null;
+        const hadNameBefore = Boolean(existingContact?.name);
+        const hadAvatarBefore = Boolean(existingContact?.avatar_url);
+        if (contactId && (!hadNameBefore || !hadAvatarBefore)) {
+          const info = await evoFetchContactInfo(inst.instance_name ?? "", remoteJid);
+          const patch: Record<string, unknown> = {};
+          if (!hadNameBefore && info.name) { patch.name = info.name; enrichedName = info.name; }
+          if (!hadAvatarBefore && info.avatar) { patch.avatar_url = info.avatar; enrichedAvatar = info.avatar; }
+          if (Object.keys(patch).length) {
+            patch.updated_at = new Date().toISOString();
+            await admin.from("contacts").update(patch).eq("id", contactId);
+          }
+          console.log("[CONTACT_ENRICHMENT_AUDIT]", {
+            company_id: inst.company_id,
+            channel_id: inst.channel_id,
+            remote_jid_masked: remoteJid.slice(0, 4) + "***",
+            phone_masked: phone ? phone.slice(0, 4) + "***" + phone.slice(-2) : null,
+            from_me: true,
+            had_name_before: hadNameBefore,
+            found_name: Boolean(enrichedName),
+            found_avatar: Boolean(enrichedAvatar),
+            source: "evolution_findContacts",
+          });
+        }
+
         console.log("[CONTACT_RESOLUTION_AUDIT]", {
           company_id: inst.company_id,
           channel_id: inst.channel_id,
@@ -497,7 +525,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
           phone_masked: phone ? phone.slice(0, 4) + "***" + phone.slice(-2) : null,
           existing_contact_id: existingContact?.id ?? null,
           created_contact_id: existingContact ? null : contactId,
-          name_source: "none_fromMe",
+          name_source: enrichedName ? "evolution_enrichment" : "none_fromMe",
         });
         if (!contactId) {
           auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, mappedStatus, 0);
