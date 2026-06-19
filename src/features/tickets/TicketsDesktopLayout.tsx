@@ -1358,6 +1358,88 @@ const TicketsDesktopLayout = () => {
     setTimeout(() => composerRef.current?.focus(), 50);
   };
 
+  const ensureRealMessageBeforeDrop = async (args: {
+    pending: PendingMessage;
+    realId?: string | null;
+    providerId?: string | null;
+    phase: string;
+    maxAttempts?: number;
+  }) => {
+    const { pending, realId = null, providerId = null, phase, maxAttempts = 18 } = args;
+    const key = ["messages", pending.ticketId] as const;
+    for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+      let cache = orderedMessages((qc.getQueryData<MessageRow[]>(key as any) ?? []) as MessageRow[]);
+      let real = cache.find((m) => realMatchesPending(pending, m, { realId, providerId }));
+      if (real) {
+        qc.setQueryData<MessageRow[]>(key as any, upsertMessage(cache, real));
+        messageLifecycleAudit(`${phase}:real_confirmed`, {
+          ticketId: pending.ticketId,
+          selectedId,
+          optimisticId: pending.tempId,
+          realId: real.id,
+          externalId: real.external_id ?? real.provider_message_id ?? null,
+          body: real.body ?? null,
+          rawBody: real.raw_body ?? null,
+          messageType: real.msg_type,
+          cacheMessagesLength: cache.length,
+          pendingMessagesLength: pendingMessages.length,
+        });
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== pending.tempId));
+        return true;
+      }
+
+      if (attempt % 3 === 0) {
+        try {
+          const fresh = await fetchMessagesForTicket(pending.ticketId);
+          qc.setQueryData<MessageRow[]>(key as any, fresh);
+          cache = fresh;
+          real = cache.find((m) => realMatchesPending(pending, m, { realId, providerId }));
+          if (real) {
+            messageLifecycleAudit(`${phase}:real_confirmed_after_fetch`, {
+              ticketId: pending.ticketId,
+              selectedId,
+              optimisticId: pending.tempId,
+              realId: real.id,
+              externalId: real.external_id ?? real.provider_message_id ?? null,
+              body: real.body ?? null,
+              rawBody: real.raw_body ?? null,
+              messageType: real.msg_type,
+              cacheMessagesLength: cache.length,
+              pendingMessagesLength: pendingMessages.length,
+            });
+            setPendingMessages((prev) => prev.filter((p) => p.tempId !== pending.tempId));
+            return true;
+          }
+        } catch (e) {
+          messageLifecycleAudit(`${phase}:fetch_failed`, {
+            ticketId: pending.ticketId,
+            selectedId,
+            optimisticId: pending.tempId,
+            error: (e as Error)?.message ?? String(e),
+          });
+        }
+      }
+
+      messageLifecycleAudit(`${phase}:keep_optimistic`, {
+        ticketId: pending.ticketId,
+        selectedId,
+        optimisticId: pending.tempId,
+        realId,
+        externalId: providerId,
+        body: pending.body,
+        messageType: pending.media?.type ?? "text",
+        cacheMessagesLength: cache.length,
+        pendingMessagesLength: pendingMessages.length,
+        lastVisibleIds: cache.slice(-5).map((m) => m.id),
+        lastVisibleBodies: cache.slice(-5).map((m) => m.raw_body ?? m.body ?? m.media_caption ?? ""),
+      });
+
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    }
+
+    return false;
+  };
+
   const sendMutation = useMutation({
     mutationFn: async (vars: { body: string; tempId: string; ticketId: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
