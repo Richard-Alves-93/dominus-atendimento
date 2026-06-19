@@ -976,6 +976,9 @@ export default function TicketsMobileLayout(props: Props) {
                           </span>
                         )}
                         <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
+                        {favSet.has(m.id) && (
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" aria-label="Favoritada" />
+                        )}
                         {isMine && <CheckIcon m={m} />}
                       </div>
                     </div>
