@@ -363,6 +363,8 @@ export default function TicketsMobileLayout(props: Props) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const lastScrolledTicketRef = useRef<string | null>(null);
+  const lastMessageCountRef = useRef(0);
   const lastMessageId = visibleMessages.length
     ? visibleMessages[visibleMessages.length - 1].id
     : null;
@@ -457,8 +459,22 @@ export default function TicketsMobileLayout(props: Props) {
   useEffect(() => {
     if (!selectedId) return;
     if (messagesLoading) return;
+    if (lastScrolledTicketRef.current === selectedId) return;
+    lastScrolledTicketRef.current = selectedId;
+    lastMessageCountRef.current = visibleMessages.length;
     return stabilizeScrollToBottom("initial");
-  }, [selectedId, visibleMessages.length, lastMessageId, messagesLoading, stabilizeScrollToBottom]);
+  }, [selectedId, messagesLoading, visibleMessages.length, stabilizeScrollToBottom]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (lastScrolledTicketRef.current !== selectedId) return;
+    const prev = lastMessageCountRef.current;
+    const next = visibleMessages.length;
+    lastMessageCountRef.current = next;
+    if (next > prev && isNearBottom) {
+      scrollToBottom("new_message");
+    }
+  }, [visibleMessages.length, selectedId, isNearBottom, scrollToBottom]);
 
 
   const filterOptions = [
