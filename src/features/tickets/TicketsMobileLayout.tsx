@@ -1233,10 +1233,10 @@ export default function TicketsMobileLayout(props: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => showComing("Favoritos")}
+                    onClick={() => { onToggleFavorite?.(actionMsg); closeActionSheet(); }}
                     className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
                   >
-                    <Star className="w-4 h-4 text-muted-foreground" /> Favoritar
+                    <Star className={`w-4 h-4 ${favSet.has(actionMsg.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} /> {favSet.has(actionMsg.id) ? "Desfavoritar" : "Favoritar"}
                   </button>
                   <button
                     type="button"
