@@ -897,6 +897,46 @@ export default function TicketsMobileLayout(props: Props) {
           </div>
         )}
 
+        {/* G.5 — Barra contextual de seleção múltipla (mobile) */}
+        {selectionMode && (() => {
+          const selectedList = visibleMessages.filter((x) => selectedMsgIds.has(x.id));
+          const count = selectedList.length;
+          const single = count === 1 ? selectedList[0] : null;
+          const canDownload = !!(single && MEDIA_TYPES.includes((single as any).msg_type) && ((single as any).media_url || (single as any).media_storage_path));
+          const label = count === 0 ? "Selecione" : count === 1 ? "1 selecionada" : `${count} selecionadas`;
+          const bulkFav = async () => {
+            for (const m of selectedList) {
+              if (!favSet.has(m.id)) await onToggleFavorite?.(m);
+            }
+            clearSelection();
+          };
+          const downloadOne = () => {
+            if (!single) return;
+            const url = (single as any).media_url as string | null;
+            if (url) window.open(url, "_blank", "noopener,noreferrer");
+          };
+          return (
+            <div className="px-2 py-1.5 border-b bg-card flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={clearSelection} aria-label="Cancelar">
+                <X className="w-5 h-5" />
+              </Button>
+              <span className="text-sm font-medium">{label}</span>
+              <div className="flex-1" />
+              {canDownload && (
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={downloadOne} aria-label="Baixar">
+                  <Download className="w-5 h-5" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={bulkFav} disabled={count === 0} aria-label="Favoritar">
+                <Star className="w-5 h-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { onShowComingSoon?.("Encaminhamento será implementado na G.6"); }} disabled={count === 0} aria-label="Encaminhar">
+                <Forward className="w-5 h-5" />
+              </Button>
+            </div>
+          );
+        })()}
+
         {/* Mensagens */}
         <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
         <div
