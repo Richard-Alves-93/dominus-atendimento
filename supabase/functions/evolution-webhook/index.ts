@@ -516,6 +516,7 @@ function extractEditInfo(m: any): {
   new_body: string | null;
   edited_message: any;
   detection_source?: string;
+  new_body_source?: string | null;
 } | null {
   const msg = m?.message ?? m?.update?.message ?? null;
   if (!msg) return null;
@@ -525,35 +526,54 @@ function extractEditInfo(m: any): {
   const secret = msg.secretEncryptedMessage ?? null;
   const secretTargetId = secret?.targetMessageKey?.id ?? null;
   if (secret && Number(secret.secretEncType) === 2 && secretTargetId) {
+    const editedBody = extractEditedBodyCandidate(m);
     return {
       original_provider_id: String(secretTargetId),
-      new_body: null,
-      edited_message: secret,
+      new_body: editedBody.body,
+      edited_message: editedBody.editedMessage ?? secret,
       detection_source: "secretEncryptedMessage.secretEncType=2",
+      new_body_source: editedBody.source,
     };
   }
   // Shape A: protocolMessage type 14
   const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
   if (proto && (proto.type === 14 || proto.type === "MESSAGE_EDIT" || proto.editedMessage)) {
-    const origId = proto?.key?.id ?? null;
-    const edited = proto.editedMessage ?? null;
+    const origId = proto?.key?.id ?? proto?.messageKey?.id ?? null;
+    const editedBody = extractEditedBodyCandidate(m);
     if (origId) {
-      const newBody =
-        edited?.conversation ??
-        edited?.extendedTextMessage?.text ??
-        edited?.imageMessage?.caption ??
-        edited?.videoMessage?.caption ??
-        edited?.documentMessage?.caption ??
-        null;
-      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited, detection_source: "protocolMessage" };
+      return {
+        original_provider_id: String(origId),
+        new_body: editedBody.body,
+        edited_message: editedBody.editedMessage,
+        detection_source: "protocolMessage",
+        new_body_source: editedBody.source,
+      };
     }
   }
   // Shape B: top-level editedMessage with separate key.id reference (fallback)
   const editedTop = msg.editedMessage ?? null;
-  const refId = m?.key?.id ?? m?.update?.key?.id ?? null;
-  if (editedTop && refId && (editedTop.conversation || editedTop.extendedTextMessage)) {
-    const newBody = editedTop.conversation ?? editedTop.extendedTextMessage?.text ?? null;
-    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop, detection_source: "editedMessage" };
+  const refId = editedTop?.key?.id ?? editedTop?.message?.key?.id ?? m?.update?.key?.id ?? m?.key?.id ?? null;
+  if (editedTop && refId) {
+    const editedBody = extractEditedBodyCandidate(m);
+    return {
+      original_provider_id: String(refId),
+      new_body: editedBody.body,
+      edited_message: editedBody.editedMessage ?? editedTop,
+      detection_source: "editedMessage",
+      new_body_source: editedBody.source,
+    };
+  }
+  // Shape C: messages.update may carry the updated original message content directly.
+  const directUpdatedBody = m?.update?.message ? extractEditedBodyFromMessage(m.update.message) : null;
+  const directUpdatedId = m?.update?.key?.id ?? null;
+  if (directUpdatedId && directUpdatedBody) {
+    return {
+      original_provider_id: String(directUpdatedId),
+      new_body: directUpdatedBody,
+      edited_message: m.update.message,
+      detection_source: "messages.update.message",
+      new_body_source: "update.message",
+    };
   }
   return null;
 }
@@ -572,6 +592,7 @@ function auditEditDetection(inst: any, source: string, m: any, editInfo: ReturnT
     secret_enc_type: msg.secretEncryptedMessage?.secretEncType ?? null,
     original_provider_id_present: !!editInfo?.original_provider_id,
     edited_text_present: !!editInfo?.new_body,
+    edited_text_source: editInfo?.new_body_source ?? null,
     edited_media_caption_present: false,
     reason: editInfo ? null : "not_recognized_as_edit",
     message_keys: Object.keys(msg),
