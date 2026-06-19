@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Filter,
@@ -361,60 +361,104 @@ export default function TicketsMobileLayout(props: Props) {
   // terminam de carregar e alteram a altura da lista.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesContentRef = useRef<HTMLDivElement>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const lastMessageId = visibleMessages.length
     ? visibleMessages[visibleMessages.length - 1].id
     : null;
 
-  const scrollToBottom = () => {
+  const distanceFromBottom = useCallback(() => {
     const c = messagesContainerRef.current;
-    if (!c) return;
-    requestAnimationFrame(() => {
+    if (!c) return 0;
+    return Math.max(0, c.scrollHeight - c.scrollTop - c.clientHeight);
+  }, []);
+
+  const scrollBottomAudit = useCallback((phase: string) => {
+    const c = messagesContainerRef.current;
+    if (!c || typeof window === "undefined") return;
+    try {
+      if (localStorage.getItem("dominus.scrollBottomAudit") !== "true") return;
+      console.debug("[SCROLL_BOTTOM_AUDIT]", {
+        layout: "mobile",
+        phase,
+        selectedId,
+        scrollTop: Math.round(c.scrollTop),
+        scrollHeight: Math.round(c.scrollHeight),
+        clientHeight: Math.round(c.clientHeight),
+        distanceFromBottom: Math.round(distanceFromBottom()),
+        lastMessageId,
+      });
+    } catch { /* noop */ }
+  }, [distanceFromBottom, lastMessageId, selectedId]);
+
+  const scrollToBottom = useCallback((phase = "manual") => {
+    const apply = () => {
+      const c = messagesContainerRef.current;
+      if (!c) return;
       c.scrollTop = c.scrollHeight;
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+      c.scrollTop = c.scrollHeight;
+      setIsNearBottom(true);
+    };
+    apply();
+    requestAnimationFrame(() => {
+      apply();
       requestAnimationFrame(() => {
-        c.scrollTop = c.scrollHeight;
-        messagesEndRef.current?.scrollIntoView({ block: "end" });
-        setIsNearBottom(true);
+        apply();
+        scrollBottomAudit(phase);
       });
     });
-  };
+  }, [scrollBottomAudit]);
+
+  const stabilizeScrollToBottom = useCallback((phase: string) => {
+    let active = true;
+    let raf1 = 0;
+    let raf2 = 0;
+    let ro: ResizeObserver | null = null;
+    const keepPinned = () => {
+      if (!active) return;
+      scrollToBottom(phase);
+    };
+
+    keepPinned();
+    raf1 = requestAnimationFrame(() => {
+      keepPinned();
+      raf2 = requestAnimationFrame(keepPinned);
+    });
+
+    const content = messagesContentRef.current;
+    if (content && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(keepPinned);
+      ro.observe(content);
+    }
+
+    const stop = window.setTimeout(() => {
+      active = false;
+      ro?.disconnect();
+      ro = null;
+      scrollBottomAudit(`${phase}:settled`);
+    }, 2200);
+
+    return () => {
+      active = false;
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(stop);
+      ro?.disconnect();
+    };
+  }, [scrollBottomAudit, scrollToBottom]);
 
   const handleMessagesScroll = () => {
     const c = messagesContainerRef.current;
     if (!c) return;
-    const distanceFromBottom = c.scrollHeight - c.scrollTop - c.clientHeight;
-    setIsNearBottom(distanceFromBottom < 120);
+    setIsNearBottom(distanceFromBottom() <= 120);
   };
 
   useEffect(() => {
     if (!selectedId) return;
-    scrollToBottom();
-    // Re-tenta após render de mídias/imagens (cobre conversa longa).
-    const t1 = window.setTimeout(scrollToBottom, 120);
-    const t2 = window.setTimeout(scrollToBottom, 400);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [selectedId, visibleMessages.length, lastMessageId, messagesLoading]);
-
-  // ResizeObserver: quando imagens/áudios carregam, a altura da lista cresce —
-  // mantém o scroll colado no fim se o usuário ainda estiver perto do fim.
-  useEffect(() => {
-    const c = messagesContainerRef.current;
-    if (!c || typeof ResizeObserver === "undefined") return;
-    let prevHeight = c.scrollHeight;
-    const ro = new ResizeObserver(() => {
-      const nearBottom =
-        c.scrollHeight - c.scrollTop - c.clientHeight < 160;
-      if (c.scrollHeight > prevHeight && nearBottom) {
-        c.scrollTop = c.scrollHeight;
-      }
-      prevHeight = c.scrollHeight;
-    });
-    ro.observe(c);
-    return () => ro.disconnect();
-  }, [selectedId]);
+    if (messagesLoading) return;
+    return stabilizeScrollToBottom("initial");
+  }, [selectedId, visibleMessages.length, lastMessageId, messagesLoading, stabilizeScrollToBottom]);
 
 
   const filterOptions = [
