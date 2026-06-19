@@ -132,7 +132,7 @@ function MockChat() {
         <span className="ml-3 text-[11px] text-muted-foreground truncate">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[44px_112px_minmax(0,1fr)] min-[390px]:grid-cols-[48px_126px_minmax(0,1fr)] sm:grid-cols-[160px_210px_minmax(0,1fr)] lg:grid-cols-[190px_240px_minmax(0,1fr)] h-[360px] min-[390px]:h-[390px] sm:h-[440px] lg:h-[460px] text-sm min-w-0">
+      <div className="grid grid-cols-[160px_210px_minmax(0,1fr)] lg:grid-cols-[190px_240px_minmax(0,1fr)] h-[440px] lg:h-[460px] text-sm min-w-0">
 
         {/* Sidebar */}
         <aside className="bg-[#0b1220] text-slate-200 flex flex-col min-w-0 overflow-hidden">
@@ -320,6 +320,125 @@ function MockChat() {
   );
 }
 
+function MockChatMobile() {
+  const conv = [
+    { name: "Mariana", msg: "Oi, gostaria...", time: "09:42", unread: 2, active: true, avatar: "https://i.pravatar.cc/80?img=47" },
+    { name: "João", msg: "Obrigado!", time: "09:28", unread: 0, avatar: "https://i.pravatar.cc/80?img=12" },
+    { name: "Clínica Vida", msg: "Confirmar?", time: "09:10", unread: 1, avatar: "https://i.pravatar.cc/80?img=32" },
+  ];
+  const icons = [BarChart3, MessageSquare, Users, Tag, CalendarClock];
+  return (
+    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden w-full max-w-full min-w-0">
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/40">
+        <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
+        <span className="ml-3 text-[10px] text-muted-foreground truncate">painel.crmdominus.com.br</span>
+      </div>
+      <div className="grid grid-cols-[56px_minmax(0,1fr)] h-[560px] min-w-0">
+        {/* Sidebar compact icons only */}
+        <aside className="bg-[#0b1220] text-slate-200 flex flex-col items-center py-3 gap-1">
+          <div className="w-8 h-8 rounded-md gradient-primary flex items-center justify-center mb-2">
+            <Zap className="w-4 h-4 text-primary-foreground" />
+          </div>
+          {icons.map((Ic, i) => (
+            <div key={i} className={`w-9 h-9 rounded-md flex items-center justify-center ${i === 1 ? "bg-primary/25 text-white" : "text-slate-400"}`}>
+              <Ic className="w-4 h-4" />
+            </div>
+          ))}
+          <div className="flex-1" />
+          <div className="w-7 h-7 rounded-full bg-primary/30 text-white flex items-center justify-center text-[10px] font-semibold">A</div>
+        </aside>
+
+        {/* Main panel: contact header + chips + tiny list + chat */}
+        <section className="flex flex-col bg-[hsl(var(--muted))]/30 min-w-0 overflow-hidden">
+          {/* Contact header */}
+          <div className="h-14 border-b px-3 flex items-center justify-between bg-background gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 bg-primary/15">
+                <img src="https://i.pravatar.cc/80?img=47" alt="Mariana" className="h-9 w-9 rounded-full object-cover" />
+              </div>
+              <div className="leading-tight min-w-0">
+                <div className="text-[13px] font-semibold truncate">Mariana Souza</div>
+                <div className="text-[10px] text-muted-foreground truncate">+55 21 · Vendas · Ana</div>
+              </div>
+            </div>
+            <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium shrink-0">Aberto</span>
+          </div>
+
+          {/* Status chips */}
+          <div className="px-3 py-1.5 flex gap-1.5 border-b bg-background overflow-hidden">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary text-primary-foreground">Abertos</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Pendentes</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Fila</span>
+          </div>
+
+          {/* Mini contact strip */}
+          <div className="flex gap-1.5 px-2 py-2 border-b bg-background overflow-hidden">
+            {conv.map((c) => (
+              <div key={c.name} className={`flex flex-col items-center gap-1 px-1.5 py-1 rounded-md min-w-0 ${c.active ? "bg-primary/10" : ""}`}>
+                <div className="relative">
+                  <img src={c.avatar} alt={c.name} className="h-8 w-8 rounded-full object-cover" />
+                  {c.unread > 0 && (
+                    <span className="absolute -top-1 -right-1 text-[8.5px] min-w-[14px] h-[14px] px-1 rounded-full bg-success text-white flex items-center justify-center">
+                      {c.unread}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[9.5px] truncate max-w-[52px]">{c.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Chat bubbles */}
+          <div className="flex-1 px-3 py-3 space-y-2 overflow-hidden">
+            <div className="flex justify-start">
+              <div className="max-w-[80%] bg-background border rounded-2xl rounded-tl-sm px-3 py-2 text-[12px] shadow-card">
+                Olá, gostaria de saber mais.
+                <div className="text-[9px] text-muted-foreground text-right mt-0.5">09:40</div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <div className="max-w-[80%] bg-success/15 border border-success/20 rounded-2xl rounded-tr-sm px-3 py-2 text-[12px]">
+                Claro, vou te ajudar.
+                <div className="flex items-center justify-end gap-1 text-[9px] text-muted-foreground mt-0.5">
+                  09:41 <CheckCheck className="w-3 h-3 text-success" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-start">
+              <div className="max-w-[80%] bg-background border rounded-2xl rounded-tl-sm px-3 py-2 text-[12px] shadow-card">
+                Conseguem retornar hoje?
+                <div className="text-[9px] text-muted-foreground text-right mt-0.5">09:42</div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <div className="max-w-[80%] bg-success/15 border border-success/20 rounded-2xl rounded-tr-sm px-3 py-2 text-[12px]">
+                Sim, já encaminhei ao setor.
+                <div className="flex items-center justify-end gap-1 text-[9px] text-muted-foreground mt-0.5">
+                  09:42 <CheckCheck className="w-3 h-3 text-success" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Composer */}
+          <div className="border-t bg-background px-2 py-2 flex items-center gap-1.5">
+            <button className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-sm shrink-0">+</button>
+            <div className="flex-1 min-w-0 h-8 rounded-full bg-muted px-3 flex items-center text-[11.5px] text-muted-foreground truncate">
+              Digite...
+            </div>
+            <Mic className="w-4 h-4 text-muted-foreground shrink-0" />
+            <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center shrink-0">
+              <Send className="w-3.5 h-3.5 text-primary-foreground" />
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
   return (
     <div className="min-h-screen w-full max-w-full bg-background overflow-x-hidden">
@@ -380,8 +499,9 @@ export default function Landing() {
             </div>
 
             <div className="w-full max-w-full overflow-hidden px-0 sm:px-4 lg:px-0 lg:pl-4 min-w-0">
-              <div className="w-full max-w-[360px] sm:max-w-[520px] lg:max-w-none mx-auto min-w-0">
-                <MockChat />
+              <div className="w-full max-w-[420px] sm:max-w-[520px] lg:max-w-none mx-auto min-w-0">
+                <div className="sm:hidden"><MockChatMobile /></div>
+                <div className="hidden sm:block"><MockChat /></div>
               </div>
             </div>
           </div>
