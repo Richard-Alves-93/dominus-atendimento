@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Filter,
@@ -361,60 +361,120 @@ export default function TicketsMobileLayout(props: Props) {
   // terminam de carregar e alteram a altura da lista.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesContentRef = useRef<HTMLDivElement>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const lastScrolledTicketRef = useRef<string | null>(null);
+  const lastMessageCountRef = useRef(0);
   const lastMessageId = visibleMessages.length
     ? visibleMessages[visibleMessages.length - 1].id
     : null;
 
-  const scrollToBottom = () => {
+  const distanceFromBottom = useCallback(() => {
     const c = messagesContainerRef.current;
-    if (!c) return;
-    requestAnimationFrame(() => {
+    if (!c) return 0;
+    return Math.max(0, c.scrollHeight - c.scrollTop - c.clientHeight);
+  }, []);
+
+  const scrollBottomAudit = useCallback((phase: string) => {
+    const c = messagesContainerRef.current;
+    if (!c || typeof window === "undefined") return;
+    try {
+      if (localStorage.getItem("dominus.scrollBottomAudit") !== "true") return;
+      console.debug("[SCROLL_BOTTOM_AUDIT]", {
+        layout: "mobile",
+        phase,
+        selectedId,
+        scrollTop: Math.round(c.scrollTop),
+        scrollHeight: Math.round(c.scrollHeight),
+        clientHeight: Math.round(c.clientHeight),
+        distanceFromBottom: Math.round(distanceFromBottom()),
+        lastMessageId,
+      });
+    } catch { /* noop */ }
+  }, [distanceFromBottom, lastMessageId, selectedId]);
+
+  const scrollToBottom = useCallback((phase = "manual") => {
+    const apply = () => {
+      const c = messagesContainerRef.current;
+      if (!c) return;
       c.scrollTop = c.scrollHeight;
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+      c.scrollTop = c.scrollHeight;
+      setIsNearBottom(true);
+    };
+    apply();
+    requestAnimationFrame(() => {
+      apply();
       requestAnimationFrame(() => {
-        c.scrollTop = c.scrollHeight;
-        messagesEndRef.current?.scrollIntoView({ block: "end" });
-        setIsNearBottom(true);
+        apply();
+        scrollBottomAudit(phase);
       });
     });
-  };
+  }, [scrollBottomAudit]);
+
+  const stabilizeScrollToBottom = useCallback((phase: string) => {
+    let active = true;
+    let raf1 = 0;
+    let raf2 = 0;
+    let ro: ResizeObserver | null = null;
+    const keepPinned = () => {
+      if (!active) return;
+      scrollToBottom(phase);
+    };
+
+    keepPinned();
+    raf1 = requestAnimationFrame(() => {
+      keepPinned();
+      raf2 = requestAnimationFrame(keepPinned);
+    });
+
+    const content = messagesContentRef.current;
+    if (content && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(keepPinned);
+      ro.observe(content);
+    }
+
+    const stop = window.setTimeout(() => {
+      active = false;
+      ro?.disconnect();
+      ro = null;
+      scrollBottomAudit(`${phase}:settled`);
+    }, 2200);
+
+    return () => {
+      active = false;
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(stop);
+      ro?.disconnect();
+    };
+  }, [scrollBottomAudit, scrollToBottom]);
 
   const handleMessagesScroll = () => {
     const c = messagesContainerRef.current;
     if (!c) return;
-    const distanceFromBottom = c.scrollHeight - c.scrollTop - c.clientHeight;
-    setIsNearBottom(distanceFromBottom < 120);
+    setIsNearBottom(distanceFromBottom() <= 120);
   };
 
   useEffect(() => {
     if (!selectedId) return;
-    scrollToBottom();
-    // Re-tenta após render de mídias/imagens (cobre conversa longa).
-    const t1 = window.setTimeout(scrollToBottom, 120);
-    const t2 = window.setTimeout(scrollToBottom, 400);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [selectedId, visibleMessages.length, lastMessageId, messagesLoading]);
+    if (messagesLoading) return;
+    if (lastScrolledTicketRef.current === selectedId) return;
+    lastScrolledTicketRef.current = selectedId;
+    lastMessageCountRef.current = visibleMessages.length;
+    return stabilizeScrollToBottom("initial");
+  }, [selectedId, messagesLoading, visibleMessages.length, stabilizeScrollToBottom]);
 
-  // ResizeObserver: quando imagens/áudios carregam, a altura da lista cresce —
-  // mantém o scroll colado no fim se o usuário ainda estiver perto do fim.
   useEffect(() => {
-    const c = messagesContainerRef.current;
-    if (!c || typeof ResizeObserver === "undefined") return;
-    let prevHeight = c.scrollHeight;
-    const ro = new ResizeObserver(() => {
-      const nearBottom =
-        c.scrollHeight - c.scrollTop - c.clientHeight < 160;
-      if (c.scrollHeight > prevHeight && nearBottom) {
-        c.scrollTop = c.scrollHeight;
-      }
-      prevHeight = c.scrollHeight;
-    });
-    ro.observe(c);
-    return () => ro.disconnect();
-  }, [selectedId]);
+    if (!selectedId) return;
+    if (lastScrolledTicketRef.current !== selectedId) return;
+    const prev = lastMessageCountRef.current;
+    const next = visibleMessages.length;
+    lastMessageCountRef.current = next;
+    if (next > prev && isNearBottom) {
+      scrollToBottom("new_message");
+    }
+  }, [visibleMessages.length, selectedId, isNearBottom, scrollToBottom]);
 
 
   const filterOptions = [
@@ -627,7 +687,7 @@ export default function TicketsMobileLayout(props: Props) {
     <AppLayout title="Atendimentos" mobileFullScreen>
       <div className="flex h-svh w-full max-w-full min-w-0 overflow-hidden bg-[hsl(var(--muted))]/30">
         <MobileCompactSidebar />
-        <div className="flex flex-1 min-w-0 max-w-full flex-col overflow-x-hidden bg-[hsl(var(--muted))]/30">
+        <div className="flex flex-1 min-w-0 min-h-0 max-w-full flex-col overflow-hidden bg-[hsl(var(--muted))]/30">
         {/* Header */}
         <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0 min-w-0 max-w-full">
           <Button
@@ -765,12 +825,13 @@ export default function TicketsMobileLayout(props: Props) {
         )}
 
         {/* Mensagens */}
-        <div className="relative flex-1 min-h-0 min-w-0">
+        <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="absolute inset-0 overflow-y-auto overflow-x-hidden px-3 pt-3 pb-6 space-y-2"
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain"
         >
+          <div ref={messagesContentRef} className="min-h-full px-3 pt-3 pb-4 space-y-2">
           {messagesLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -889,12 +950,14 @@ export default function TicketsMobileLayout(props: Props) {
               );
             })
           )}
+          <div className="h-28 shrink-0" aria-hidden="true" />
           <div ref={messagesEndRef} aria-hidden="true" />
+          </div>
         </div>
         {!isNearBottom && (
           <button
             type="button"
-            onClick={scrollToBottom}
+            onClick={() => scrollToBottom("button")}
             aria-label="Ir para o fim da conversa"
             className="absolute bottom-3 right-3 z-10 h-9 w-9 rounded-full bg-background/90 border border-border shadow-md backdrop-blur text-muted-foreground hover:text-foreground flex items-center justify-center"
           >

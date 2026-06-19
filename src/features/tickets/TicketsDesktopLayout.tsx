@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
@@ -1098,43 +1098,100 @@ const TicketsDesktopLayout = () => {
   // • Nova mensagem → só rola se o usuário JÁ estava perto do fim.
   // • Botão flutuante "voltar ao fim" aparece quando usuário sobe o scroll.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messagesContentRef = useRef<HTMLDivElement>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const lastScrolledTicketRef = useRef<string | null>(null);
   const lastMessageCountRef = useRef(0);
+  const lastVisibleMessageId = visibleMessages.length
+    ? visibleMessages[visibleMessages.length - 1].id
+    : null;
 
-  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+  const distanceFromBottom = useCallback(() => {
     const el = scrollContainerRef.current;
-    if (!el) return;
-    const jump = () => {
-      const c = scrollContainerRef.current;
-      if (!c) return;
-      if (behavior === "smooth" && typeof c.scrollTo === "function") {
-        c.scrollTo({ top: c.scrollHeight, behavior: "smooth" });
-      } else {
-        c.scrollTop = c.scrollHeight;
-      }
-    };
-    jump();
-    // Re-aplica em rAFs sucessivos para vencer layout tardio (mídias/labels).
-    requestAnimationFrame(() => {
-      jump();
-      requestAnimationFrame(jump);
-    });
-    // Fallback final caso ainda exista padding/última bolha alta.
-    window.setTimeout(() => {
+    if (!el) return 0;
+    return Math.max(0, el.scrollHeight - el.scrollTop - el.clientHeight);
+  }, []);
+
+  const scrollBottomAudit = useCallback((phase: string) => {
+    const el = scrollContainerRef.current;
+    if (!el || typeof window === "undefined") return;
+    try {
+      if (localStorage.getItem("dominus.scrollBottomAudit") !== "true") return;
+      console.debug("[SCROLL_BOTTOM_AUDIT]", {
+        layout: "desktop",
+        phase,
+        selectedId,
+        scrollTop: Math.round(el.scrollTop),
+        scrollHeight: Math.round(el.scrollHeight),
+        clientHeight: Math.round(el.clientHeight),
+        distanceFromBottom: Math.round(distanceFromBottom()),
+        lastMessageId: lastVisibleMessageId,
+      });
+    } catch { /* noop */ }
+  }, [distanceFromBottom, lastVisibleMessageId, selectedId]);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto", phase = "manual") => {
+    const apply = () => {
       const c = scrollContainerRef.current;
       if (!c) return;
       c.scrollTop = c.scrollHeight;
-      endRef.current?.scrollIntoView({ block: "end" });
+      endRef.current?.scrollIntoView({ block: "end", behavior });
+      c.scrollTop = c.scrollHeight;
       setIsNearBottom(true);
-    }, 250);
-  };
+    };
+    apply();
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(() => {
+        apply();
+        scrollBottomAudit(phase);
+      });
+    });
+  }, [scrollBottomAudit]);
+
+  const stabilizeScrollToBottom = useCallback((phase: string) => {
+    let active = true;
+    let raf1 = 0;
+    let raf2 = 0;
+    let ro: ResizeObserver | null = null;
+    const keepPinned = () => {
+      if (!active) return;
+      scrollToBottom("auto", phase);
+    };
+
+    keepPinned();
+    raf1 = requestAnimationFrame(() => {
+      keepPinned();
+      raf2 = requestAnimationFrame(keepPinned);
+    });
+
+    const content = messagesContentRef.current;
+    if (content && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(keepPinned);
+      ro.observe(content);
+    }
+
+    const stop = window.setTimeout(() => {
+      active = false;
+      ro?.disconnect();
+      ro = null;
+      scrollBottomAudit(`${phase}:settled`);
+    }, 2200);
+
+    return () => {
+      active = false;
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(stop);
+      ro?.disconnect();
+    };
+  }, [scrollBottomAudit, scrollToBottom]);
 
 
   const handleScroll = () => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    const near = distanceFromBottom() <= 120;
     setIsNearBottom(near);
   };
 
@@ -1146,41 +1203,8 @@ const TicketsDesktopLayout = () => {
     if (lastScrolledTicketRef.current === selectedId) return;
     lastScrolledTicketRef.current = selectedId;
     lastMessageCountRef.current = visibleMessages.length;
-
-    const pin = () => {
-      const c = scrollContainerRef.current;
-      if (!c) return;
-      c.scrollTop = c.scrollHeight;
-      endRef.current?.scrollIntoView({ block: "end" });
-      setIsNearBottom(true);
-    };
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(pin);
-    });
-    const timers = [120, 400, 800, 1500].map((ms) =>
-      window.setTimeout(pin, ms),
-    );
-
-    // ResizeObserver: mídias que carregam tarde aumentam scrollHeight; durante
-    // a janela inicial, mantém colado no fim.
-    const c = scrollContainerRef.current;
-    let ro: ResizeObserver | null = null;
-    if (c && typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(() => pin());
-      ro.observe(c);
-    }
-    const stop = window.setTimeout(() => {
-      ro?.disconnect();
-      ro = null;
-    }, 2000);
-
-    return () => {
-      timers.forEach((t) => window.clearTimeout(t));
-      window.clearTimeout(stop);
-      ro?.disconnect();
-    };
-  }, [selectedId, messagesQuery.isLoading]);
+    return stabilizeScrollToBottom("initial");
+  }, [selectedId, messagesQuery.isLoading, visibleMessages.length, stabilizeScrollToBottom]);
 
   // Nova mensagem chegando: só rola se o usuário estava no fim.
   useEffect(() => {
@@ -1190,9 +1214,9 @@ const TicketsDesktopLayout = () => {
     const next = visibleMessages.length;
     lastMessageCountRef.current = next;
     if (next > prev && isNearBottom) {
-      requestAnimationFrame(() => scrollToBottom("smooth"));
+      scrollToBottom("auto", "new_message");
     }
-  }, [visibleMessages.length, selectedId, isNearBottom]);
+  }, [visibleMessages.length, selectedId, isNearBottom, scrollToBottom]);
 
 
   // ─── Atendimento parado ────────────────────────────────────────────
@@ -2628,7 +2652,7 @@ const TicketsDesktopLayout = () => {
 
         {/* Chat */}
         {selected ? (
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
             {isMobile && selectedMessageId ? (
               <div className="h-12 flex items-center px-2 border-b bg-card gap-1">
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedMessageId(null)} aria-label="Cancelar seleção">
@@ -2785,12 +2809,13 @@ const TicketsDesktopLayout = () => {
             </div>
             )}
 
-            <div className="flex-1 relative">
+            <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="absolute inset-0 overflow-y-auto p-4 space-y-3 bg-secondary/30 scrollbar-thin"
+              className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-secondary/30 scrollbar-thin overscroll-contain"
             >
+              <div ref={messagesContentRef} className="min-h-full p-4 space-y-3">
               {messagesQuery.isLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -3061,14 +3086,15 @@ const TicketsDesktopLayout = () => {
                   </div>
                   );
                 })
-
               )}
-              <div ref={endRef} />
+              <div className="h-24 shrink-0" aria-hidden="true" />
+              <div ref={endRef} aria-hidden="true" />
+              </div>
             </div>
             {!isNearBottom && (
               <button
                 type="button"
-                onClick={() => scrollToBottom("smooth")}
+                onClick={() => scrollToBottom("smooth", "button")}
                 aria-label="Ir para o fim da conversa"
                 className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur text-slate-500 dark:text-slate-300 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100 flex items-center justify-center transition-colors"
               >
