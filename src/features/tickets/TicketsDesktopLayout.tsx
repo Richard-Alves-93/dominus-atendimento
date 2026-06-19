@@ -112,6 +112,7 @@ interface MessageRow {
   direction: "inbound" | "outbound";
   from_me: boolean;
   body: string | null;
+  raw_body?: string | null;
   msg_type: string;
   status: string | null;
   delivery_status?: string | null;
@@ -139,6 +140,64 @@ interface MessageRow {
   _optimistic?: boolean;
 }
 
+const MESSAGE_SELECT_FIELDS =
+  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at";
+
+const MIN_BODY_MATCH_CHARS = 8;
+const BODY_MATCH_WINDOW_MS = 10 * 60 * 1000;
+
+function orderedMessages(rows: MessageRow[]) {
+  return [...rows].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+function upsertMessage(rows: MessageRow[] = [], row: MessageRow) {
+  const exists = rows.some((m) => m.id === row.id);
+  const next = exists ? rows.map((m) => (m.id === row.id ? { ...m, ...row } : m)) : [...rows, row];
+  return orderedMessages(next);
+}
+
+function compactBody(v?: string | null) {
+  return (v ?? "").trim().replace(/\s+/g, " ");
+}
+
+function sameShortWindow(a?: string | null, b?: string | null) {
+  if (!a || !b) return false;
+  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= BODY_MATCH_WINDOW_MS;
+}
+
+function messageLifecycleAudit(phase: string, payload: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem("dominus.messageLifecycleAudit") !== "true") return;
+    console.debug("[MESSAGE_LIFECYCLE_AUDIT]", { phase, ...payload });
+  } catch { /* noop */ }
+}
+
+function realMatchesPending(
+  pending: PendingMessage,
+  real: MessageRow,
+  ids?: { realId?: string | null; providerId?: string | null },
+) {
+  if (real._optimistic || real.id.startsWith("tmp_")) return false;
+  if (real.ticket_id !== pending.ticketId || !real.from_me || real.direction !== "outbound") return false;
+  if (ids?.realId && real.id === ids.realId) return true;
+  if (ids?.providerId && (real.provider_message_id === ids.providerId || real.external_id === ids.providerId)) return true;
+  if (pending.media) {
+    const mediaStoragePath = pending.media.storagePath;
+    if (mediaStoragePath && real.media_storage_path === mediaStoragePath) return true;
+    return (
+      real.msg_type === pending.media.type &&
+      real.media_file_name === pending.media.fileName &&
+      real.media_size === pending.media.size &&
+      sameShortWindow(real.created_at, pending.createdAt)
+    );
+  }
+  const pendingBody = compactBody(pending.body);
+  if (pendingBody.length < MIN_BODY_MATCH_CHARS) return false;
+  const realBodies = [real.raw_body, real.body, real.media_caption].map(compactBody).filter(Boolean);
+  return realBodies.some((body) => body === pendingBody) && sameShortWindow(real.created_at, pending.createdAt);
+}
+
 
 interface PendingMessage {
   tempId: string;
@@ -153,6 +212,7 @@ interface PendingMessage {
     size: number;
     previewUrl: string; // local blob URL
     caption: string | null;
+    storagePath?: string;
   };
 }
 
@@ -802,22 +862,30 @@ const TicketsDesktopLayout = () => {
       toast({ title: "Falha ao assumir", description: e.message, variant: "destructive" });
     },
   });
-
-
+  const fetchMessagesForTicket = async (ticketId: string) => {
+    const { data, error } = await supabase
+      .from("messages")
+      .select(MESSAGE_SELECT_FIELDS)
+      .eq("company_id", activeCompanyId!)
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    const rows = orderedMessages((data ?? []) as MessageRow[]);
+    messageLifecycleAudit("MESSAGES_QUERY_AFTER_REFETCH", {
+      ticketId,
+      count: rows.length,
+      last5Ids: rows.slice(-5).map((m) => m.id),
+      last5Bodies: rows.slice(-5).map((m) => m.raw_body ?? m.body ?? m.media_caption ?? ""),
+      last5CreatedAt: rows.slice(-5).map((m) => m.created_at),
+    });
+    return rows;
+  };
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
-    enabled: !!selectedId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at")
-        .eq("ticket_id", selectedId!)
-        .order("created_at", { ascending: true })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as MessageRow[];
-    },
+    enabled: !!selectedId && !!activeCompanyId,
+    queryFn: () => fetchMessagesForTicket(selectedId!),
   });
 
   // Realtime: messages for the currently selected ticket
@@ -830,25 +898,7 @@ const TicketsDesktopLayout = () => {
         { event: "INSERT", schema: "public", table: "messages", filter: `ticket_id=eq.${selectedId}` },
         (payload) => {
           const row = payload.new as MessageRow;
-          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => {
-            if (prev.some((m) => m.id === row.id)) return prev;
-            return [...prev, row];
-          });
-          // Drop any matching optimistic bubble for this ticket+body.
-          // Não casar quando algum lado tem body vazio (".includes('')" sempre true)
-          // — isso removia otimistas que não correspondiam à mensagem real.
-          if (row.from_me) {
-            const realBody = (row.body ?? "").trim();
-            setPendingMessages((prev) =>
-              prev.filter((p) => {
-                if (p.ticketId !== selectedId) return true;
-                const pBody = (p.body ?? "").trim();
-                if (!pBody && !realBody) return false; // ambos vazios (mídia s/ caption)
-                if (!pBody || !realBody) return true;  // apenas um vazio → mantém
-                return !(realBody === pBody || realBody.includes(pBody));
-              }),
-            );
-          }
+          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => upsertMessage(prev, row));
         },
       )
       .on(
@@ -856,9 +906,7 @@ const TicketsDesktopLayout = () => {
         { event: "UPDATE", schema: "public", table: "messages", filter: `ticket_id=eq.${selectedId}` },
         (payload) => {
           const row = payload.new as MessageRow;
-          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) =>
-            prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)),
-          );
+          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => upsertMessage(prev, row));
         },
       )
       .subscribe();
@@ -904,9 +952,7 @@ const TicketsDesktopLayout = () => {
           const key = ["messages", row.ticket_id] as const;
           const cached = qc.getQueryData<MessageRow[]>(key as any);
           if (cached) {
-            if (!cached.some((m) => m.id === row.id)) {
-              qc.setQueryData<MessageRow[]>(key as any, [...cached, row]);
-            }
+            qc.setQueryData<MessageRow[]>(key as any, upsertMessage(cached, row));
           } else {
             // No cache yet → ensure next open refetches fresh.
             qc.invalidateQueries({ queryKey: ["messages", row.ticket_id] });
@@ -922,7 +968,7 @@ const TicketsDesktopLayout = () => {
           const key = ["messages", row.ticket_id] as const;
           const cached = qc.getQueryData<MessageRow[]>(key as any);
           if (cached) {
-            qc.setQueryData<MessageRow[]>(key as any, cached.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+            qc.setQueryData<MessageRow[]>(key as any, upsertMessage(cached, row));
           }
         },
       )
@@ -938,7 +984,7 @@ const TicketsDesktopLayout = () => {
   );
 
   const visibleMessages = useMemo<MessageRow[]>(() => {
-    const real = (messagesQuery.data ?? []) as MessageRow[];
+    const real = orderedMessages((messagesQuery.data ?? []) as MessageRow[]);
     const optimistic: MessageRow[] = pendingForSelected.map((p) => {
       const r = (p as any).reply as { message_id?: string; provider_message_id?: string | null; preview?: string; sender_name?: string; message_type?: string } | null | undefined;
       return {
@@ -965,8 +1011,27 @@ const TicketsDesktopLayout = () => {
         _optimistic: true,
       };
     });
-    return [...real, ...optimistic];
+    const unresolvedOptimistic = optimistic.filter((o) => {
+      const pending = pendingForSelected.find((p) => p.tempId === o.id);
+      return pending ? !real.some((m) => realMatchesPending(pending, m)) : true;
+    });
+    return orderedMessages([...real, ...unresolvedOptimistic]);
   }, [messagesQuery.data, pendingForSelected]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const real = (messagesQuery.data ?? []) as MessageRow[];
+    messageLifecycleAudit("render_visible", {
+      ticketId: selectedId,
+      selectedId,
+      realMessagesLength: real.length,
+      pendingMessagesLength: pendingForSelected.length,
+      visibleMessagesLength: visibleMessages.length,
+      cacheMessagesLength: (qc.getQueryData<MessageRow[]>(["messages", selectedId]) ?? []).length,
+      lastVisibleIds: visibleMessages.slice(-5).map((m) => m.id),
+      lastVisibleBodies: visibleMessages.slice(-5).map((m) => m.raw_body ?? m.body ?? m.media_caption ?? ""),
+    });
+  }, [selectedId, messagesQuery.data, pendingForSelected.length, visibleMessages, qc]);
 
   // ─── Smart scroll ──────────────────────────────────────────────────
   // • Abrir conversa → rola direto pro fim (instant) assim que mensagens
@@ -1317,8 +1382,90 @@ const TicketsDesktopLayout = () => {
     setTimeout(() => composerRef.current?.focus(), 50);
   };
 
+  const ensureRealMessageBeforeDrop = async (args: {
+    pending: PendingMessage;
+    realId?: string | null;
+    providerId?: string | null;
+    phase: string;
+    maxAttempts?: number;
+  }) => {
+    const { pending, realId = null, providerId = null, phase, maxAttempts = 18 } = args;
+    const key = ["messages", pending.ticketId] as const;
+    for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+      let cache = orderedMessages((qc.getQueryData<MessageRow[]>(key as any) ?? []) as MessageRow[]);
+      let real = cache.find((m) => realMatchesPending(pending, m, { realId, providerId }));
+      if (real) {
+        qc.setQueryData<MessageRow[]>(key as any, upsertMessage(cache, real));
+        messageLifecycleAudit(`${phase}:real_confirmed`, {
+          ticketId: pending.ticketId,
+          selectedId,
+          optimisticId: pending.tempId,
+          realId: real.id,
+          externalId: real.external_id ?? real.provider_message_id ?? null,
+          body: real.body ?? null,
+          rawBody: real.raw_body ?? null,
+          messageType: real.msg_type,
+          cacheMessagesLength: cache.length,
+          pendingMessagesLength: pendingMessages.length,
+        });
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== pending.tempId));
+        return true;
+      }
+
+      if (attempt % 3 === 0) {
+        try {
+          const fresh = await fetchMessagesForTicket(pending.ticketId);
+          qc.setQueryData<MessageRow[]>(key as any, fresh);
+          cache = fresh;
+          real = cache.find((m) => realMatchesPending(pending, m, { realId, providerId }));
+          if (real) {
+            messageLifecycleAudit(`${phase}:real_confirmed_after_fetch`, {
+              ticketId: pending.ticketId,
+              selectedId,
+              optimisticId: pending.tempId,
+              realId: real.id,
+              externalId: real.external_id ?? real.provider_message_id ?? null,
+              body: real.body ?? null,
+              rawBody: real.raw_body ?? null,
+              messageType: real.msg_type,
+              cacheMessagesLength: cache.length,
+              pendingMessagesLength: pendingMessages.length,
+            });
+            setPendingMessages((prev) => prev.filter((p) => p.tempId !== pending.tempId));
+            return true;
+          }
+        } catch (e) {
+          messageLifecycleAudit(`${phase}:fetch_failed`, {
+            ticketId: pending.ticketId,
+            selectedId,
+            optimisticId: pending.tempId,
+            error: (e as Error)?.message ?? String(e),
+          });
+        }
+      }
+
+      messageLifecycleAudit(`${phase}:keep_optimistic`, {
+        ticketId: pending.ticketId,
+        selectedId,
+        optimisticId: pending.tempId,
+        realId,
+        externalId: providerId,
+        body: pending.body,
+        messageType: pending.media?.type ?? "text",
+        cacheMessagesLength: cache.length,
+        pendingMessagesLength: pendingMessages.length,
+        lastVisibleIds: cache.slice(-5).map((m) => m.id),
+        lastVisibleBodies: cache.slice(-5).map((m) => m.raw_body ?? m.body ?? m.media_caption ?? ""),
+      });
+
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    }
+
+    return false;
+  };
+
   const sendMutation = useMutation({
-    mutationFn: async (vars: { body: string; tempId: string; ticketId: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
+    mutationFn: async (vars: { body: string; tempId: string; ticketId: string; createdAt: string; reply?: ReturnType<typeof buildReplyPayload> | null }) => {
       if (!activeCompanyId) throw new Error("Empresa não selecionada");
       // Ensure we have a current session before invoking
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1350,34 +1497,21 @@ const TicketsDesktopLayout = () => {
       }
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
     },
-    onSuccess: async (res) => {
-      // Garante que a mensagem real esteja no cache ANTES de remover a otimista.
-      // Sem isso, se o realtime atrasar/falhar, a bolha some sem nada no lugar.
-      try {
-        await qc.invalidateQueries({ queryKey: ["messages", res.ticketId] });
-      } catch {}
-      const hasReal = () => {
-        const cur = (qc.getQueryData<MessageRow[]>(["messages", res.ticketId]) ?? []) as MessageRow[];
-        const body = (((res as any).data?.body ?? "") as string).trim();
-        // Considera real a mensagem mais recente from_me com body equivalente,
-        // ou qualquer linha cujo provider_message_id bata com a resposta.
-        const pid = (res as any).data?.provider_message_id ?? (res as any).data?.message_id ?? null;
-        return cur.some((m) => {
-          if (m.id.startsWith("tmp_")) return false;
-          if (pid && (m.provider_message_id === pid || m.external_id === pid)) return true;
-          if (m.from_me && body && (m.body ?? "").trim() === body) return true;
-          return false;
-        });
+    onSuccess: async (res, vars) => {
+      const data = (res as any).data ?? {};
+      const pending: PendingMessage = {
+        tempId: vars.tempId,
+        ticketId: vars.ticketId,
+        body: vars.body,
+        createdAt: vars.createdAt,
+        status: "sending",
       };
-      const drop = () => setPendingMessages((prev) => prev.filter((p) => p.tempId !== res.tempId));
-      // Tenta até 6s; depois remove de qualquer jeito para não travar a UI.
-      let tries = 0;
-      const tick = () => {
-        if (hasReal() || tries >= 12) return drop();
-        tries++;
-        window.setTimeout(tick, 500);
-      };
-      tick();
+      await ensureRealMessageBeforeDrop({
+        pending,
+        realId: data?.message_id ?? null,
+        providerId: data?.provider_message_id ?? data?.external_id ?? null,
+        phase: "text_send_success",
+      });
     },
     onError: (e: any, vars) => {
       setPendingMessages((prev) =>
@@ -1400,6 +1534,7 @@ const TicketsDesktopLayout = () => {
     if (!v || !selected) return;
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const ticketId = selected.id;
+    const createdAt = new Date().toISOString();
     const replySnapshot = replyingTo ? buildReplyPayload(replyingTo) : null;
     setPendingMessages((prev) => [
       ...prev,
@@ -1407,7 +1542,7 @@ const TicketsDesktopLayout = () => {
         tempId,
         ticketId,
         body: v,
-        createdAt: new Date().toISOString(),
+        createdAt,
         status: "sending",
         reply: replySnapshot,
       } as PendingMessage & { reply?: ReturnType<typeof buildReplyPayload> | null },
@@ -1415,7 +1550,7 @@ const TicketsDesktopLayout = () => {
     setText("");
     setReplyingTo(null);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
-    sendMutation.mutate({ body: v, tempId, ticketId, reply: replySnapshot });
+    sendMutation.mutate({ body: v, tempId, ticketId, createdAt, reply: replySnapshot });
   };
 
   // ── Envio de mídia ─────────────────────────────────────────────
@@ -1471,7 +1606,8 @@ const TicketsDesktopLayout = () => {
     const ticketId = selected.id;
     const channelId = selected.channel_id ?? "ch";
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const previewUrl = attachPreviewUrl!;
+    const createdAt = new Date().toISOString();
+    const previewUrl = URL.createObjectURL(file);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
     const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const storagePath = `${activeCompanyId}/${channelId}/${ticketId}/temp_${uuid}/${safeName}`;
@@ -1483,9 +1619,9 @@ const TicketsDesktopLayout = () => {
       {
         tempId, ticketId,
         body: caption ?? "",
-        createdAt: new Date().toISOString(),
+        createdAt,
         status: "sending",
-        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption, storagePath },
       },
     ]);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -1516,25 +1652,23 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      // Sucesso: força refetch para a mensagem real entrar no cache antes de
-      // remover a otimista. Sem isso, se o realtime atrasar, a bolha some.
-      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
-      const dropMedia = () => {
-        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
-        URL.revokeObjectURL(previewUrl);
-      };
-      const hasReal = () => {
-        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
-        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
-      };
-      let tries = 0;
-      const tick = () => {
-        if (hasReal() || tries >= 16) return dropMedia();
-        tries++;
-        window.setTimeout(tick, 500);
-      };
-      tick();
       closeAttachDialog();
+      void ensureRealMessageBeforeDrop({
+        pending: {
+          tempId,
+          ticketId,
+          body: caption ?? "",
+          createdAt,
+          status: "sending",
+          media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption, storagePath },
+        },
+        realId: d?.message_id ?? null,
+        providerId: d?.provider_message_id ?? d?.external_id ?? null,
+        phase: "media_send_success",
+        maxAttempts: 24,
+      }).then((dropped) => {
+        if (dropped) URL.revokeObjectURL(previewUrl);
+      });
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
       toast({
@@ -1565,6 +1699,7 @@ const TicketsDesktopLayout = () => {
     const ticketId = selected.id;
     const channelId = selected.channel_id ?? "ch";
     const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const createdAt = new Date().toISOString();
     const previewUrl = URL.createObjectURL(file);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
     const uuid = (crypto as any).randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -1575,9 +1710,9 @@ const TicketsDesktopLayout = () => {
       {
         tempId, ticketId,
         body: caption ?? "",
-        createdAt: new Date().toISOString(),
+        createdAt,
         status: "sending",
-        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption },
+        media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption, storagePath },
       },
     ]);
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -1606,22 +1741,22 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
-      const dropMedia = () => {
-        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
-        URL.revokeObjectURL(previewUrl);
-      };
-      const hasReal = () => {
-        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
-        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
-      };
-      let tries = 0;
-      const tick = () => {
-        if (hasReal() || tries >= 16) return dropMedia();
-        tries++;
-        window.setTimeout(tick, 500);
-      };
-      tick();
+      void ensureRealMessageBeforeDrop({
+        pending: {
+          tempId,
+          ticketId,
+          body: caption ?? "",
+          createdAt,
+          status: "sending",
+          media: { type, fileName: file.name, mimeType: file.type, size: file.size, previewUrl, caption, storagePath },
+        },
+        realId: d?.message_id ?? null,
+        providerId: d?.provider_message_id ?? d?.external_id ?? null,
+        phase: "direct_media_send_success",
+        maxAttempts: 24,
+      }).then((dropped) => {
+        if (dropped) URL.revokeObjectURL(previewUrl);
+      });
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
       toast({ title: "Não foi possível enviar o arquivo.", description: e?.message, variant: "destructive" });
