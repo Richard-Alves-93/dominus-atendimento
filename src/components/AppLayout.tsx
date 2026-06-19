@@ -6,16 +6,19 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useNavigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AppLayoutProps {
   children: React.ReactNode;
   title?: string;
+  mobileFullScreen?: boolean;
 }
 
-export function AppLayout({ children, title }: AppLayoutProps) {
+export function AppLayout({ children, title, mobileFullScreen = false }: AppLayoutProps) {
   const { profile } = useAuth();
   const { activeMembership, isImpersonating, impersonatedCompanyName, stopImpersonation } = useCompany();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
   const initials = (profile?.full_name ?? profile?.email ?? "U")
     .split(" ")
@@ -33,11 +36,19 @@ export function AppLayout({ children, title }: AppLayoutProps) {
     ? impersonatedCompanyName
     : activeMembership?.company?.name;
 
+  if (mobileFullScreen && isMobile) {
+    return (
+      <div className="min-h-svh w-full max-w-full min-w-0 overflow-x-hidden bg-background">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full max-w-full overflow-x-hidden">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 max-w-full">
           {isImpersonating && (
             <div className="flex items-center gap-2 px-4 py-2 bg-warning/10 border-b border-warning/20 text-warning text-sm">
               <ShieldAlert className="w-4 h-4 shrink-0" />
@@ -49,12 +60,12 @@ export function AppLayout({ children, title }: AppLayoutProps) {
               </span>
             </div>
           )}
-          <header className="h-14 flex items-center justify-between border-b bg-card px-4">
-            <div className="flex items-center gap-3">
+          <header className="h-14 flex items-center justify-between border-b bg-card px-4 min-w-0 max-w-full">
+            <div className="flex items-center gap-3 min-w-0">
               <SidebarTrigger />
-              {title && <h1 className="text-lg font-semibold text-foreground">{title}</h1>}
+              {title && <h1 className="text-lg font-semibold text-foreground truncate">{title}</h1>}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 shrink-0">
               {displayCompanyName && (
                 <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground">
                   <Building2 className="w-4 h-4" />
@@ -70,12 +81,12 @@ export function AppLayout({ children, title }: AppLayoutProps) {
                 <Bell className="h-4 w-4" />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
               </Button>
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-8 w-8 shrink-0">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">{initials}</AvatarFallback>
               </Avatar>
             </div>
           </header>
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main className="flex-1 overflow-auto min-w-0 max-w-full">{children}</main>
         </div>
       </div>
     </SidebarProvider>
