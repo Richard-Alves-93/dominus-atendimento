@@ -3243,9 +3243,9 @@ const TicketsDesktopLayout = () => {
                                 <Pin className="w-4 h-4 mr-2" /> {pinnedMessageId === m.id ? "Desafixar" : "Fixar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." })}
+                                onClick={() => toggleFavorite(m)}
                               >
-                                <Star className="w-4 h-4 mr-2" /> Favoritar
+                                <Star className={`w-4 h-4 mr-2 ${favoriteIds.has(m.id) ? "fill-amber-400 text-amber-400" : ""}`} /> {favoriteIds.has(m.id) ? "Desfavoritar" : "Favoritar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." })}
