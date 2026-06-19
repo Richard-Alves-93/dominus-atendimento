@@ -862,22 +862,21 @@ const TicketsDesktopLayout = () => {
       toast({ title: "Falha ao assumir", description: e.message, variant: "destructive" });
     },
   });
-
-
+  const fetchMessagesForTicket = async (ticketId: string) => {
+    const { data, error } = await supabase
+      .from("messages")
+      .select(MESSAGE_SELECT_FIELDS)
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    return orderedMessages((data ?? []) as MessageRow[]);
+  };
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
     enabled: !!selectedId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("messages")
-        .select(MESSAGE_SELECT_FIELDS)
-        .eq("ticket_id", selectedId!)
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return orderedMessages((data ?? []) as MessageRow[]);
-    },
+    queryFn: () => fetchMessagesForTicket(selectedId!),
   });
 
   // Realtime: messages for the currently selected ticket
