@@ -2860,7 +2860,7 @@ const TicketsDesktopLayout = () => {
                     }}>
                       <CopyIcon className="w-4 h-4 mr-2" /> Copiar
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." }); setSelectedMessageId(null); }}>
+                    <DropdownMenuItem onClick={() => { if (selectedMessageId) { enterSelection(selectedMessageId); } setSelectedMessageId(null); }}>
                       <SquareCheck className="w-4 h-4 mr-2" /> Selecionar
                     </DropdownMenuItem>
                   </DropdownMenuContent>
