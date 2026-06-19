@@ -1369,8 +1369,10 @@ const TicketsDesktopLayout = () => {
   }, [reactionsQuery.data]);
 
   const toggleReaction = async (m: MessageRow, emoji: string) => {
-    if (!activeCompanyId || !profile?.id || m._optimistic) return;
     mobileReactionAudit("[MOBILE_REACTION_CALL]", { messageId: m.id, emoji });
+    if (!activeCompanyId) throw new Error("Empresa não selecionada");
+    if (!profile?.id) throw new Error("Usuário não identificado");
+    if (m._optimistic || m.id.startsWith("tmp_")) throw new Error("Mensagem ainda não confirmada");
     const mine = (reactionsByMsg.get(m.id) ?? []).find((r) => r.user_id === profile.id);
     const reactionKey = ["message-reactions", selectedId] as const;
     try {
@@ -1407,6 +1409,7 @@ const TicketsDesktopLayout = () => {
     } catch (e: any) {
       console.error("[MOBILE_REACTION_ERROR]", e);
       toast({ title: "Falha ao reagir", description: e?.message ?? String(e), variant: "destructive" });
+      e.__reactionToastShown = true;
       throw e;
     }
   };
