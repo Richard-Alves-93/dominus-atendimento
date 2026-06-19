@@ -28,6 +28,7 @@ type AnyTicket = {
   unread_count: number;
   last_message_at: string | null;
   department_id: string | null;
+  protocol_number?: string | null;
   contact: { id: string; name: string | null; phone_number: string | null; avatar_url: string | null } | null;
   department: { id: string; name: string } | null;
   assignee?: { id: string; full_name: string | null; email: string | null } | null;
