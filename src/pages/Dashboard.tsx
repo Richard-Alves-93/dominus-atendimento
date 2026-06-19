@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useMemo } from "react";
 
-type Row = { created_at: string; status: string; assigned_to: string | null };
+type Row = { created_at: string; status: string; assigned_user_id: string | null; updated_at: string };
 
 const Dashboard = () => {
   const { activeCompanyId } = useCompany();
