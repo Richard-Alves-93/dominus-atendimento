@@ -1056,6 +1056,13 @@ export default function TicketsMobileLayout(props: Props) {
                         </div>
                       )}
 
+                      {((m as any).raw?.forwarded === true) && (
+                        <div className="flex items-center gap-1 text-[11px] italic mb-0.5 text-muted-foreground">
+                          <Forward className="w-3 h-3" /> Encaminhada
+                        </div>
+                      )}
+
+
                       {isMedia && (
                         <div className="mb-1 min-w-0">
                           <MediaContent m={m} onMime={(mime) => mime?.split("/")[1]?.toUpperCase() ?? ""} />
