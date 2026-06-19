@@ -1,4 +1,4 @@
-import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle } from "lucide-react";
+import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle, MoreVertical, RotateCcw, Clock, CheckCircle2, Building2, UserPlus, Copy } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
