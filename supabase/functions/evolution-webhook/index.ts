@@ -355,10 +355,113 @@ function extractBody(m: any): string | null {
   );
 }
 
+function extractEditedBodyFromMessage(msg: any): string | null {
+  if (!msg) return null;
+  return (
+    msg.conversation ??
+    msg.extendedTextMessage?.text ??
+    msg.imageMessage?.caption ??
+    msg.videoMessage?.caption ??
+    msg.documentMessage?.caption ??
+    msg.editedMessage?.conversation ??
+    msg.editedMessage?.extendedTextMessage?.text ??
+    msg.editedMessage?.imageMessage?.caption ??
+    msg.editedMessage?.videoMessage?.caption ??
+    msg.editedMessage?.documentMessage?.caption ??
+    msg.editedMessage?.message?.conversation ??
+    msg.editedMessage?.message?.extendedTextMessage?.text ??
+    msg.editedMessage?.message?.imageMessage?.caption ??
+    msg.editedMessage?.message?.videoMessage?.caption ??
+    msg.editedMessage?.message?.documentMessage?.caption ??
+    null
+  );
+}
+
+function extractEditedBodyCandidate(m: any): { body: string | null; source: string | null; editedMessage: any } {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  const candidates: Array<[string, any]> = [
+    ["protocolMessage.editedMessage", proto?.editedMessage],
+    ["protocolMessage.editedMessage.message", proto?.editedMessage?.message],
+    ["message.editedMessage", msg.editedMessage],
+    ["message.editedMessage.message", msg.editedMessage?.message],
+    ["secretEncryptedMessage.editedMessage", msg.secretEncryptedMessage?.editedMessage],
+    ["secretEncryptedMessage.editedMessage.message", msg.secretEncryptedMessage?.editedMessage?.message],
+    ["message", msg],
+  ];
+  for (const [source, candidate] of candidates) {
+    const body = extractEditedBodyFromMessage(candidate);
+    if (typeof body === "string" && body.length > 0) return { body, source, editedMessage: candidate };
+  }
+  return { body: null, source: null, editedMessage: proto?.editedMessage ?? msg.editedMessage ?? null };
+}
+
+function resolveEditTargetId(m: any): string | null {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  return (
+    msg.secretEncryptedMessage?.targetMessageKey?.id ??
+    proto?.key?.id ??
+    proto?.messageKey?.id ??
+    msg.editedMessage?.key?.id ??
+    msg.editedMessage?.message?.key?.id ??
+    m?.update?.key?.id ??
+    m?.key?.id ??
+    null
+  );
+}
+
+function auditEditPayloadStructure(inst: any, source: string, m: any, editInfo: ReturnType<typeof extractEditInfo>) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
+  const edited = proto?.editedMessage ?? msg.editedMessage ?? msg.editedMessage?.message ?? null;
+  console.log("[WHATSAPP_EDIT_PAYLOAD_STRUCTURE]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    event_type: source,
+    message_type: detectMsgType({ message: msg }),
+    has_protocolMessage: !!proto,
+    has_editedMessage: !!msg.editedMessage || !!proto?.editedMessage,
+    has_secretEncryptedMessage: !!msg.secretEncryptedMessage,
+    secretEncType: msg.secretEncryptedMessage?.secretEncType ?? null,
+    has_encPayload: !!msg.secretEncryptedMessage?.encPayload,
+    has_encIv: !!msg.secretEncryptedMessage?.encIv,
+    has_targetMessageKey: !!msg.secretEncryptedMessage?.targetMessageKey,
+    target_message_id_present: !!resolveEditTargetId(m),
+    available_message_keys: Object.keys(msg),
+    available_edited_message_keys: edited ? Object.keys(edited) : [],
+    has_conversation: !!msg.conversation || !!edited?.conversation || !!edited?.message?.conversation,
+    has_extendedTextMessage: !!msg.extendedTextMessage || !!edited?.extendedTextMessage || !!edited?.message?.extendedTextMessage,
+    has_imageMessage_caption: !!msg.imageMessage?.caption || !!edited?.imageMessage?.caption || !!edited?.message?.imageMessage?.caption,
+    has_documentMessage_caption: !!msg.documentMessage?.caption || !!edited?.documentMessage?.caption || !!edited?.message?.documentMessage?.caption,
+    contains_new_text: !!editInfo?.new_body,
+    edited_text_source: editInfo?.new_body_source ?? null,
+  });
+}
+
+function auditEditEventSequence(inst: any, source: string, m: any, editInfo: ReturnType<typeof extractEditInfo>, handledAsEdit: boolean, skippedAsTechnical: boolean) {
+  const msg = m?.message ?? m?.update?.message ?? {};
+  console.log("[WHATSAPP_EDIT_EVENT_SEQUENCE]", {
+    company_id: inst.company_id,
+    channel_id: inst.channel_id,
+    target_message_id: editInfo?.original_provider_id ?? resolveEditTargetId(m),
+    event_type: source,
+    message_type: detectMsgType({ message: msg }),
+    message_key_id: m?.key?.id ?? m?.update?.key?.id ?? m?.id ?? null,
+    contains_new_text: !!editInfo?.new_body,
+    handled_as_edit: handledAsEdit,
+    skipped_as_technical: skippedAsTechnical,
+  });
+}
+
 function isTechnicalWhatsAppEvent(m: any): { technical: boolean; reason: string | null } {
   const msg = m?.message ?? m?.update?.message ?? {};
   const keys = Object.keys(msg);
   if (!keys.length) return { technical: false, reason: null };
+
+  const editTargetId = resolveEditTargetId(m);
+  const editedBody = extractEditedBodyCandidate(m);
+  if (editTargetId && editedBody.body) return { technical: false, reason: null };
 
   if (msg.secretEncryptedMessage) return { technical: true, reason: "secretEncryptedMessage" };
   if (msg.protocolMessage) return { technical: true, reason: "protocolMessage" };
@@ -413,6 +516,7 @@ function extractEditInfo(m: any): {
   new_body: string | null;
   edited_message: any;
   detection_source?: string;
+  new_body_source?: string | null;
 } | null {
   const msg = m?.message ?? m?.update?.message ?? null;
   if (!msg) return null;
@@ -422,35 +526,54 @@ function extractEditInfo(m: any): {
   const secret = msg.secretEncryptedMessage ?? null;
   const secretTargetId = secret?.targetMessageKey?.id ?? null;
   if (secret && Number(secret.secretEncType) === 2 && secretTargetId) {
+    const editedBody = extractEditedBodyCandidate(m);
     return {
       original_provider_id: String(secretTargetId),
-      new_body: null,
-      edited_message: secret,
+      new_body: editedBody.body,
+      edited_message: editedBody.editedMessage ?? secret,
       detection_source: "secretEncryptedMessage.secretEncType=2",
+      new_body_source: editedBody.source,
     };
   }
   // Shape A: protocolMessage type 14
   const proto = msg.protocolMessage ?? msg.editedMessage?.message?.protocolMessage ?? null;
   if (proto && (proto.type === 14 || proto.type === "MESSAGE_EDIT" || proto.editedMessage)) {
-    const origId = proto?.key?.id ?? null;
-    const edited = proto.editedMessage ?? null;
+    const origId = proto?.key?.id ?? proto?.messageKey?.id ?? null;
+    const editedBody = extractEditedBodyCandidate(m);
     if (origId) {
-      const newBody =
-        edited?.conversation ??
-        edited?.extendedTextMessage?.text ??
-        edited?.imageMessage?.caption ??
-        edited?.videoMessage?.caption ??
-        edited?.documentMessage?.caption ??
-        null;
-      return { original_provider_id: String(origId), new_body: newBody, edited_message: edited, detection_source: "protocolMessage" };
+      return {
+        original_provider_id: String(origId),
+        new_body: editedBody.body,
+        edited_message: editedBody.editedMessage,
+        detection_source: "protocolMessage",
+        new_body_source: editedBody.source,
+      };
     }
   }
   // Shape B: top-level editedMessage with separate key.id reference (fallback)
   const editedTop = msg.editedMessage ?? null;
-  const refId = m?.key?.id ?? m?.update?.key?.id ?? null;
-  if (editedTop && refId && (editedTop.conversation || editedTop.extendedTextMessage)) {
-    const newBody = editedTop.conversation ?? editedTop.extendedTextMessage?.text ?? null;
-    return { original_provider_id: String(refId), new_body: newBody, edited_message: editedTop, detection_source: "editedMessage" };
+  const refId = editedTop?.key?.id ?? editedTop?.message?.key?.id ?? m?.update?.key?.id ?? m?.key?.id ?? null;
+  if (editedTop && refId) {
+    const editedBody = extractEditedBodyCandidate(m);
+    return {
+      original_provider_id: String(refId),
+      new_body: editedBody.body,
+      edited_message: editedBody.editedMessage ?? editedTop,
+      detection_source: "editedMessage",
+      new_body_source: editedBody.source,
+    };
+  }
+  // Shape C: messages.update may carry the updated original message content directly.
+  const directUpdatedBody = m?.update?.message ? extractEditedBodyFromMessage(m.update.message) : null;
+  const directUpdatedId = m?.update?.key?.id ?? null;
+  if (directUpdatedId && directUpdatedBody) {
+    return {
+      original_provider_id: String(directUpdatedId),
+      new_body: directUpdatedBody,
+      edited_message: m.update.message,
+      detection_source: "messages.update.message",
+      new_body_source: "update.message",
+    };
   }
   return null;
 }
@@ -469,11 +592,45 @@ function auditEditDetection(inst: any, source: string, m: any, editInfo: ReturnT
     secret_enc_type: msg.secretEncryptedMessage?.secretEncType ?? null,
     original_provider_id_present: !!editInfo?.original_provider_id,
     edited_text_present: !!editInfo?.new_body,
-    edited_media_caption_present: false,
+    edited_text_source: editInfo?.new_body_source ?? null,
+    edited_media_caption_present: !!editInfo?.new_body_source?.toLowerCase().includes("message"),
     reason: editInfo ? null : "not_recognized_as_edit",
     message_keys: Object.keys(msg),
     key: safeKeyAudit(m?.key ?? m?.update?.key ?? {}),
   });
+}
+
+async function detectSameProviderContentEdit(admin: any, inst: any, m: any): Promise<{ editInfo: ReturnType<typeof extractEditInfo>; foundExisting: boolean }>{
+  const providerId = m?.key?.id ?? m?.update?.key?.id ?? null;
+  const newBody = extractBody(m);
+  if (!providerId || typeof newBody !== "string" || newBody.length === 0) {
+    return { editInfo: null, foundExisting: false };
+  }
+  const { data: existing } = await admin
+    .from("messages")
+    .select("id, body, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`)
+    .limit(1)
+    .maybeSingle();
+  if (!existing) return { editInfo: null, foundExisting: false };
+
+  const oldComparable = ["image", "audio", "video", "document", "sticker"].includes(existing.msg_type)
+    ? existing.media_caption ?? existing.body ?? null
+    : existing.body ?? null;
+  if (oldComparable === newBody) return { editInfo: null, foundExisting: true };
+
+  return {
+    foundExisting: true,
+    editInfo: {
+      original_provider_id: String(providerId),
+      new_body: newBody,
+      edited_message: m?.message ?? m?.update?.message ?? null,
+      detection_source: "same_provider_message_updated_content",
+      new_body_source: "message",
+    },
+  };
 }
 
 async function applyMessageEdit(
@@ -547,9 +704,11 @@ async function applyMessageEdit(
     if (isMedia) {
       if (!original.original_body) patch.original_body = original.media_caption ?? original.body ?? null;
       patch.media_caption = edit.new_body;
+      patch.raw_body = edit.new_body;
     } else {
       if (!original.original_body) patch.original_body = original.body ?? null;
       patch.body = edit.new_body;
+      patch.raw_body = edit.new_body;
     }
   }
   await admin.from("messages").update(patch).eq("id", original.id);
@@ -678,14 +837,20 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
 
     // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
-    const editInfo = extractEditInfo(m);
+    let editInfo = extractEditInfo(m);
+    if (!editInfo) {
+      const sameProviderEdit = await detectSameProviderContentEdit(admin, inst, m);
+      if (sameProviderEdit.editInfo) editInfo = sameProviderEdit.editInfo;
+    }
     const technicalEvent = isTechnicalWhatsAppEvent(m);
     if (detectMsgType(m) === "other") auditOtherMessage(inst, m, source);
     if (editInfo || m?.message?.protocolMessage || m?.message?.editedMessage || m?.message?.secretEncryptedMessage) {
       auditEditDetection(inst, source, m, editInfo);
+      auditEditPayloadStructure(inst, source, m, editInfo);
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, m, editInfo, source);
+      auditEditEventSequence(inst, source, m, editInfo, true, true);
       auditTechnicalEventSkipped(inst, source, m, technicalEvent.reason ?? editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
@@ -698,6 +863,8 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     }
     if (technicalEvent.technical) {
       auditEditDetection(inst, source, m, null);
+      auditEditPayloadStructure(inst, source, m, null);
+      auditEditEventSequence(inst, source, m, null, false, true);
       auditTechnicalEventSkipped(inst, source, m, technicalEvent.reason, null);
       continue;
     }
@@ -1113,12 +1280,18 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
   for (const u of dataArr) {
     // Edit detection: messages.update can carry editedMessage/protocolMessage.
     // Detect FIRST so we don't mistakenly treat an edit as a status update.
-    const editInfo = extractEditInfo(u);
+    let editInfo = extractEditInfo(u);
+    if (!editInfo) {
+      const sameProviderEdit = await detectSameProviderContentEdit(admin, inst, u);
+      if (sameProviderEdit.editInfo) editInfo = sameProviderEdit.editInfo;
+    }
     if (editInfo || u?.message?.protocolMessage || u?.message?.editedMessage || u?.message?.secretEncryptedMessage || u?.update?.message?.protocolMessage || u?.update?.message?.editedMessage || u?.update?.message?.secretEncryptedMessage) {
       auditEditDetection(inst, source, u, editInfo);
+      auditEditPayloadStructure(inst, source, u, editInfo);
     }
     if (editInfo) {
       const editApplied = await applyMessageEdit(admin, inst, u, editInfo, source);
+      auditEditEventSequence(inst, source, u, editInfo, true, true);
       auditTechnicalEventSkipped(inst, source, u, editInfo.detection_source ?? "edit_event", editInfo);
       console.log("[WHATSAPP_EDIT_HANDLED_SKIP_INSERT]", {
         company_id: inst.company_id,
@@ -1132,6 +1305,8 @@ async function handleMessageUpdate(admin: any, inst: any, payload: any, source =
     const technicalEvent = isTechnicalWhatsAppEvent(u);
     if (technicalEvent.technical) {
       auditEditDetection(inst, source, u, null);
+      auditEditPayloadStructure(inst, source, u, null);
+      auditEditEventSequence(inst, source, u, null, false, true);
       auditTechnicalEventSkipped(inst, source, u, technicalEvent.reason, null);
       continue;
     }
