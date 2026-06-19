@@ -382,13 +382,13 @@ export default function TicketsMobileLayout(props: Props) {
         </div>
 
         {/* Composer mínimo (apenas texto nesta fase) */}
-        <div className="border-t bg-background px-2 py-2 flex items-end gap-2 shrink-0">
+        <div className="border-t bg-background px-2 py-2 flex items-end gap-2 shrink-0 w-full max-w-full min-w-0">
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Digite..."
             rows={1}
-            className="min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-muted border-0 px-3 py-2 text-sm"
+            className="flex-1 min-w-0 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-muted border-0 px-3 py-2 text-sm"
           />
           <Button
             size="icon"
