@@ -329,22 +329,22 @@ function MockChat() {
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-40">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
               <Zap className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg">Dominus Atendimento</span>
+            <span className="font-bold text-base sm:text-lg truncate">Dominus Atendimento</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" className="hidden sm:inline-flex">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <Button asChild variant="ghost" className="hidden md:inline-flex">
               <a href="#como-funciona">Como funciona</a>
             </Button>
-            <Button asChild variant="ghost"><Link to="/auth">Entrar</Link></Button>
-            <Button asChild className="gradient-primary text-primary-foreground">
-              <Link to="/cadastro">Começar agora</Link>
+            <Button asChild variant="ghost" size="sm"><Link to="/auth">Entrar</Link></Button>
+            <Button asChild size="sm" className="gradient-primary text-primary-foreground">
+              <Link to="/cadastro">Começar</Link>
             </Button>
           </div>
         </div>
