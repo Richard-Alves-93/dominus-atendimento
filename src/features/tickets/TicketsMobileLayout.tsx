@@ -74,6 +74,7 @@ function formatRecTime(sec: number) {
 
 type AnyTicket = {
   id: string;
+  company_id: string;
   status: string;
   unread_count: number;
   last_message_at: string | null;
@@ -166,6 +167,9 @@ interface Props {
   onCopyMessage?: (m: AnyMessage) => void | Promise<void>;
   onReplyMessage?: (m: AnyMessage) => void;
   onComingSoonAction?: (label: string) => void;
+  // G.2 — fixar conversa na lista
+  pinnedIds?: Set<string>;
+  onTogglePinTicket?: (ticketId: string, companyId: string) => void | Promise<void>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -247,7 +251,30 @@ export default function TicketsMobileLayout(props: Props) {
     onCopyMessage,
     onReplyMessage,
     onComingSoonAction,
+    pinnedIds,
+    onTogglePinTicket,
   } = props;
+  const pinnedSet = pinnedIds ?? new Set<string>();
+
+  // G.2 — long press no item da lista abre o sheet de ações da conversa
+  const [ticketActionId, setTicketActionId] = useState<string | null>(null);
+  const ticketLongPressRef = useRef<number | null>(null);
+  const ticketLongPressFiredRef = useRef(false);
+  const startTicketLongPress = (ticketId: string) => {
+    if (ticketLongPressRef.current) window.clearTimeout(ticketLongPressRef.current);
+    ticketLongPressFiredRef.current = false;
+    ticketLongPressRef.current = window.setTimeout(() => {
+      ticketLongPressFiredRef.current = true;
+      setTicketActionId(ticketId);
+      try { (navigator as any).vibrate?.(20); } catch { /* noop */ }
+    }, 450);
+  };
+  const cancelTicketLongPress = () => {
+    if (ticketLongPressRef.current) {
+      window.clearTimeout(ticketLongPressRef.current);
+      ticketLongPressRef.current = null;
+    }
+  };
 
   // F.3 — long-press → bottom sheet de ações da mensagem
   const [actionMsg, setActionMsg] = useState<AnyMessage | null>(null);
@@ -489,10 +516,22 @@ export default function TicketsMobileLayout(props: Props) {
             ) : (
               tickets.map((t) => {
                 const name = t.contact?.name || t.contact?.phone_number || "Sem nome";
+                const isPinned = pinnedSet.has(t.id);
                 return (
                   <button
                     key={t.id}
-                    onClick={() => setSelectedId(t.id)}
+                    onClick={() => {
+                      if (ticketLongPressFiredRef.current) {
+                        ticketLongPressFiredRef.current = false;
+                        return;
+                      }
+                      setSelectedId(t.id);
+                    }}
+                    onPointerDown={() => startTicketLongPress(t.id)}
+                    onPointerUp={cancelTicketLongPress}
+                    onPointerLeave={cancelTicketLongPress}
+                    onPointerCancel={cancelTicketLongPress}
+                    onContextMenu={(e) => { e.preventDefault(); setTicketActionId(t.id); }}
                     className="w-full text-left px-3 py-3 border-b flex gap-3 items-center hover:bg-muted/40 active:bg-muted/60"
                   >
                     <div className="h-11 w-11 rounded-full overflow-hidden bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
@@ -508,7 +547,10 @@ export default function TicketsMobileLayout(props: Props) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium truncate">{name}</span>
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          {isPinned && <Pin className="w-3 h-3 text-muted-foreground shrink-0" />}
+                          <span className="truncate">{name}</span>
+                        </span>
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {fmtTime(t.last_message_at)}
                         </span>
@@ -529,6 +571,42 @@ export default function TicketsMobileLayout(props: Props) {
                 );
               })
             )}
+            {/* G.2 — Sheet de ações da conversa (mobile) */}
+            <Sheet open={!!ticketActionId} onOpenChange={(open) => { if (!open) setTicketActionId(null); }}>
+              <SheetContent side="bottom" className="rounded-t-2xl p-3 pb-6">
+                {(() => {
+                  const t = tickets.find((x) => x.id === ticketActionId);
+                  if (!t) return null;
+                  const isPinned = pinnedSet.has(t.id);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs text-muted-foreground px-3 pt-2 pb-1 truncate">
+                        {t.contact?.name || t.contact?.phone_number || "Conversa"}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = t.id, cid = t.company_id;
+                          setTicketActionId(null);
+                          onTogglePinTicket?.(id, cid);
+                        }}
+                        className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                      >
+                        <Pin className="w-4 h-4 text-muted-foreground" />
+                        {isPinned ? "Desafixar conversa" : "Fixar conversa"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTicketActionId(null)}
+                        className="flex items-center justify-center gap-2 px-3 py-3 mt-1 rounded-lg hover:bg-muted text-sm text-muted-foreground"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  );
+                })()}
+              </SheetContent>
+            </Sheet>
           </div>
           </div>
         </div>

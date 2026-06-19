@@ -554,6 +554,46 @@ const TicketsDesktopLayout = () => {
     },
   });
 
+  // G.2 — conversas fixadas pelo usuário atual nesta empresa
+  const pinnedTicketsQuery = useQuery({
+    queryKey: ["pinned-tickets", activeCompanyId, profile?.id],
+    enabled: !!activeCompanyId && !!profile?.id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pinned_tickets")
+        .select("ticket_id")
+        .eq("company_id", activeCompanyId)
+        .eq("user_id", profile!.id);
+      if (error) throw error;
+      return new Set<string>(((data ?? []) as Array<{ ticket_id: string }>).map((r) => r.ticket_id));
+    },
+  });
+  const pinnedIds = pinnedTicketsQuery.data ?? new Set<string>();
+
+  const togglePinTicket = async (ticketId: string, companyId: string) => {
+    if (!profile?.id) return;
+    const isPinned = pinnedIds.has(ticketId);
+    try {
+      if (isPinned) {
+        const { error } = await (supabase as any)
+          .from("pinned_tickets")
+          .delete()
+          .eq("user_id", profile.id)
+          .eq("ticket_id", ticketId);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("pinned_tickets")
+          .insert({ user_id: profile.id, ticket_id: ticketId, company_id: companyId });
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["pinned-tickets", activeCompanyId, profile.id] });
+    } catch (e: any) {
+      toast({ title: "Não foi possível fixar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+
   // Candidatos a "atendimento parado" na lista: status=open e com responsável.
   const stalledCandidateIds = useMemo(() => {
     return (ticketsQuery.data ?? [])
@@ -595,15 +635,26 @@ const TicketsDesktopLayout = () => {
     const withAssignee = list.map((t) => ({
       ...t,
       assignee: t.assigned_user_id ? pmap[t.assigned_user_id] ?? null : null,
+      pinned: pinnedIds.has(t.id),
     }));
-    if (!search.trim()) return withAssignee;
-    const s = search.toLowerCase();
-    return withAssignee.filter(
-      (t) =>
-        (t.contact?.name || "").toLowerCase().includes(s) ||
-        (t.contact?.phone_number || "").includes(s),
-    );
-  }, [ticketsQuery.data, assigneeProfilesQuery.data, search]);
+    const filtered = !search.trim()
+      ? withAssignee
+      : withAssignee.filter((t) => {
+          const s = search.toLowerCase();
+          return (
+            (t.contact?.name || "").toLowerCase().includes(s) ||
+            (t.contact?.phone_number || "").includes(s)
+          );
+        });
+    // Ordenação: fixadas primeiro, depois por last_message_at desc.
+    return [...filtered].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return tb - ta;
+    });
+  }, [ticketsQuery.data, assigneeProfilesQuery.data, search, pinnedIds]);
+
 
   const selected = useMemo(
     () => tickets.find((t) => t.id === selectedId) ?? null,
@@ -2350,6 +2401,8 @@ const TicketsDesktopLayout = () => {
           onCopyMessage={handleCopyMessage}
           onReplyMessage={handleReplyClick}
           onComingSoonAction={(label) => toast({ title: "Em breve", description: `${label} será implementado em próxima etapa.` })}
+          pinnedIds={pinnedIds}
+          onTogglePinTicket={togglePinTicket}
         />
         {sharedModals}
       </>
@@ -2466,7 +2519,7 @@ const TicketsDesktopLayout = () => {
                   <div
                     key={t.id}
                     onClick={() => setSelectedId(t.id)}
-                    className={`flex items-start gap-3 px-3 py-3 cursor-pointer border-b transition-colors hover:bg-secondary/50 ${selectedId === t.id ? "bg-secondary" : ""}`}
+                    className={`group/ticket flex items-start gap-3 px-3 py-3 cursor-pointer border-b transition-colors hover:bg-secondary/50 ${selectedId === t.id ? "bg-secondary" : ""}`}
                   >
                     <Avatar className="h-10 w-10 flex-shrink-0">
                       {t.contact?.avatar_url && (
@@ -2477,8 +2530,11 @@ const TicketsDesktopLayout = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm text-foreground truncate">{name}</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-medium text-sm text-foreground truncate flex items-center gap-1">
+                          {t.pinned && <Pin className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                          <span className="truncate">{name}</span>
+                        </span>
                         <span className="text-xs text-muted-foreground flex-shrink-0">
                           {fmtTime(t.last_message_at)}
                         </span>
@@ -2511,11 +2567,30 @@ const TicketsDesktopLayout = () => {
                         )}
                       </div>
                     </div>
-                    {t.unread_count > 0 && (
-                      <Badge className="gradient-primary text-primary-foreground text-[10px] h-5 min-w-5 flex items-center justify-center rounded-full px-1.5">
-                        {t.unread_count}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {t.unread_count > 0 && (
+                        <Badge className="gradient-primary text-primary-foreground text-[10px] h-5 min-w-5 flex items-center justify-center rounded-full px-1.5">
+                          {t.unread_count}
+                        </Badge>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            aria-label="Ações da conversa"
+                            className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground opacity-0 group-hover/ticket:opacity-100 hover:bg-muted transition-opacity"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => togglePinTicket(t.id, t.company_id)}>
+                            <Pin className="w-4 h-4 mr-2" />
+                            {t.pinned ? "Desafixar conversa" : "Fixar conversa"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 );
               })
