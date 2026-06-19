@@ -388,6 +388,8 @@ const TicketsDesktopLayout = () => {
     }, 450);
   };
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  // G.5 — limpar seleção ao trocar de ticket
+  useEffect(() => { clearSelection(); }, [selectedId]);
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
