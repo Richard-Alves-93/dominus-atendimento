@@ -302,15 +302,15 @@ function MockChat() {
           </div>
 
           {/* Composer */}
-          <div className="border-t bg-background px-3 py-2 flex items-center gap-2">
-            <button className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-sm leading-none">+</button>
-            <Tag className="w-4 h-4 text-muted-foreground" />
-            <div className="flex-1 h-8 rounded-full bg-muted px-3 flex items-center text-[12px] text-muted-foreground">
+          <div className="border-t bg-background px-2 sm:px-3 py-2 flex items-center gap-1 sm:gap-2">
+            <button className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-sm leading-none shrink-0">+</button>
+            <Tag className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
+            <div className="flex-1 min-w-0 h-8 rounded-full bg-muted px-3 flex items-center text-[12px] text-muted-foreground truncate">
               Digite uma mensagem
             </div>
-            <Smile className="w-4 h-4 text-muted-foreground" />
-            <Mic className="w-4 h-4 text-muted-foreground" />
-            <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
+            <Smile className="w-4 h-4 text-muted-foreground shrink-0 hidden sm:block" />
+            <Mic className="w-4 h-4 text-muted-foreground shrink-0" />
+            <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center shrink-0">
               <Send className="w-3.5 h-3.5 text-primary-foreground" />
             </button>
           </div>
