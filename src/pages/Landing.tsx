@@ -1,18 +1,228 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Zap, Users, BarChart3, Sparkles, ArrowRight } from "lucide-react";
+import {
+  MessageSquare,
+  Zap,
+  Users,
+  Clock,
+  History,
+  Layers,
+  CheckCheck,
+  Inbox,
+  Send,
+  Search,
+  Filter,
+  Sparkles,
+  ArrowRight,
+  BarChart3,
+  CalendarClock,
+  Megaphone,
+  Tag,
+  ShieldCheck,
+  Building2,
+  Paperclip,
+  Smile,
+  Mic,
+} from "lucide-react";
 
-const features = [
-  { icon: MessageSquare, title: "Multicanal", desc: "WhatsApp, Instagram, Facebook e E-mail em uma única caixa de entrada." },
-  { icon: Users, title: "Multiempresa", desc: "Isole dados, equipes e métricas por empresa com total segurança." },
-  { icon: BarChart3, title: "Dashboard em tempo real", desc: "Acompanhe atendimentos, conversões e desempenho do time." },
-  { icon: Sparkles, title: "Automação & IA", desc: "Chatbot e fluxos inteligentes prontos para escalar o atendimento." },
+const problems = [
+  "Mensagens que se perdem no WhatsApp",
+  "Clientes esperando resposta por horas",
+  "Vários atendentes no mesmo número",
+  "Ninguém sabe quem está falando com quem",
+  "Conversas misturadas entre setores",
+  "Sem histórico do que foi combinado",
 ];
+
+const benefits = [
+  { icon: Inbox, title: "Centralize os atendimentos", desc: "Todas as conversas em uma tela simples e organizada." },
+  { icon: Layers, title: "Organize por setor", desc: "Separe vendas, suporte, financeiro e recepção." },
+  { icon: Users, title: "Defina responsáveis", desc: "Cada conversa com um atendente claro." },
+  { icon: Clock, title: "Acompanhe pendências", desc: "Veja o que ainda precisa de resposta." },
+  { icon: Zap, title: "Respostas rápidas", desc: "Atalhos para mensagens que sua equipe usa todo dia." },
+  { icon: History, title: "Histórico completo", desc: "Toda a conversa do cliente sempre à mão." },
+  { icon: CalendarClock, title: "Agendamentos e retornos", desc: "Lembre seus clientes na hora certa." },
+  { icon: ShieldCheck, title: "Mais controle da equipe", desc: "Acompanhe o desempenho do seu time." },
+];
+
+const steps = [
+  { n: "1", title: "Receba as mensagens", desc: "Os atendimentos chegam organizados em uma tela simples." },
+  { n: "2", title: "Distribua para a equipe", desc: "Separe por setor e responsável em poucos cliques." },
+  { n: "3", title: "Acompanhe tudo", desc: "Veja conversas abertas, pendentes e finalizadas." },
+  { n: "4", title: "Nunca perca o histórico", desc: "Cada cliente mantém todo seu histórico de atendimento." },
+];
+
+const resources = [
+  { icon: MessageSquare, title: "Atendimento pelo WhatsApp" },
+  { icon: Layers, title: "Organização por setores" },
+  { icon: Users, title: "Responsáveis por conversa" },
+  { icon: Zap, title: "Mensagens rápidas" },
+  { icon: History, title: "Histórico de clientes" },
+  { icon: CalendarClock, title: "Agendamentos e retornos" },
+  { icon: Megaphone, title: "Campanhas e prospecção" },
+  { icon: BarChart3, title: "Relatórios de atendimento" },
+];
+
+function MockChat() {
+  const conversations = [
+    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true },
+    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0 },
+    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1 },
+    { name: "Auto Center RJ", msg: "Vou conferir e te respondo", time: "08:55", unread: 0 },
+    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0 },
+  ];
+
+  return (
+    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden">
+      {/* Top window bar */}
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/40">
+        <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
+        <span className="ml-3 text-[11px] text-muted-foreground">painel.crmdominus.com.br/app/tickets</span>
+      </div>
+
+      <div className="grid grid-cols-[180px_220px_1fr] h-[440px] text-sm">
+        {/* Sidebar */}
+        <aside className="bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] flex flex-col">
+          <div className="flex items-center gap-2 px-3 h-12 border-b border-white/10">
+            <div className="w-7 h-7 rounded-md gradient-primary flex items-center justify-center">
+              <Zap className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <span className="font-semibold text-[13px]">Dominus</span>
+          </div>
+          <nav className="flex-1 px-2 py-3 space-y-1 text-[12px]">
+            <div className="px-2 py-1.5 rounded-md opacity-70">Painel</div>
+            <div className="px-2 py-1.5 rounded-md bg-primary/20 text-primary-foreground flex items-center gap-2">
+              <MessageSquare className="w-3.5 h-3.5" /> Atendimentos
+            </div>
+            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
+              <Users className="w-3.5 h-3.5" /> Contatos
+            </div>
+            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
+              <Layers className="w-3.5 h-3.5" /> Setores
+            </div>
+            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
+              <CalendarClock className="w-3.5 h-3.5" /> Agendamentos
+            </div>
+            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
+              <Tag className="w-3.5 h-3.5" /> Mensagens rápidas
+            </div>
+            <div className="px-2 py-1.5 rounded-md opacity-70 flex items-center gap-2">
+              <Building2 className="w-3.5 h-3.5" /> Conexões
+            </div>
+          </nav>
+          <div className="px-3 py-2 border-t border-white/10 text-[11px] opacity-70">
+            Rives Atendimento
+          </div>
+        </aside>
+
+        {/* Conversation list */}
+        <div className="border-r flex flex-col bg-background">
+          <div className="h-12 border-b px-3 flex items-center gap-2">
+            <Search className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-[12px] text-muted-foreground">Buscar conversas</span>
+          </div>
+          <div className="px-2 py-2 flex gap-1 border-b">
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary text-primary-foreground">Abertos</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Pendentes</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Fechados</span>
+          </div>
+          <div className="px-2 py-1.5 border-b flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Filter className="w-3 h-3" /> Setor: Vendas
+          </div>
+          <div className="flex-1 overflow-hidden">
+            {conversations.map((c) => (
+              <div
+                key={c.name}
+                className={`px-3 py-2 border-b cursor-pointer ${c.active ? "bg-primary/5" : ""}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-[12.5px] truncate">{c.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{c.time}</span>
+                </div>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-[11.5px] text-muted-foreground truncate pr-2">{c.msg}</span>
+                  {c.unread > 0 && (
+                    <span className="text-[10px] min-w-[16px] h-4 px-1 rounded-full bg-success text-white flex items-center justify-center">
+                      {c.unread}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat */}
+        <section className="flex flex-col bg-[hsl(var(--muted))]/30">
+          <div className="h-12 border-b px-4 flex items-center justify-between bg-background">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-semibold">
+                MS
+              </div>
+              <div className="leading-tight">
+                <div className="text-[13px] font-medium">Mariana Souza</div>
+                <div className="text-[10.5px] text-muted-foreground">Vendas · Responsável: Ana</div>
+              </div>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium">
+              Aberto
+            </span>
+          </div>
+
+          <div className="flex-1 px-4 py-4 space-y-2 overflow-hidden">
+            <div className="flex justify-start">
+              <div className="max-w-[78%] bg-background border rounded-2xl rounded-tl-sm px-3 py-2 text-[12.5px] shadow-card">
+                Olá, gostaria de saber mais sobre o serviço.
+                <div className="text-[9.5px] text-muted-foreground text-right mt-0.5">09:40</div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <div className="max-w-[78%] bg-success/15 border border-success/20 rounded-2xl rounded-tr-sm px-3 py-2 text-[12.5px]">
+                Olá! Claro, vou te ajudar.
+                <div className="flex items-center justify-end gap-1 text-[9.5px] text-muted-foreground mt-0.5">
+                  09:41 <CheckCheck className="w-3 h-3 text-success" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-start">
+              <div className="max-w-[78%] bg-background border rounded-2xl rounded-tl-sm px-3 py-2 text-[12.5px] shadow-card">
+                Vocês conseguem me retornar ainda hoje?
+                <div className="text-[9.5px] text-muted-foreground text-right mt-0.5">09:42</div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <div className="max-w-[78%] bg-success/15 border border-success/20 rounded-2xl rounded-tr-sm px-3 py-2 text-[12.5px]">
+                Sim, já deixei seu atendimento com o setor responsável.
+                <div className="flex items-center justify-end gap-1 text-[9.5px] text-muted-foreground mt-0.5">
+                  09:42 <CheckCheck className="w-3 h-3 text-success" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Composer */}
+          <div className="border-t bg-background px-3 py-2 flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-muted-foreground" />
+            <div className="flex-1 h-8 rounded-full bg-muted px-3 flex items-center text-[12px] text-muted-foreground">
+              Digite uma mensagem
+            </div>
+            <Smile className="w-4 h-4 text-muted-foreground" />
+            <button className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
+              <Send className="w-3.5 h-3.5 text-primary-foreground" />
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
 
 export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
+      <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-40">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center">
@@ -21,49 +231,168 @@ export default function Landing() {
             <span className="font-bold text-lg">Dominus Atendimento</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" className="hidden sm:inline-flex">
+              <a href="#como-funciona">Como funciona</a>
+            </Button>
             <Button asChild variant="ghost"><Link to="/auth">Entrar</Link></Button>
-            <Button asChild className="gradient-primary text-primary-foreground"><Link to="/cadastro">Começar grátis</Link></Button>
+            <Button asChild className="gradient-primary text-primary-foreground">
+              <Link to="/cadastro">Começar agora</Link>
+            </Button>
           </div>
         </div>
       </header>
 
       <main>
-        <section className="max-w-6xl mx-auto px-6 py-24 text-center">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-6">
-            <Sparkles className="w-3.5 h-3.5" /> SaaS de atendimento multicanal
-          </span>
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-            Centralize o atendimento da sua empresa.
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-            O Dominus Atendimento unifica WhatsApp, Instagram, Facebook e e-mail em uma plataforma simples, segura e multiempresa.
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <Button asChild size="lg" className="gradient-primary text-primary-foreground">
-              <Link to="/cadastro">Começar grátis <ArrowRight className="w-4 h-4 ml-2" /></Link>
-            </Button>
-            <Button asChild size="lg" variant="outline"><Link to="/auth">Entrar</Link></Button>
+        {/* HERO */}
+        <section className="max-w-6xl mx-auto px-6 pt-16 pb-12 md:pt-24 md:pb-16">
+          <div className="grid lg:grid-cols-2 gap-10 items-center">
+            <div className="text-center lg:text-left">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 text-success text-xs font-medium mb-5">
+                <Sparkles className="w-3.5 h-3.5" /> Atendimento profissional pelo WhatsApp
+              </span>
+              <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1]">
+                Organize todos os atendimentos da sua empresa em um só lugar.
+              </h1>
+              <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
+                Com o Dominus, sua equipe atende pelo WhatsApp com mais organização, histórico,
+                setores, responsáveis e acompanhamento em tempo real.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
+                <Button asChild size="lg" className="gradient-primary text-primary-foreground w-full sm:w-auto">
+                  <Link to="/cadastro">Começar agora <ArrowRight className="w-4 h-4 ml-2" /></Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
+                  <a href="#como-funciona">Ver como funciona</a>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-4">
+                Teste grátis · Sem cartão de crédito · Suporte em português
+              </p>
+            </div>
+
+            <div className="lg:pl-4">
+              <MockChat />
+            </div>
           </div>
         </section>
 
-        <section className="max-w-6xl mx-auto px-6 pb-24">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {features.map((f) => (
-              <div key={f.title} className="p-6 rounded-xl border bg-card">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <f.icon className="w-5 h-5 text-primary" />
+        {/* PROBLEMAS */}
+        <section className="bg-muted/30 border-y">
+          <div className="max-w-6xl mx-auto px-6 py-16">
+            <div className="max-w-3xl mx-auto text-center mb-10">
+              <h2 className="text-2xl md:text-3xl font-bold mb-3">
+                Chega de perder clientes no WhatsApp.
+              </h2>
+              <p className="text-muted-foreground">
+                Se sua empresa atende clientes pelo WhatsApp, você sabe como é fácil perder uma mensagem
+                importante. Com o Dominus, cada conversa fica organizada, com responsável, setor e
+                histórico completo.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl mx-auto">
+              {problems.map((p) => (
+                <div key={p} className="flex items-start gap-2 p-4 rounded-lg bg-card border">
+                  <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2 shrink-0" />
+                  <span className="text-sm">{p}</span>
                 </div>
-                <h3 className="font-semibold mb-1">{f.title}</h3>
-                <p className="text-sm text-muted-foreground">{f.desc}</p>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* BENEFÍCIOS */}
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">Tudo o que sua equipe precisa</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Ferramentas simples para atender melhor, responder mais rápido e acompanhar tudo o
+              que acontece com seus clientes.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {benefits.map((b) => (
+              <div key={b.title} className="p-5 rounded-xl border bg-card hover:shadow-card transition-shadow">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                  <b.icon className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-semibold mb-1 text-[15px]">{b.title}</h3>
+                <p className="text-sm text-muted-foreground">{b.desc}</p>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* COMO FUNCIONA */}
+        <section id="como-funciona" className="bg-muted/30 border-y">
+          <div className="max-w-6xl mx-auto px-6 py-16">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl md:text-3xl font-bold mb-3">Como o Dominus ajuda</h2>
+              <p className="text-muted-foreground">Em quatro passos simples, sua empresa atende melhor.</p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {steps.map((s) => (
+                <div key={s.n} className="p-5 rounded-xl bg-card border">
+                  <div className="w-9 h-9 rounded-full gradient-primary text-primary-foreground flex items-center justify-center font-bold mb-3">
+                    {s.n}
+                  </div>
+                  <h3 className="font-semibold mb-1">{s.title}</h3>
+                  <p className="text-sm text-muted-foreground">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* RECURSOS */}
+        <section className="max-w-6xl mx-auto px-6 py-16">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">Recursos do Dominus</h2>
+            <p className="text-muted-foreground">
+              Preparado para evoluir com novos canais de atendimento.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {resources.map((r) => (
+              <div key={r.title} className="flex items-center gap-3 p-4 rounded-lg border bg-card">
+                <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
+                  <r.icon className="w-4.5 h-4.5 text-success" />
+                </div>
+                <span className="text-sm font-medium">{r.title}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA FINAL */}
+        <section className="max-w-6xl mx-auto px-6 pb-20">
+          <div className="rounded-2xl gradient-primary text-primary-foreground p-10 md:p-14 text-center shadow-elevated">
+            <h2 className="text-2xl md:text-4xl font-bold mb-3">
+              Atenda melhor. Responda mais rápido. Não perca mais nenhum cliente.
+            </h2>
+            <p className="opacity-90 max-w-2xl mx-auto mb-7">
+              Comece agora gratuitamente e veja como o Dominus transforma o atendimento da sua empresa.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button asChild size="lg" variant="secondary" className="w-full sm:w-auto">
+                <Link to="/cadastro">Começar agora <ArrowRight className="w-4 h-4 ml-2" /></Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="w-full sm:w-auto bg-transparent text-primary-foreground border-primary-foreground/30 hover:bg-primary-foreground/10 hover:text-primary-foreground">
+                <Link to="/auth">Já tenho conta</Link>
+              </Button>
+            </div>
           </div>
         </section>
       </main>
 
       <footer className="border-t py-8">
-        <div className="max-w-6xl mx-auto px-6 text-center text-sm text-muted-foreground">
-          © {new Date().getFullYear()} Dominus Atendimento. Todos os direitos reservados.
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md gradient-primary flex items-center justify-center">
+              <Zap className="w-3.5 h-3.5 text-primary-foreground" />
+            </div>
+            <span>© {new Date().getFullYear()} Dominus Atendimento</span>
+          </div>
+          <span>Feito para empresas que atendem de verdade.</span>
         </div>
       </footer>
     </div>
