@@ -593,11 +593,44 @@ function auditEditDetection(inst: any, source: string, m: any, editInfo: ReturnT
     original_provider_id_present: !!editInfo?.original_provider_id,
     edited_text_present: !!editInfo?.new_body,
     edited_text_source: editInfo?.new_body_source ?? null,
-    edited_media_caption_present: false,
+    edited_media_caption_present: !!editInfo?.new_body_source?.toLowerCase().includes("message"),
     reason: editInfo ? null : "not_recognized_as_edit",
     message_keys: Object.keys(msg),
     key: safeKeyAudit(m?.key ?? m?.update?.key ?? {}),
   });
+}
+
+async function detectSameProviderContentEdit(admin: any, inst: any, m: any): Promise<{ editInfo: ReturnType<typeof extractEditInfo>; foundExisting: boolean }>{
+  const providerId = m?.key?.id ?? m?.update?.key?.id ?? null;
+  const newBody = extractBody(m);
+  if (!providerId || typeof newBody !== "string" || newBody.length === 0) {
+    return { editInfo: null, foundExisting: false };
+  }
+  const { data: existing } = await admin
+    .from("messages")
+    .select("id, body, media_caption, msg_type")
+    .eq("company_id", inst.company_id)
+    .eq("channel_id", inst.channel_id)
+    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId},raw->key->>id.eq.${providerId}`)
+    .limit(1)
+    .maybeSingle();
+  if (!existing) return { editInfo: null, foundExisting: false };
+
+  const oldComparable = ["image", "audio", "video", "document", "sticker"].includes(existing.msg_type)
+    ? existing.media_caption ?? existing.body ?? null
+    : existing.body ?? null;
+  if (oldComparable === newBody) return { editInfo: null, foundExisting: true };
+
+  return {
+    foundExisting: true,
+    editInfo: {
+      original_provider_id: String(providerId),
+      new_body: newBody,
+      edited_message: m?.message ?? m?.update?.message ?? null,
+      detection_source: "same_provider_message_updated_content",
+      new_body_source: "message",
+    },
+  };
 }
 
 async function applyMessageEdit(
@@ -671,9 +704,11 @@ async function applyMessageEdit(
     if (isMedia) {
       if (!original.original_body) patch.original_body = original.media_caption ?? original.body ?? null;
       patch.media_caption = edit.new_body;
+      patch.raw_body = edit.new_body;
     } else {
       if (!original.original_body) patch.original_body = original.body ?? null;
       patch.body = edit.new_body;
+      patch.raw_body = edit.new_body;
     }
   }
   await admin.from("messages").update(patch).eq("id", original.id);
