@@ -261,7 +261,9 @@ export default function TicketsMobileLayout(props: Props) {
 
   return (
     <AppLayout title="Atendimentos" mobileFullScreen>
-      <div className="flex h-svh w-full max-w-full min-w-0 flex-col overflow-x-hidden bg-[hsl(var(--muted))]/30">
+      <div className="flex h-svh w-full max-w-full min-w-0 overflow-hidden bg-[hsl(var(--muted))]/30">
+        <MobileCompactSidebar />
+        <div className="flex flex-1 min-w-0 max-w-full flex-col overflow-x-hidden bg-[hsl(var(--muted))]/30">
         {/* Header */}
         <div className="h-14 px-2 border-b bg-background flex items-center gap-2 shrink-0 min-w-0 max-w-full">
           <Button
