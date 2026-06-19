@@ -2896,6 +2896,25 @@ const TicketsDesktopLayout = () => {
             </div>
             )}
 
+            {pinnedMessagePreview && (
+              <div className="px-3 py-2 border-b bg-card/70 backdrop-blur flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => pinnedMessageId && scrollToMessage(pinnedMessageId)}
+                  className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-md border-l-2 border-primary/60 bg-muted/40 hover:bg-muted/60 px-2 py-1.5"
+                  title="Ir para a mensagem fixada"
+                >
+                  <Pin className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-primary leading-tight">Mensagem fixada</p>
+                    <p className="text-xs text-foreground/80 truncate">{pinnedMessagePreview.preview}</p>
+                  </div>
+                </button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Desafixar" onClick={() => unpinMessage()}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
             <div className="flex-1 relative min-h-0 overflow-hidden">
             <div
               ref={scrollContainerRef}
