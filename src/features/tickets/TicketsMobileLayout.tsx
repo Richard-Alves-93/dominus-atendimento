@@ -1,4 +1,31 @@
-import { ArrowLeft, Filter, Loader2, Send, Check, CheckCheck, AlertCircle, MoreVertical, RotateCcw, Clock, CheckCircle2, Building2, UserPlus, Copy } from "lucide-react";
+import { useRef } from "react";
+import {
+  ArrowLeft,
+  Filter,
+  Loader2,
+  Send,
+  Check,
+  CheckCheck,
+  AlertCircle,
+  MoreVertical,
+  RotateCcw,
+  Clock,
+  CheckCircle2,
+  Building2,
+  UserPlus,
+  Copy,
+  Plus,
+  X,
+  Mic,
+  Trash2,
+  FileText,
+  Image as ImageIcon,
+  Camera,
+  Music,
+  User as UserIcon,
+  BarChart3,
+  CalendarPlus,
+} from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +45,17 @@ import {
 import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
+import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
+
+const ATTACH_DOC_ACCEPT =
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv";
+
+function formatRecTime(sec: number) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
 
 // Fase C/D/E.1 — Shell mobile + render visual read-only completo.
 // Continua sem duplicar regra de negócio: recebe estado/handlers via props.
