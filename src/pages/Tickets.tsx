@@ -2343,6 +2343,11 @@ const Tickets = () => {
                         <div
                           className={`flex items-center justify-end gap-1 mt-1 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}
                         >
+                          {m.is_edited && (
+                            <span className="text-[10px] italic opacity-70" title={m.edited_at ? `Editada em ${fmtTime(m.edited_at)}` : "Editada"}>
+                              Editada
+                            </span>
+                          )}
                           <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
                           {m.from_me && (() => {
                             const ds = m._optimistic
