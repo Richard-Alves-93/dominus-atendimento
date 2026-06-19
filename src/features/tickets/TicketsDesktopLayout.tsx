@@ -79,6 +79,7 @@ import { toast } from "@/hooks/use-toast";
 import { EventModal } from "@/components/events/EventModal";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { useIsMobile } from "@/hooks/use-mobile";
+import TicketsMobileLayout from "@/features/tickets/TicketsMobileLayout";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
