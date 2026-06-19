@@ -746,6 +746,7 @@ const Tickets = () => {
 
   // Ao abrir um ticket: zerar unread_count (somente leitura/visualização).
   // NÃO altera assigned_user_id, status nem move de Pendentes para Atendendo.
+  const evoMarkReadGuardRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!selectedId || !activeCompanyId) return;
     const current = (ticketsQuery.data ?? []).find((t) => t.id === selectedId);
@@ -773,6 +774,18 @@ const Tickets = () => {
         });
       }
     })();
+    // Marca como lido no WhatsApp/Evolution — não bloqueia UI, falha silenciosa.
+    const guardKey = `${selectedId}:${prev}`;
+    if (!evoMarkReadGuardRef.current.has(guardKey)) {
+      evoMarkReadGuardRef.current.add(guardKey);
+      supabase.functions
+        .invoke("mark-whatsapp-chat-read", {
+          body: { ticket_id: selectedId, company_id: activeCompanyId },
+        })
+        .catch((err) => {
+          console.warn("[WHATSAPP_MARK_READ_ERROR] invoke", { ticket_id: selectedId, message: err?.message });
+        });
+    }
   }, [selectedId, activeCompanyId, ticketsQuery.data, qc]);
 
   const isPendingAcceptance = !!selected && !selected.assigned_user_id && selected.status !== "closed";
