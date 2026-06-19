@@ -130,16 +130,17 @@ function MockChat() {
   ];
 
   return (
-    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden">
+    <div className="rounded-xl border bg-card shadow-elevated overflow-hidden w-full max-w-full">
       {/* Top window bar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/40">
-        <span className="w-2.5 h-2.5 rounded-full bg-destructive/70" />
-        <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
-        <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
-        <span className="ml-3 text-[11px] text-muted-foreground">painel.crmdominus.com.br/app/tickets</span>
+        <span className="w-2.5 h-2.5 rounded-full bg-destructive/70 shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-warning/70 shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-success/70 shrink-0" />
+        <span className="ml-3 text-[11px] text-muted-foreground truncate">painel.crmdominus.com.br/app/tickets</span>
       </div>
 
-      <div className="grid grid-cols-[190px_240px_1fr] h-[460px] text-sm">
+      <div className="grid grid-cols-[80px_140px_1fr] sm:grid-cols-[160px_210px_1fr] lg:grid-cols-[190px_240px_1fr] h-[420px] sm:h-[440px] lg:h-[460px] text-sm">
+
         {/* Sidebar */}
         <aside className="bg-[#0b1220] text-slate-200 flex flex-col">
           <div className="flex items-center gap-2 px-3 h-12 border-b border-white/10">
