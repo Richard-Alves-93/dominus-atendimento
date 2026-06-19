@@ -107,12 +107,13 @@ function Typewriter({ words }: { words: string[] }) {
 
 function MockChat() {
   const conversations = [
-    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true, dept: "Vendas", resp: "Ana" },
-    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0, dept: "Suporte", resp: "Carlos" },
-    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1, dept: "Recepção", resp: "—" },
-    { name: "Auto Center RJ", msg: "Vou conferir e te respondo", time: "08:55", unread: 0, dept: "Vendas", resp: "Ana" },
-    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0, dept: "Financeiro", resp: "Marcos" },
+    { name: "Mariana Souza", msg: "Olá, gostaria de saber mais...", time: "09:42", unread: 2, active: true, dept: "Vendas", resp: "Ana", avatar: "https://i.pravatar.cc/80?img=47" },
+    { name: "João Pedro", msg: "Obrigado pelo retorno!", time: "09:28", unread: 0, dept: "Suporte", resp: "Carlos", avatar: "https://i.pravatar.cc/80?img=12" },
+    { name: "Clínica Vida", msg: "Pode confirmar o horário?", time: "09:10", unread: 1, dept: "Recepção", resp: "—", avatar: "https://i.pravatar.cc/80?img=32" },
+    { name: "Gabriel Cezimbra", msg: "Vou conferir e te respondo", time: "08:55", unread: 0, dept: "Vendas", resp: "Ana", avatar: "https://i.pravatar.cc/80?img=15" },
+    { name: "Loja Bella", msg: "Boa tarde, tudo bem?", time: "Ontem", unread: 0, dept: "Financeiro", resp: "Marcos", avatar: "https://i.pravatar.cc/80?img=49" },
   ];
+
 
   const navMain = [
     { label: "Painel", icon: BarChart3 },
