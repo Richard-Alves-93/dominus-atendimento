@@ -1470,11 +1470,24 @@ const TicketsDesktopLayout = () => {
       if (d?.ok === false || d?.error) {
         throw new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${d?.detail ? ` — ${d.detail}` : ""}`);
       }
-      // Sucesso: webhook fromMe vai atualizar/dedup; remover otimista após pequena espera.
-      setTimeout(() => {
+      // Sucesso: força refetch para a mensagem real entrar no cache antes de
+      // remover a otimista. Sem isso, se o realtime atrasar, a bolha some.
+      try { await qc.invalidateQueries({ queryKey: ["messages", ticketId] }); } catch {}
+      const dropMedia = () => {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         URL.revokeObjectURL(previewUrl);
-      }, 1500);
+      };
+      const hasReal = () => {
+        const cur = (qc.getQueryData<MessageRow[]>(["messages", ticketId]) ?? []) as MessageRow[];
+        return cur.some((m) => !m.id.startsWith("tmp_") && m.from_me && (m.msg_type === type));
+      };
+      let tries = 0;
+      const tick = () => {
+        if (hasReal() || tries >= 16) return dropMedia();
+        tries++;
+        window.setTimeout(tick, 500);
+      };
+      tick();
       closeAttachDialog();
     } catch (e: any) {
       setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, status: "error" } : p)));
