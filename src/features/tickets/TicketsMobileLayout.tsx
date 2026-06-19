@@ -25,7 +25,17 @@ import {
   User as UserIcon,
   BarChart3,
   CalendarPlus,
+  CornerUpLeft,
+  Smile,
+  Forward,
+  Pin,
+  Star,
+  SquareCheck,
 } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+} from "@/components/ui/sheet";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
