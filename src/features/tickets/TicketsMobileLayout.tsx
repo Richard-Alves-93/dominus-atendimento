@@ -871,6 +871,105 @@ export default function TicketsMobileLayout(props: Props) {
         </div>
         </div>
       </div>
+
+      {/* F.3 — Bottom sheet de ações da mensagem (long-press) */}
+      <Sheet open={!!actionMsg} onOpenChange={(o) => { if (!o) closeActionSheet(); }}>
+        <SheetContent
+          side="bottom"
+          className="p-0 rounded-t-2xl max-h-[80vh] overflow-y-auto"
+        >
+          {actionMsg && (() => {
+            const myReaction = (reactionsByMsg?.get(actionMsg.id) ?? []).find((r) => r.user_id === profileId)?.emoji;
+            const showComing = (label: string) =>
+              (onComingSoonAction ?? onShowComingSoon)?.(label);
+            return (
+              <div className="px-3 pt-3 pb-4 flex flex-col gap-2">
+                {/* Linha rápida de reações */}
+                <div className="flex items-center justify-around bg-muted/60 rounded-full px-2 py-1.5">
+                  {QUICK_EMOJIS.map((emo) => (
+                    <button
+                      key={emo}
+                      type="button"
+                      onClick={() => {
+                        onToggleReaction?.(actionMsg, emo);
+                        closeActionSheet();
+                      }}
+                      className={`text-xl px-1.5 py-1 rounded-full transition active:scale-95 ${
+                        myReaction === emo ? "bg-primary/15" : "hover:bg-background"
+                      }`}
+                      aria-label={`Reagir com ${emo}`}
+                    >
+                      {emo}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Ações */}
+                <div className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => { onReplyMessage?.(actionMsg); closeActionSheet(); }}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <CornerUpLeft className="w-4 h-4 text-muted-foreground" /> Responder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { onCopyMessage?.(actionMsg); closeActionSheet(); }}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Copy className="w-4 h-4 text-muted-foreground" /> Copiar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Seletor completo de emojis")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Smile className="w-4 h-4 text-muted-foreground" /> Reagir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Encaminhamento")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Forward className="w-4 h-4 text-muted-foreground" /> Encaminhar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Fixar mensagem")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Pin className="w-4 h-4 text-muted-foreground" /> Fixar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Favoritos")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <Star className="w-4 h-4 text-muted-foreground" /> Favoritar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showComing("Seleção múltipla")}
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
+                  >
+                    <SquareCheck className="w-4 h-4 text-muted-foreground" /> Selecionar
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeActionSheet}
+                  className="mt-1 mx-auto text-sm text-muted-foreground px-4 py-2"
+                >
+                  Cancelar
+                </button>
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
     </AppLayout>
   );
 }
+
