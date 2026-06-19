@@ -670,6 +670,62 @@ export type Database = {
           },
         ]
       }
+      pinned_messages: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          message_id: string
+          pinned_by: string
+          ticket_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          message_id: string
+          pinned_by: string
+          ticket_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+          pinned_by?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pinned_messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pinned_messages_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pinned_messages_pinned_by_fkey"
+            columns: ["pinned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pinned_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: true
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pinned_tickets: {
         Row: {
           company_id: string
