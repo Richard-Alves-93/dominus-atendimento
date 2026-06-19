@@ -122,8 +122,8 @@ export default function TicketsMobileLayout(props: Props) {
 
     return (
       <AppLayout title="Atendimentos">
-        <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background">
-          <div className="p-3 space-y-2 border-b">
+        <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background w-full max-w-full overflow-x-hidden min-w-0">
+          <div className="p-3 space-y-2 border-b min-w-0 max-w-full">
             <Input
               placeholder="Buscar atendimentos..."
               value={search}
