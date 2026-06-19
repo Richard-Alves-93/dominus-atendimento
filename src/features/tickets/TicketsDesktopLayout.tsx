@@ -1498,6 +1498,62 @@ const TicketsDesktopLayout = () => {
     }
   };
 
+  // G.4 — favoritos do usuário no ticket selecionado
+  const favoritesQuery = useQuery({
+    queryKey: ["message-favorites", selectedId, profile?.id],
+    enabled: !!selectedId && !!profile?.id && !!activeCompanyId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("message_favorites")
+        .select("message_id")
+        .eq("ticket_id", selectedId)
+        .eq("user_id", profile!.id);
+      if (error) throw error;
+      return new Set<string>((data ?? []).map((r: any) => r.message_id as string));
+    },
+  });
+  const favoriteIds: Set<string> = favoritesQuery.data ?? new Set<string>();
+
+  const toggleFavorite = async (m: MessageRow) => {
+    if (!profile?.id || !activeCompanyId || !selectedId) return;
+    if (m._optimistic || m.id.startsWith("tmp_")) {
+      toast({ title: "Aguarde", description: "Mensagem ainda não confirmada." });
+      return;
+    }
+    const isFav = favoriteIds.has(m.id);
+    // Optimistic update
+    const key = ["message-favorites", selectedId, profile.id];
+    const prev = qc.getQueryData<Set<string>>(key);
+    const next = new Set<string>(prev ?? []);
+    if (isFav) next.delete(m.id); else next.add(m.id);
+    qc.setQueryData(key, next);
+    try {
+      if (isFav) {
+        const { error } = await (supabase as any)
+          .from("message_favorites")
+          .delete()
+          .eq("user_id", profile.id)
+          .eq("message_id", m.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("message_favorites")
+          .insert({
+            company_id: activeCompanyId,
+            ticket_id: selectedId,
+            message_id: m.id,
+            user_id: profile.id,
+          });
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      qc.setQueryData(key, prev);
+      toast({ title: "Não foi possível favoritar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    } finally {
+      qc.invalidateQueries({ queryKey: key });
+    }
+  };
+
   const pinnedMessagePreview = useMemo(() => {
     if (!pinnedMessageId) return null;
     const m = (messagesQuery.data ?? []).find((x) => x.id === pinnedMessageId) as MessageRow | undefined;
@@ -2543,6 +2599,8 @@ const TicketsDesktopLayout = () => {
           pinnedMessagePreview={pinnedMessagePreview}
           onTogglePinMessage={togglePinMessage}
           onUnpinMessage={unpinMessage}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={toggleFavorite}
         />
         {sharedModals}
       </>
@@ -2754,8 +2812,11 @@ const TicketsDesktopLayout = () => {
                 }}>
                   <CornerUpLeft className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Favoritar" onClick={() => { toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." }); setSelectedMessageId(null); }}>
-                  <Star className="w-5 h-5" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={selectedMessageId && favoriteIds.has(selectedMessageId) ? "Desfavoritar" : "Favoritar"} onClick={() => {
+                  const m = visibleMessages.find((x) => x.id === selectedMessageId);
+                  if (m) { toggleFavorite(m); setSelectedMessageId(null); }
+                }}>
+                  <Star className={`w-5 h-5 ${selectedMessageId && favoriteIds.has(selectedMessageId) ? "fill-amber-400 text-amber-400" : ""}`} />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={pinnedMessageId === selectedMessageId ? "Desafixar" : "Fixar"} onClick={() => {
                   const m = visibleMessages.find((x) => x.id === selectedMessageId);
@@ -3054,6 +3115,9 @@ const TicketsDesktopLayout = () => {
                               Editada
                             </span>
                           )}
+                          {favoriteIds.has(m.id) && (
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" aria-label="Favoritada" />
+                          )}
                           <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
                           {m.from_me && (() => {
                             const ds = m._optimistic
@@ -3179,9 +3243,9 @@ const TicketsDesktopLayout = () => {
                                 <Pin className="w-4 h-4 mr-2" /> {pinnedMessageId === m.id ? "Desafixar" : "Fixar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => toast({ title: "Em breve", description: "Favoritos serão implementados em próxima etapa." })}
+                                onClick={() => toggleFavorite(m)}
                               >
-                                <Star className="w-4 h-4 mr-2" /> Favoritar
+                                <Star className={`w-4 h-4 mr-2 ${favoriteIds.has(m.id) ? "fill-amber-400 text-amber-400" : ""}`} /> {favoriteIds.has(m.id) ? "Desfavoritar" : "Favoritar"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => toast({ title: "Em breve", description: "Seleção múltipla será implementada em próxima etapa." })}

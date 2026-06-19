@@ -175,6 +175,9 @@ interface Props {
   pinnedMessagePreview?: { sender: string; preview: string; found: boolean } | null;
   onTogglePinMessage?: (m: AnyMessage) => void | Promise<void>;
   onUnpinMessage?: () => void | Promise<void>;
+  // G.4 — favoritar mensagem por usuário
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (m: AnyMessage) => void | Promise<void>;
 }
 
 function initials(name?: string | null, phone?: string | null) {
@@ -262,8 +265,11 @@ export default function TicketsMobileLayout(props: Props) {
     pinnedMessagePreview = null,
     onTogglePinMessage,
     onUnpinMessage,
+    favoriteIds,
+    onToggleFavorite,
   } = props;
   const pinnedSet = pinnedIds ?? new Set<string>();
+  const favSet = favoriteIds ?? new Set<string>();
 
   // G.2 — long press no item da lista abre o sheet de ações da conversa
   const [ticketActionId, setTicketActionId] = useState<string | null>(null);
@@ -970,6 +976,9 @@ export default function TicketsMobileLayout(props: Props) {
                           </span>
                         )}
                         <span className="text-[10px]">{fmtTime(m.sent_at || m.created_at)}</span>
+                        {favSet.has(m.id) && (
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" aria-label="Favoritada" />
+                        )}
                         {isMine && <CheckIcon m={m} />}
                       </div>
                     </div>
@@ -1224,10 +1233,10 @@ export default function TicketsMobileLayout(props: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => showComing("Favoritos")}
+                    onClick={() => { onToggleFavorite?.(actionMsg); closeActionSheet(); }}
                     className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left text-sm"
                   >
-                    <Star className="w-4 h-4 text-muted-foreground" /> Favoritar
+                    <Star className={`w-4 h-4 ${favSet.has(actionMsg.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} /> {favSet.has(actionMsg.id) ? "Desfavoritar" : "Favoritar"}
                   </button>
                   <button
                     type="button"
