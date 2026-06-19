@@ -1498,6 +1498,62 @@ const TicketsDesktopLayout = () => {
     }
   };
 
+  // G.4 — favoritos do usuário no ticket selecionado
+  const favoritesQuery = useQuery({
+    queryKey: ["message-favorites", selectedId, profile?.id],
+    enabled: !!selectedId && !!profile?.id && !!activeCompanyId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("message_favorites")
+        .select("message_id")
+        .eq("ticket_id", selectedId)
+        .eq("user_id", profile!.id);
+      if (error) throw error;
+      return new Set<string>((data ?? []).map((r: any) => r.message_id as string));
+    },
+  });
+  const favoriteIds: Set<string> = favoritesQuery.data ?? new Set<string>();
+
+  const toggleFavorite = async (m: MessageRow) => {
+    if (!profile?.id || !activeCompanyId || !selectedId) return;
+    if (m._optimistic || m.id.startsWith("tmp_")) {
+      toast({ title: "Aguarde", description: "Mensagem ainda não confirmada." });
+      return;
+    }
+    const isFav = favoriteIds.has(m.id);
+    // Optimistic update
+    const key = ["message-favorites", selectedId, profile.id];
+    const prev = qc.getQueryData<Set<string>>(key);
+    const next = new Set<string>(prev ?? []);
+    if (isFav) next.delete(m.id); else next.add(m.id);
+    qc.setQueryData(key, next);
+    try {
+      if (isFav) {
+        const { error } = await (supabase as any)
+          .from("message_favorites")
+          .delete()
+          .eq("user_id", profile.id)
+          .eq("message_id", m.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("message_favorites")
+          .insert({
+            company_id: activeCompanyId,
+            ticket_id: selectedId,
+            message_id: m.id,
+            user_id: profile.id,
+          });
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      qc.setQueryData(key, prev);
+      toast({ title: "Não foi possível favoritar", description: e?.message ?? "Tente novamente.", variant: "destructive" });
+    } finally {
+      qc.invalidateQueries({ queryKey: key });
+    }
+  };
+
   const pinnedMessagePreview = useMemo(() => {
     if (!pinnedMessageId) return null;
     const m = (messagesQuery.data ?? []).find((x) => x.id === pinnedMessageId) as MessageRow | undefined;
