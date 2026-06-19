@@ -132,6 +132,8 @@ interface MessageRow {
   reply_to_preview?: string | null;
   reply_to_sender_name?: string | null;
   reply_to_message_type?: string | null;
+  is_edited?: boolean | null;
+  edited_at?: string | null;
   _optimistic?: boolean;
 }
 
