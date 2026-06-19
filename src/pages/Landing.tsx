@@ -324,14 +324,17 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-              <Zap className="w-5 h-5 text-primary-foreground" />
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg gradient-primary flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-base sm:text-lg truncate">Dominus Atendimento</span>
+            <span className="font-bold text-sm sm:text-lg truncate">
+              <span className="hidden sm:inline">Dominus Atendimento</span>
+              <span className="sm:hidden">Dominus</span>
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Button asChild variant="ghost" className="hidden md:inline-flex">
               <a href="#como-funciona">Como funciona</a>
             </Button>
