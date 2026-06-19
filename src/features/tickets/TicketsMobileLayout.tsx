@@ -123,6 +123,12 @@ export default function TicketsMobileLayout(props: Props) {
     return (
       <AppLayout title="Atendimentos" mobileFullScreen>
         <div className="flex h-svh w-full max-w-full min-w-0 flex-col overflow-x-hidden bg-background">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-3 min-w-0 max-w-full">
+            <h1 className="text-base font-semibold text-foreground truncate">Atendimentos</h1>
+            <span className="ml-2 shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              {tickets.length}
+            </span>
+          </div>
           <div className="p-3 space-y-2 border-b min-w-0 max-w-full">
             <Input
               placeholder="Buscar atendimentos..."
