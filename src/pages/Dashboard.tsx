@@ -107,12 +107,12 @@ const Dashboard = () => {
   const attendantData = useMemo(() => {
     const nameById = new Map<string, string>();
     (data?.members ?? []).forEach((m) => {
-      nameById.set(m.user_id, m.profiles?.full_name ?? "—");
+      nameById.set(m.user_id, m.full_name ?? "—");
     });
     const counts: Record<string, number> = {};
     tickets.forEach((t) => {
-      if (!t.assigned_to) return;
-      counts[t.assigned_to] = (counts[t.assigned_to] ?? 0) + 1;
+      if (!t.assigned_user_id) return;
+      counts[t.assigned_user_id] = (counts[t.assigned_user_id] ?? 0) + 1;
     });
     return Object.entries(counts)
       .map(([uid, n]) => ({ name: (nameById.get(uid) ?? "—").split(" ")[0], tickets: n }))
