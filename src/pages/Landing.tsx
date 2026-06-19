@@ -298,7 +298,9 @@ export default function Landing() {
                 Organize todos os atendimentos da sua empresa em um só lugar.
               </h1>
               <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
-                Com o Dominus, sua equipe atende pelo WhatsApp com mais organização, histórico,
+                Com o Dominus, sua equipe atende pelo{" "}
+                <Typewriter words={["WhatsApp", "Instagram", "Facebook", "E-mail", "seus canais"]} />{" "}
+                com mais organização, histórico,
                 setores, responsáveis e acompanhamento em tempo real.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
