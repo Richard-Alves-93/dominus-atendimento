@@ -2940,7 +2940,7 @@ const TicketsDesktopLayout = () => {
                   const hasReply = !!(m.reply_to_message_id || m.reply_to_preview);
                   const replyUnavailable = hasReply && !replyPreview;
                   return (
-                  <div key={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"}`}>
+                  <div key={m.id} data-message-id={m.id} className={`group/msg flex ${m.from_me ? "justify-end" : "justify-start"} transition-shadow`}>
                     <div className="relative max-w-[70%]">
                       {/* Mobile reaction strip when selected */}
                       {isMobile && selectedMessageId === m.id && !m._optimistic && m.source !== "system" && (
