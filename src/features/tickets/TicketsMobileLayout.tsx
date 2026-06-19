@@ -276,30 +276,57 @@ export default function TicketsMobileLayout(props: Props) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // F.2-fix #13 — auto-scroll: a mensagem otimista era anexada ao fim do
-  // container scrollável, mas em mobile (teclado aberto) o usuário continuava
-  // vendo a posição anterior. Forçamos scroll para o fim sempre que muda a
-  // quantidade de mensagens ou ao abrir/trocar de conversa.
+  // F.2-fix #13 / F.3-fix #15 — scroll robusto para o fim no mobile.
+  // Dispara em: troca de conversa, mudança na quantidade ou no id da última
+  // mensagem (cobre status sending→sent), e via ResizeObserver quando mídias
+  // terminam de carregar e alteram a altura da lista.
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const lastCountRef = useRef(0);
-  const lastTicketRef = useRef<string | null>(null);
+  const lastMessageId = visibleMessages.length
+    ? visibleMessages[visibleMessages.length - 1].id
+    : null;
+
+  const scrollToBottom = () => {
+    const c = messagesContainerRef.current;
+    if (!c) return;
+    requestAnimationFrame(() => {
+      c.scrollTop = c.scrollHeight;
+      requestAnimationFrame(() => {
+        c.scrollTop = c.scrollHeight;
+        messagesEndRef.current?.scrollIntoView({ block: "end" });
+      });
+    });
+  };
+
   useEffect(() => {
     if (!selectedId) return;
-    const ticketChanged = lastTicketRef.current !== selectedId;
-    const lengthIncreased = visibleMessages.length > lastCountRef.current;
-    if (ticketChanged || lengthIncreased) {
-      const c = messagesContainerRef.current;
-      if (c) {
-        requestAnimationFrame(() => {
-          c.scrollTop = c.scrollHeight;
-          messagesEndRef.current?.scrollIntoView({ block: "end" });
-        });
+    scrollToBottom();
+    // Re-tenta após render de mídias/imagens (cobre conversa longa).
+    const t1 = window.setTimeout(scrollToBottom, 120);
+    const t2 = window.setTimeout(scrollToBottom, 400);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [selectedId, visibleMessages.length, lastMessageId, messagesLoading]);
+
+  // ResizeObserver: quando imagens/áudios carregam, a altura da lista cresce —
+  // mantém o scroll colado no fim se o usuário ainda estiver perto do fim.
+  useEffect(() => {
+    const c = messagesContainerRef.current;
+    if (!c || typeof ResizeObserver === "undefined") return;
+    let prevHeight = c.scrollHeight;
+    const ro = new ResizeObserver(() => {
+      const nearBottom =
+        c.scrollHeight - c.scrollTop - c.clientHeight < 160;
+      if (c.scrollHeight > prevHeight && nearBottom) {
+        c.scrollTop = c.scrollHeight;
       }
-    }
-    lastCountRef.current = visibleMessages.length;
-    lastTicketRef.current = selectedId;
-  }, [selectedId, visibleMessages.length]);
+      prevHeight = c.scrollHeight;
+    });
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, [selectedId]);
 
 
   const filterOptions = [
@@ -599,7 +626,7 @@ export default function TicketsMobileLayout(props: Props) {
         )}
 
         {/* Mensagens */}
-        <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2">
+        <div ref={messagesContainerRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 pt-3 pb-6 space-y-2">
           {messagesLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando mensagens...
@@ -890,11 +917,27 @@ export default function TicketsMobileLayout(props: Props) {
                     <button
                       key={emo}
                       type="button"
-                      onClick={() => {
-                        onToggleReaction?.(actionMsg, emo);
+                      // F.3-fix #6/#7/#8: usar onPointerDown garante disparo
+                      // antes do Sheet começar a fechar em iOS/Android e
+                      // evita que o overlay engula o tap.
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const snapshot = actionMsg;
+                        // Fecha primeiro o sheet (visualmente) e dispara
+                        // a mutation logo em seguida — o invalidate do
+                        // desktop atualiza reactionsByMsg e o badge.
                         closeActionSheet();
+                        Promise.resolve(onToggleReaction?.(snapshot, emo)).catch(
+                          () => { /* erro já é tratado no handler */ }
+                        );
                       }}
-                      className={`text-xl px-1.5 py-1 rounded-full transition active:scale-95 ${
+                      onClick={(e) => {
+                        // Fallback para cliques não-touch (mouse no DevTools).
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className={`text-2xl px-2 py-1.5 rounded-full transition active:scale-90 touch-manipulation ${
                         myReaction === emo ? "bg-primary/15" : "hover:bg-background"
                       }`}
                       aria-label={`Reagir com ${emo}`}
