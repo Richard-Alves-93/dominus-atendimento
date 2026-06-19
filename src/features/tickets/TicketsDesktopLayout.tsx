@@ -862,12 +862,12 @@ const TicketsDesktopLayout = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, ticket_id, direction, from_me, body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at")
+        .select(MESSAGE_SELECT_FIELDS)
         .eq("ticket_id", selectedId!)
         .order("created_at", { ascending: true })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as MessageRow[];
+      return orderedMessages((data ?? []) as MessageRow[]);
     },
   });
 
@@ -881,25 +881,7 @@ const TicketsDesktopLayout = () => {
         { event: "INSERT", schema: "public", table: "messages", filter: `ticket_id=eq.${selectedId}` },
         (payload) => {
           const row = payload.new as MessageRow;
-          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => {
-            if (prev.some((m) => m.id === row.id)) return prev;
-            return [...prev, row];
-          });
-          // Drop any matching optimistic bubble for this ticket+body.
-          // Não casar quando algum lado tem body vazio (".includes('')" sempre true)
-          // — isso removia otimistas que não correspondiam à mensagem real.
-          if (row.from_me) {
-            const realBody = (row.body ?? "").trim();
-            setPendingMessages((prev) =>
-              prev.filter((p) => {
-                if (p.ticketId !== selectedId) return true;
-                const pBody = (p.body ?? "").trim();
-                if (!pBody && !realBody) return false; // ambos vazios (mídia s/ caption)
-                if (!pBody || !realBody) return true;  // apenas um vazio → mantém
-                return !(realBody === pBody || realBody.includes(pBody));
-              }),
-            );
-          }
+          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => upsertMessage(prev, row));
         },
       )
       .on(
@@ -907,9 +889,7 @@ const TicketsDesktopLayout = () => {
         { event: "UPDATE", schema: "public", table: "messages", filter: `ticket_id=eq.${selectedId}` },
         (payload) => {
           const row = payload.new as MessageRow;
-          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) =>
-            prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)),
-          );
+          qc.setQueryData<MessageRow[]>(["messages", selectedId], (prev = []) => upsertMessage(prev, row));
         },
       )
       .subscribe();
