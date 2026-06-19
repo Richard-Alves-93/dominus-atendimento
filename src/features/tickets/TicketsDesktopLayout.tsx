@@ -2652,7 +2652,7 @@ const TicketsDesktopLayout = () => {
 
         {/* Chat */}
         {selected ? (
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
             {isMobile && selectedMessageId ? (
               <div className="h-12 flex items-center px-2 border-b bg-card gap-1">
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedMessageId(null)} aria-label="Cancelar seleção">
@@ -3094,7 +3094,7 @@ const TicketsDesktopLayout = () => {
             {!isNearBottom && (
               <button
                 type="button"
-                onClick={() => scrollToBottom("smooth")}
+                onClick={() => scrollToBottom("smooth", "button")}
                 aria-label="Ir para o fim da conversa"
                 className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm backdrop-blur text-slate-500 dark:text-slate-300 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100 flex items-center justify-center transition-colors"
               >
