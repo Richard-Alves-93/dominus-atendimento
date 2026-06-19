@@ -352,10 +352,10 @@ export default function Landing() {
 
       <main>
         {/* HERO */}
-        <section className="max-w-6xl mx-auto px-6 pt-16 pb-12 md:pt-24 md:pb-16">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-12 md:pt-24 md:pb-16 overflow-hidden">
           <div className="grid lg:grid-cols-2 gap-10 items-center">
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1]">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-5 leading-[1.1] break-words">
                 Organize todos os atendimentos da sua empresa em um só lugar.
               </h1>
               <p className="text-base md:text-lg text-muted-foreground mb-7 max-w-xl mx-auto lg:mx-0">
@@ -377,11 +377,14 @@ export default function Landing() {
               </p>
             </div>
 
-            <div className="lg:pl-4">
-              <MockChat />
+            <div className="lg:pl-4 w-full max-w-full">
+              <div className="w-full max-w-[560px] mx-auto">
+                <MockChat />
+              </div>
             </div>
           </div>
         </section>
+
 
         {/* PROBLEMAS */}
         <section className="bg-muted/30 border-y">
