@@ -183,6 +183,15 @@ function mobileReactionAudit(label: string, payload: Record<string, unknown>) {
   } catch { /* noop */ }
 }
 
+function messageLoadAudit(payload: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem("dominus.messageLoadAudit") !== "true") return;
+    console.debug("[MESSAGE_LOAD_AUDIT]", payload);
+  } catch { /* noop */ }
+}
+
+
 function realMatchesPending(
   pending: PendingMessage,
   real: MessageRow,
