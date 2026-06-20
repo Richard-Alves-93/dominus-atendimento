@@ -1482,14 +1482,17 @@ const TicketsDesktopLayout = () => {
     queryKey: ["pinned-message", selectedId],
     enabled: !!selectedId && !!activeCompanyId,
     queryFn: async () => {
+      const t0 = performance.now();
       const { data, error } = await (supabase as any)
         .from("pinned_messages")
         .select("id, message_id, pinned_by, created_at")
         .eq("ticket_id", selectedId)
         .maybeSingle();
       if (error) throw error;
+      messageLoadAudit({ phase: "pinned", ticketId: selectedId, durationMs: Math.round(performance.now() - t0), hasPinned: !!data });
       return data ?? null;
     },
+
   });
   const pinnedMessageId: string | null = pinnedMessageQuery.data?.message_id ?? null;
 
