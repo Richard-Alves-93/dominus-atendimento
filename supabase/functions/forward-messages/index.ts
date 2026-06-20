@@ -17,6 +17,8 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
+const AUDIT_ENABLED = Deno.env.get("FORWARD_NATIVE_AUDIT") === "true";
+const auditLog = (...args: unknown[]) => { if (AUDIT_ENABLED) console.log("[FORWARD_NATIVE_AUDIT]", ...args); };
 
 const MEDIA_TYPES = ["image", "video", "audio", "document"] as const;
 type MediaType = typeof MEDIA_TYPES[number];
