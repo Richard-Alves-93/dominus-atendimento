@@ -957,6 +957,13 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
     const pushName = m?.pushName ?? m?.profileName ?? null;
     const statusRaw = m?.status ?? m?.messageStatus ?? m?.update?.status ?? m?.update?.messageStatus;
 
+    // ── H.1: reaction event arrives as messages.upsert with reactionMessage.
+    //         Handle it BEFORE any insert so we don't create a placeholder message row.
+    if (extractReaction(m)) {
+      await handleInboundReaction(admin, inst, m, source);
+      continue;
+    }
+
     // ── Edit detection (must come BEFORE insert so we don't create a new "[other]" row).
     let editInfo = extractEditInfo(m);
     if (!editInfo) {
