@@ -511,28 +511,37 @@ export type Database = {
           company_id: string
           created_at: string
           emoji: string
+          external_reaction_id: string | null
+          external_sender: string | null
           id: string
           message_id: string
+          source: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           company_id: string
           created_at?: string
           emoji: string
+          external_reaction_id?: string | null
+          external_sender?: string | null
           id?: string
           message_id: string
+          source?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           company_id?: string
           created_at?: string
           emoji?: string
+          external_reaction_id?: string | null
+          external_sender?: string | null
           id?: string
           message_id?: string
+          source?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
