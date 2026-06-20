@@ -183,6 +183,15 @@ function mobileReactionAudit(label: string, payload: Record<string, unknown>) {
   } catch { /* noop */ }
 }
 
+function messageLoadAudit(payload: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem("dominus.messageLoadAudit") !== "true") return;
+    console.debug("[MESSAGE_LOAD_AUDIT]", payload);
+  } catch { /* noop */ }
+}
+
+
 function realMatchesPending(
   pending: PendingMessage,
   real: MessageRow,
@@ -946,6 +955,7 @@ const TicketsDesktopLayout = () => {
     },
   });
   const fetchMessagesForTicket = async (ticketId: string) => {
+    const t0 = performance.now();
     const { data, error } = await supabase
       .from("messages")
       .select(MESSAGE_SELECT_FIELDS)
@@ -955,6 +965,8 @@ const TicketsDesktopLayout = () => {
       .limit(500);
     if (error) throw error;
     const rows = orderedMessages((data ?? []) as MessageRow[]);
+    const durationMs = Math.round(performance.now() - t0);
+    messageLoadAudit({ phase: "messages", ticketId, companyId: activeCompanyId, durationMs, count: rows.length });
     messageLifecycleAudit("MESSAGES_QUERY_AFTER_REFETCH", {
       ticketId,
       count: rows.length,
@@ -964,6 +976,7 @@ const TicketsDesktopLayout = () => {
     });
     return rows;
   };
+
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
@@ -1469,14 +1482,17 @@ const TicketsDesktopLayout = () => {
     queryKey: ["pinned-message", selectedId],
     enabled: !!selectedId && !!activeCompanyId,
     queryFn: async () => {
+      const t0 = performance.now();
       const { data, error } = await (supabase as any)
         .from("pinned_messages")
         .select("id, message_id, pinned_by, created_at")
         .eq("ticket_id", selectedId)
         .maybeSingle();
       if (error) throw error;
+      messageLoadAudit({ phase: "pinned", ticketId: selectedId, durationMs: Math.round(performance.now() - t0), hasPinned: !!data });
       return data ?? null;
     },
+
   });
   const pinnedMessageId: string | null = pinnedMessageQuery.data?.message_id ?? null;
 
@@ -1527,14 +1543,18 @@ const TicketsDesktopLayout = () => {
     queryKey: ["message-favorites", selectedId, profile?.id],
     enabled: !!selectedId && !!profile?.id && !!activeCompanyId,
     queryFn: async () => {
+      const t0 = performance.now();
       const { data, error } = await (supabase as any)
         .from("message_favorites")
         .select("message_id")
         .eq("ticket_id", selectedId)
         .eq("user_id", profile!.id);
       if (error) throw error;
-      return new Set<string>((data ?? []).map((r: any) => r.message_id as string));
+      const set = new Set<string>((data ?? []).map((r: any) => r.message_id as string));
+      messageLoadAudit({ phase: "favorites", ticketId: selectedId, durationMs: Math.round(performance.now() - t0), count: set.size });
+      return set;
     },
+
   });
   const favoriteIds: Set<string> = favoritesQuery.data ?? new Set<string>();
 
@@ -1610,6 +1630,7 @@ const TicketsDesktopLayout = () => {
     queryKey: ["message-reactions", selectedId],
     enabled: !!selectedId,
     queryFn: async () => {
+      const t0 = performance.now();
       const ids = (messagesQuery.data ?? []).map((m) => m.id).filter((id) => !id.startsWith("tmp_"));
       if (ids.length === 0) return [] as ReactionRow[];
       const { data, error } = await supabase
@@ -1617,8 +1638,11 @@ const TicketsDesktopLayout = () => {
         .select("id, message_id, user_id, emoji")
         .in("message_id", ids);
       if (error) throw error;
-      return (data ?? []) as ReactionRow[];
+      const rows = (data ?? []) as ReactionRow[];
+      messageLoadAudit({ phase: "reactions", ticketId: selectedId, durationMs: Math.round(performance.now() - t0), count: rows.length });
+      return rows;
     },
+
   });
   useEffect(() => {
     if (!selectedId) return;
