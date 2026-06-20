@@ -824,6 +824,127 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
   return updated?.length ?? 0;
 }
 
+// ─── H.1 — Inbound reactions from WhatsApp ─────────────────────────────────────
+const REACTION_AUDIT = Deno.env.get("EVOLUTION_REACTION_AUDIT") === "true";
+const reactionAudit = (info: Record<string, unknown>) => {
+  if (REACTION_AUDIT) console.log("[EVOLUTION_REACTION_AUDIT]", info);
+};
+
+function extractReaction(m: any): {
+  targetProviderId: string;
+  targetRemoteJid: string | null;
+  emoji: string;
+  reactionExternalId: string | null;
+  fromMe: boolean;
+} | null {
+  const r =
+    m?.message?.reactionMessage ??
+    m?.reactionMessage ??
+    m?.message?.reaction ??
+    m?.reaction ??
+    null;
+  if (!r) return null;
+  const targetKey = r?.key ?? r?.targetMessageKey ?? null;
+  const targetProviderId: string | null = targetKey?.id ?? r?.messageId ?? null;
+  if (!targetProviderId) return null;
+  const emoji: string = (r?.text ?? r?.reaction ?? r?.emoji ?? "").toString();
+  return {
+    targetProviderId,
+    targetRemoteJid: targetKey?.remoteJid ?? null,
+    emoji,
+    reactionExternalId: m?.key?.id ?? null,
+    fromMe: Boolean(targetKey?.fromMe ?? r?.fromMe),
+  };
+}
+
+async function handleInboundReaction(
+  admin: any,
+  inst: any,
+  m: any,
+  source: string,
+): Promise<boolean> {
+  const r = extractReaction(m);
+  if (!r) return false;
+
+  const key = m?.key ?? {};
+  const remoteJid: string | undefined = key.remoteJid;
+  const reactionFromMe = Boolean(key.fromMe);
+  const senderJid: string =
+    (key.participant ?? remoteJid ?? r.targetRemoteJid ?? "").toString();
+
+  reactionAudit({
+    companyId: inst.company_id,
+    instanceId: inst.id,
+    event: source,
+    messageId: r.reactionExternalId,
+    remoteJid: remoteJid ? remoteJid.slice(0, 6) + "***" : null,
+    reactionText: r.emoji || "(remove)",
+    reactionSender: senderJid ? senderJid.slice(0, 6) + "***" : null,
+    targetMessageId: r.targetProviderId,
+    fromMe: reactionFromMe,
+  });
+
+  // Reaction sent by the connected device (agent/owner) — Dominus already stored it
+  // when send-whatsapp-reaction ran. Skip to avoid duplicates.
+  if (reactionFromMe) return true;
+
+  // Locate the target message in our DB by provider/external id within the same company.
+  const { data: target } = await admin
+    .from("messages")
+    .select("id, company_id, ticket_id")
+    .eq("company_id", inst.company_id)
+    .or(`external_id.eq.${r.targetProviderId},provider_message_id.eq.${r.targetProviderId}`)
+    .limit(1)
+    .maybeSingle();
+
+  if (!target) {
+    reactionAudit({
+      companyId: inst.company_id,
+      event: source,
+      targetMessageId: r.targetProviderId,
+      result: "target_not_found",
+    });
+    return true; // swallow safely
+  }
+
+  // Removal (empty text) → delete the contact's reaction on this message.
+  if (!r.emoji.trim()) {
+    await admin
+      .from("message_reactions")
+      .delete()
+      .eq("company_id", inst.company_id)
+      .eq("message_id", target.id)
+      .eq("external_sender", senderJid);
+    return true;
+  }
+
+  // Upsert by (message_id, external_sender) — partial unique index guarantees dedup.
+  const { error } = await admin
+    .from("message_reactions")
+    .upsert(
+      {
+        company_id: inst.company_id,
+        message_id: target.id,
+        user_id: null,
+        external_sender: senderJid,
+        external_reaction_id: r.reactionExternalId,
+        emoji: r.emoji,
+        source: "contact",
+      },
+      { onConflict: "message_id,external_sender" },
+    );
+  if (error) {
+    reactionAudit({
+      companyId: inst.company_id,
+      event: source,
+      targetMessageId: r.targetProviderId,
+      result: "upsert_failed",
+      detail: error.message?.slice(0, 200),
+    });
+  }
+  return true;
+}
+
 async function handleMessageUpsert(admin: any, inst: any, payload: any, source = "messages_upsert") {
   const dataArr = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
   for (const m of dataArr) {
