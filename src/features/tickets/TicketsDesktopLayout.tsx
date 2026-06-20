@@ -955,6 +955,7 @@ const TicketsDesktopLayout = () => {
     },
   });
   const fetchMessagesForTicket = async (ticketId: string) => {
+    const t0 = performance.now();
     const { data, error } = await supabase
       .from("messages")
       .select(MESSAGE_SELECT_FIELDS)
@@ -964,6 +965,8 @@ const TicketsDesktopLayout = () => {
       .limit(500);
     if (error) throw error;
     const rows = orderedMessages((data ?? []) as MessageRow[]);
+    const durationMs = Math.round(performance.now() - t0);
+    messageLoadAudit({ phase: "messages", ticketId, companyId: activeCompanyId, durationMs, count: rows.length });
     messageLifecycleAudit("MESSAGES_QUERY_AFTER_REFETCH", {
       ticketId,
       count: rows.length,
@@ -973,6 +976,7 @@ const TicketsDesktopLayout = () => {
     });
     return rows;
   };
+
 
   const messagesQuery = useQuery({
     queryKey: ["messages", selectedId],
