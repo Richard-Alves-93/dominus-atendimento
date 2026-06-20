@@ -1630,6 +1630,7 @@ const TicketsDesktopLayout = () => {
     queryKey: ["message-reactions", selectedId],
     enabled: !!selectedId,
     queryFn: async () => {
+      const t0 = performance.now();
       const ids = (messagesQuery.data ?? []).map((m) => m.id).filter((id) => !id.startsWith("tmp_"));
       if (ids.length === 0) return [] as ReactionRow[];
       const { data, error } = await supabase
@@ -1637,8 +1638,11 @@ const TicketsDesktopLayout = () => {
         .select("id, message_id, user_id, emoji")
         .in("message_id", ids);
       if (error) throw error;
-      return (data ?? []) as ReactionRow[];
+      const rows = (data ?? []) as ReactionRow[];
+      messageLoadAudit({ phase: "reactions", ticketId: selectedId, durationMs: Math.round(performance.now() - t0), count: rows.length });
+      return rows;
     },
+
   });
   useEffect(() => {
     if (!selectedId) return;
