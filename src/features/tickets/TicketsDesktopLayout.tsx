@@ -1543,14 +1543,18 @@ const TicketsDesktopLayout = () => {
     queryKey: ["message-favorites", selectedId, profile?.id],
     enabled: !!selectedId && !!profile?.id && !!activeCompanyId,
     queryFn: async () => {
+      const t0 = performance.now();
       const { data, error } = await (supabase as any)
         .from("message_favorites")
         .select("message_id")
         .eq("ticket_id", selectedId)
         .eq("user_id", profile!.id);
       if (error) throw error;
-      return new Set<string>((data ?? []).map((r: any) => r.message_id as string));
+      const set = new Set<string>((data ?? []).map((r: any) => r.message_id as string));
+      messageLoadAudit({ phase: "favorites", ticketId: selectedId, durationMs: Math.round(performance.now() - t0), count: set.size });
+      return set;
     },
+
   });
   const favoriteIds: Set<string> = favoritesQuery.data ?? new Set<string>();
 
