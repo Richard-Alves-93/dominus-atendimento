@@ -18,7 +18,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
 const AUDIT_ENABLED = Deno.env.get("FORWARD_NATIVE_AUDIT") === "true";
-const auditLog = (...args: unknown[]) => { if (AUDIT_ENABLED) console.log("[FORWARD_NATIVE_AUDIT]", ...args); };
+const auditLog = (...args: unknown[]) => { if (AUDIT_ENABLED) auditLog(...args); };
 
 const MEDIA_TYPES = ["image", "video", "audio", "document"] as const;
 type MediaType = typeof MEDIA_TYPES[number];
@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
           forwardMode: "fallback",
           fallbackReason: "missing_original_key",
         };
-        console.log("[FORWARD_NATIVE_AUDIT]", audit);
+        auditLog(audit);
         return { attempted: false, ok: false, confirmed: false, status: null, data: null, endpointUsed: endpoint, payloadShape, fallbackReason: "missing_original_key" };
       }
       try {
@@ -299,7 +299,7 @@ Deno.serve(async (req) => {
         const responseSummary = summarizeEvoResponse(data);
         const confirmed = res.ok && responseSummary.hasForwardMarker;
         const fallbackReason = confirmed ? null : res.ok ? "native_forward_not_confirmed" : `evolution_${res.status}`;
-        console.log("[FORWARD_NATIVE_AUDIT]", {
+        auditLog({
           instance: instance.instance_name,
           sourceMessageId: src.id,
           sourceExternalId: src.external_id ?? null,
@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
         return { attempted: true, ok: res.ok, confirmed, status: res.status, data, endpointUsed: endpoint, payloadShape, fallbackReason, key, keySource: resolved.keySource ?? "fallback_fields" };
       } catch (e) {
         const fallbackReason = `native_forward_exception:${String((e as Error)?.message ?? e).slice(0, 120)}`;
-        console.log("[FORWARD_NATIVE_AUDIT]", {
+        auditLog({
           instance: instance.instance_name,
           sourceMessageId: src.id,
           sourceExternalId: src.external_id ?? null,
