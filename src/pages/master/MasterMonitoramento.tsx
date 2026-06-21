@@ -83,6 +83,57 @@ const mapWhatsAppStatus = (s: string | null | undefined): { status: OpStatus; he
   }
 };
 
+const healthLabel = (h: Health) => {
+  const map: Record<Health, string> = {
+    healthy: "Saudável",
+    warning: "Atenção",
+    critical: "Crítico",
+    offline: "Offline",
+    pending_auth: "Autenticação pendente",
+    pending_qr: "QR Code pendente",
+    expired_token: "Token expirado",
+    sync_delayed: "Sincronização atrasada",
+    rate_limited: "Limite atingido",
+    unknown: "Desconhecido",
+  };
+  return map[h] ?? h;
+};
+
+const statusLabel = (s: OpStatus) => {
+  const map: Record<OpStatus, string> = {
+    connected: "Conectado",
+    disconnected: "Desconectado",
+    connecting: "Conectando",
+    error: "Erro",
+    paused: "Pausado",
+    disabled: "Desativado",
+    unknown: "Desconhecido",
+  };
+  return map[s] ?? s;
+};
+
+const channelTypeLabel = (t: string) => {
+  const map: Record<string, string> = {
+    whatsapp: "WhatsApp",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    email: "E-mail",
+    telegram: "Telegram",
+  };
+  return map[t] ?? t;
+};
+
+const providerLabel = (p: string) => {
+  const map: Record<string, string> = {
+    evolution: "Evolution",
+    evogo: "EvoGo",
+    meta: "Meta",
+    imap_smtp: "IMAP/SMTP",
+    manual: "Manual",
+  };
+  return map[p] ?? p;
+};
+
 const healthColor = (h: Health) => {
   switch (h) {
     case "healthy":
@@ -389,7 +440,7 @@ export default function MasterMonitoramento() {
                   <h4 className="font-semibold">Evolution API</h4>
                 </div>
                 <Badge variant="outline" className={healthColor(evoProviderHealth)}>
-                  {evoProviderHealth}
+                  {healthLabel(evoProviderHealth)}
                 </Badge>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -498,20 +549,20 @@ export default function MasterMonitoramento() {
                         <td className="px-4 py-2">
                           <span className="inline-flex items-center gap-1.5">
                             <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                            {r.channelType}
+                            {channelTypeLabel(r.channelType)}
                           </span>
                         </td>
-                        <td className="px-4 py-2 capitalize">{r.provider}</td>
+                        <td className="px-4 py-2">{providerLabel(r.provider)}</td>
                         <td className="px-4 py-2">{r.name}</td>
                         <td className="px-4 py-2 font-mono text-xs">{r.identifier}</td>
                         <td className="px-4 py-2">
-                          <Badge variant="outline" className="capitalize">
-                            {r.status}
+                          <Badge variant="outline">
+                            {statusLabel(r.status)}
                           </Badge>
                         </td>
                         <td className="px-4 py-2">
                           <Badge variant="outline" className={healthColor(r.health)}>
-                            {r.health}
+                            {healthLabel(r.health)}
                           </Badge>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground">
@@ -544,12 +595,12 @@ export default function MasterMonitoramento() {
           {selected && (
             <div className="mt-6 space-y-4 text-sm">
               <Field label="Empresa" value={selected.companyName} />
-              <Field label="Canal" value={selected.channelType} />
-              <Field label="Provedor" value={selected.provider} />
+              <Field label="Canal" value={channelTypeLabel(selected.channelType)} />
+              <Field label="Provedor" value={providerLabel(selected.provider)} />
               <Field label="Nome da conexão" value={selected.name} />
               <Field label="Identificador" value={selected.identifier} mono />
-              <Field label="Status" value={selected.status} />
-              <Field label="Saúde" value={selected.health} />
+              <Field label="Status" value={statusLabel(selected.status)} />
+              <Field label="Saúde" value={healthLabel(selected.health)} />
               <Field label="Última atividade" value={fmtDate(selected.lastActivityAt)} />
               <Field
                 label="Última atualização"
