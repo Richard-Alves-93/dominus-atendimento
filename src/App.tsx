@@ -25,6 +25,7 @@ import MensagensRapidas from "./pages/MensagensRapidas";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
+import MasterMonitoramento from "./pages/master/MasterMonitoramento";
 import EmpresaBloqueada from "./pages/EmpresaBloqueada";
 import NotFound from "./pages/NotFound";
 
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/master/empresas" element={<MasterRoute><MasterEmpresas /></MasterRoute>} />
               <Route path="/master/planos" element={<MasterRoute><MasterPlaceholder title="Planos" /></MasterRoute>} />
               <Route path="/master/canais" element={<MasterRoute><MasterPlaceholder title="Canais" /></MasterRoute>} />
+              <Route path="/master/monitoramento" element={<MasterRoute><MasterMonitoramento /></MasterRoute>} />
               <Route path="/master/logs" element={<MasterRoute><MasterPlaceholder title="Logs" /></MasterRoute>} />
               <Route path="/master/configuracoes" element={<MasterRoute><MasterPlaceholder title="Configurações" /></MasterRoute>} />
 

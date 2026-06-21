@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Building2, Package, Plug, ScrollText, Settings, LogOut, Zap, ArrowRightCircle } from "lucide-react";
+import { LayoutDashboard, Building2, Package, Plug, ScrollText, Settings, LogOut, Zap, ArrowRightCircle, Activity } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,7 @@ const items = [
   { to: "/master/empresas", icon: Building2, label: "Empresas" },
   { to: "/master/planos", icon: Package, label: "Planos" },
   { to: "/master/canais", icon: Plug, label: "Canais" },
+  { to: "/master/monitoramento", icon: Activity, label: "Monitoramento" },
   { to: "/master/logs", icon: ScrollText, label: "Logs" },
   { to: "/master/configuracoes", icon: Settings, label: "Configurações" },
 ];
