@@ -280,36 +280,46 @@ export default function MasterMonitoramento() {
 
 
   const summary = useMemo(() => {
-    const total = rows.length;
-    const healthy = rows.filter((r) => r.health === "healthy").length;
-    const warning = rows.filter((r) =>
+    const total = mergedRows.length;
+    const healthy = mergedRows.filter((r) => r.health === "healthy").length;
+    const warning = mergedRows.filter((r) =>
       ["warning", "pending_qr", "pending_auth", "sync_delayed", "rate_limited"].includes(r.health)
     ).length;
-    const offline = rows.filter((r) => r.health === "offline" || r.status === "disconnected").length;
-    const critical = rows.filter((r) => r.health === "critical").length;
+    const offline = mergedRows.filter((r) => r.health === "offline" || r.status === "disconnected").length;
+    const critical = mergedRows.filter((r) => r.health === "critical").length;
     const companiesWithAlert = new Set(
-      rows
+      mergedRows
         .filter((r) => r.health !== "healthy" && r.companyId)
         .map((r) => r.companyId)
     ).size;
     return { total, healthy, warning, offline, critical, companiesWithAlert };
-  }, [rows]);
+  }, [mergedRows]);
 
-  const evolutionInstances = rows.filter((r) => r.provider === "evolution");
-  const evoStats = {
+  const evolutionInstances = mergedRows.filter((r) => r.provider === "evolution");
+  const persistedEvoStats = {
     total: evolutionInstances.length,
     connected: evolutionInstances.filter((r) => r.status === "connected").length,
     disconnected: evolutionInstances.filter((r) => r.status === "disconnected").length,
     errors: evolutionInstances.filter((r) => r.status === "error").length,
   };
-  const evoProviderHealth: Health =
-    evoStats.total === 0
+  const evoStats = live
+    ? {
+        total: live.total_instances,
+        connected: live.connected_instances,
+        disconnected: live.disconnected_instances,
+        errors: live.error_instances,
+      }
+    : persistedEvoStats;
+  const evoProviderHealth: Health = live
+    ? live.health
+    : evoStats.total === 0
       ? "unknown"
       : evoStats.errors > 0
         ? "critical"
         : evoStats.disconnected > 0
           ? "warning"
           : "healthy";
+
 
   const cards = [
     { label: "Total de conexões", value: summary.total, icon: PlugZap, tone: "bg-primary/10 text-primary" },
