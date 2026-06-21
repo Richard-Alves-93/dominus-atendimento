@@ -446,14 +446,14 @@ export default function MasterMonitoramento() {
                       Carregando...
                     </td>
                   </tr>
-                ) : rows.length === 0 ? (
+                ) : mergedRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                       Nenhuma conexão registrada.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => {
+                  mergedRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
                     return (
                       <tr key={r.id} className="border-t hover:bg-muted/30">
