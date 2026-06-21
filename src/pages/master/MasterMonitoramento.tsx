@@ -130,92 +130,154 @@ export default function MasterMonitoramento() {
   const [rows, setRows] = useState<ConnectionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ConnectionRow | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [live, setLive] = useState<{
+    checked_at: string;
+    online: boolean;
+    response_time_ms: number | null;
+    health: Health;
+    error?: string | null;
+    total_instances: number;
+    connected_instances: number;
+    disconnected_instances: number;
+    error_instances: number;
+    liveStateByInstance: Record<string, OpStatus>;
+  } | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  const loadPersisted = useCallback(async () => {
+    const [channelsRes, instancesRes, companiesRes] = await Promise.all([
+      (supabase.from("channels") as any).select(
+        "id, company_id, channel_type, channel_provider, name, status, external_id, phone_number, email_address, metadata, updated_at"
+      ),
+      (supabase.from("whatsapp_instances") as any).select(
+        "id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error, last_settings_sync_at"
+      ),
+      (supabase.from("companies") as any).select("id, name"),
+    ]);
+
+    const companies = new Map<string, string>(
+      (companiesRes.data ?? []).map((c: any) => [c.id, c.name])
+    );
+
+    const list: ConnectionRow[] = [];
+    for (const inst of instancesRes.data ?? []) {
+      const m = mapWhatsAppStatus(inst.status);
+      list.push({
+        id: `inst:${inst.id}`,
+        companyId: inst.company_id,
+        companyName: companies.get(inst.company_id) ?? "—",
+        channelType: "whatsapp",
+        provider: "evolution",
+        name: inst.instance_name ?? "Instância",
+        identifier: inst.phone_number ?? inst.instance_name ?? "—",
+        status: m.status,
+        health: m.health,
+        lastActivityAt: inst.updated_at ?? inst.connected_at ?? null,
+        lastError: inst.settings_sync_error ?? null,
+        raw: inst,
+      });
+    }
+
+    for (const ch of channelsRes.data ?? []) {
+      if (ch.channel_provider === "evolution" || ch.channel_provider === "evogo") continue;
+      const status: OpStatus =
+        ch.status === "connected"
+          ? "connected"
+          : ch.status === "error"
+            ? "error"
+            : ch.status === "disabled"
+              ? "disabled"
+              : ch.status === "pending"
+                ? "connecting"
+                : "disconnected";
+      const health: Health =
+        status === "connected"
+          ? "healthy"
+          : status === "error"
+            ? "critical"
+            : status === "connecting"
+              ? "pending_auth"
+              : "offline";
+      list.push({
+        id: `ch:${ch.id}`,
+        companyId: ch.company_id,
+        companyName: companies.get(ch.company_id) ?? "—",
+        channelType: ch.channel_type,
+        provider: ch.channel_provider,
+        name: ch.name ?? "Canal",
+        identifier: ch.phone_number ?? ch.email_address ?? ch.external_id ?? "—",
+        status,
+        health,
+        lastActivityAt: ch.updated_at ?? null,
+        lastError: null,
+        raw: ch,
+      });
+    }
+
+    setRows(list);
+  }, []);
+
+  const loadLive = useCallback(async () => {
+    setLiveLoading(true);
+    setLiveError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("master-monitoring-status", {
+        body: {},
+      });
+      if (error) throw error;
+      const evo = data?.evolution ?? {};
+      const map: Record<string, OpStatus> = {};
+      for (const c of (data?.connections ?? []) as any[]) {
+        if (c?.provider === "evolution" && c?.instance_name && c?.live_checked) {
+          map[c.instance_name] = c.status as OpStatus;
+        }
+      }
+      setLive({
+        checked_at: data?.checked_at ?? new Date().toISOString(),
+        online: !!evo.online,
+        response_time_ms: evo.response_time_ms ?? null,
+        health: (evo.health as Health) ?? "unknown",
+        error: evo.error ?? null,
+        total_instances: evo.total_instances ?? 0,
+        connected_instances: evo.connected_instances ?? 0,
+        disconnected_instances: evo.disconnected_instances ?? 0,
+        error_instances: evo.error_instances ?? 0,
+        liveStateByInstance: map,
+      });
+    } catch (e: any) {
+      setLiveError(e?.message ?? "Falha ao consultar status real.");
+    } finally {
+      setLiveLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [channelsRes, instancesRes, companiesRes] = await Promise.all([
-        (supabase.from("channels") as any).select(
-          "id, company_id, channel_type, channel_provider, name, status, external_id, phone_number, email_address, metadata, updated_at"
-        ),
-        (supabase.from("whatsapp_instances") as any).select(
-          "id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error, last_settings_sync_at"
-        ),
-        (supabase.from("companies") as any).select("id, name"),
-      ]);
-
+      await loadPersisted();
       if (cancelled) return;
-
-      const companies = new Map<string, string>(
-        (companiesRes.data ?? []).map((c: any) => [c.id, c.name])
-      );
-
-      const list: ConnectionRow[] = [];
-
-      // WhatsApp via instâncias Evolution (fonte principal nesta fase)
-      for (const inst of instancesRes.data ?? []) {
-        const m = mapWhatsAppStatus(inst.status);
-        list.push({
-          id: `inst:${inst.id}`,
-          companyId: inst.company_id,
-          companyName: companies.get(inst.company_id) ?? "—",
-          channelType: "whatsapp",
-          provider: "evolution",
-          name: inst.instance_name ?? "Instância",
-          identifier: inst.phone_number ?? inst.instance_name ?? "—",
-          status: m.status,
-          health: m.health,
-          lastActivityAt: inst.updated_at ?? inst.connected_at ?? null,
-          lastError: inst.settings_sync_error ?? null,
-          raw: inst,
-        });
-      }
-
-      // Outros canais (Meta, e-mail) — estrutura preparada
-      for (const ch of channelsRes.data ?? []) {
-        if (ch.channel_provider === "evolution" || ch.channel_provider === "evogo") continue;
-        const status: OpStatus =
-          ch.status === "connected"
-            ? "connected"
-            : ch.status === "error"
-              ? "error"
-              : ch.status === "disabled"
-                ? "disabled"
-                : ch.status === "pending"
-                  ? "connecting"
-                  : "disconnected";
-        const health: Health =
-          status === "connected"
-            ? "healthy"
-            : status === "error"
-              ? "critical"
-              : status === "connecting"
-                ? "pending_auth"
-                : "offline";
-        list.push({
-          id: `ch:${ch.id}`,
-          companyId: ch.company_id,
-          companyName: companies.get(ch.company_id) ?? "—",
-          channelType: ch.channel_type,
-          provider: ch.channel_provider,
-          name: ch.name ?? "Canal",
-          identifier: ch.phone_number ?? ch.email_address ?? ch.external_id ?? "—",
-          status,
-          health,
-          lastActivityAt: ch.updated_at ?? null,
-          lastError: null,
-          raw: ch,
-        });
-      }
-
-      setRows(list);
       setLoading(false);
+      loadLive();
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadPersisted, loadLive]);
+
+  // Apply live state to rows
+  const mergedRows = useMemo(() => {
+    if (!live) return rows;
+    return rows.map((r) => {
+      if (r.provider !== "evolution") return r;
+      const liveStatus = live.liveStateByInstance[r.name];
+      if (!liveStatus) return r;
+      const m = mapWhatsAppStatus(liveStatus);
+      return { ...r, status: m.status, health: m.health };
+    });
+  }, [rows, live]);
+
 
   const summary = useMemo(() => {
     const total = rows.length;
