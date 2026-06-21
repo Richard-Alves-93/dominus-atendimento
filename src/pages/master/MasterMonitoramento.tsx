@@ -595,12 +595,12 @@ export default function MasterMonitoramento() {
           {selected && (
             <div className="mt-6 space-y-4 text-sm">
               <Field label="Empresa" value={selected.companyName} />
-              <Field label="Canal" value={selected.channelType} />
-              <Field label="Provedor" value={selected.provider} />
+              <Field label="Canal" value={channelTypeLabel(selected.channelType)} />
+              <Field label="Provedor" value={providerLabel(selected.provider)} />
               <Field label="Nome da conexão" value={selected.name} />
               <Field label="Identificador" value={selected.identifier} mono />
-              <Field label="Status" value={selected.status} />
-              <Field label="Saúde" value={selected.health} />
+              <Field label="Status" value={statusLabel(selected.status)} />
+              <Field label="Saúde" value={healthLabel(selected.health)} />
               <Field label="Última atividade" value={fmtDate(selected.lastActivityAt)} />
               <Field
                 label="Última atualização"
