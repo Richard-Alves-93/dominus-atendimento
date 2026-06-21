@@ -458,7 +458,7 @@ export default function MasterMonitoramento() {
                 Última verificação: {fmtDate(live.checked_at)}
               </span>
             )}
-            <Button variant="outline" size="sm" onClick={loadLive} disabled={liveLoading}>
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={liveLoading}>
               <RefreshCw className={`w-3.5 h-3.5 mr-2 ${liveLoading ? "animate-spin" : ""}`} />
               Atualizar status
             </Button>
