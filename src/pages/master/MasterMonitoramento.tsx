@@ -319,12 +319,12 @@ export default function MasterMonitoramento() {
     setRows(list);
   }, []);
 
-  const loadLive = useCallback(async () => {
+  const loadLive = useCallback(async (saveSnapshot = false) => {
     setLiveLoading(true);
     setLiveError(null);
     try {
       const { data, error } = await supabase.functions.invoke("master-monitoring-status", {
-        body: {},
+        body: { save_snapshot: saveSnapshot, source: saveSnapshot ? "manual_refresh" : "view" },
       });
       if (error) throw error;
       const evo = data?.evolution ?? {};
