@@ -565,6 +565,100 @@ export default function MasterMonitoramento() {
           </div>
         </div>
 
+        {/* Histórico da Evolution */}
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <LineChartIcon className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Histórico da Evolution
+              </h3>
+            </div>
+            <div className="flex items-center gap-1">
+              {(["1h", "6h", "24h"] as HistoryPeriod[]).map((p) => (
+                <Button
+                  key={p}
+                  size="sm"
+                  variant={period === p ? "default" : "outline"}
+                  onClick={() => setPeriod(p)}
+                  disabled={historyLoading}
+                >
+                  {p === "1h" ? "Última 1h" : p === "6h" ? "Últimas 6h" : "Últimas 24h"}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {history.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              {historyLoading
+                ? "Carregando histórico..."
+                : "Ainda não há dados históricos suficientes. Clique em “Atualizar status” para registrar um snapshot."}
+            </Card>
+          ) : (
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card className="p-4">
+                <h4 className="text-sm font-semibold mb-3">Latência (ms)</h4>
+                <div style={{ width: "100%", height: 220 }}>
+                  <ResponsiveContainer>
+                    <LineChart
+                      data={history.map((s) => ({
+                        t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                        latency: s.response_time_ms ?? 0,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="t" fontSize={11} />
+                      <YAxis fontSize={11} />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="latency"
+                        name="Latência (ms)"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h4 className="text-sm font-semibold mb-3">Instâncias conectadas x desconectadas</h4>
+                <div style={{ width: "100%", height: 220 }}>
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={history.map((s) => ({
+                        t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                        Conectadas: s.connected_instances,
+                        Desconectadas: s.disconnected_instances,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="t" fontSize={11} />
+                      <YAxis fontSize={11} allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="Conectadas" fill="hsl(142 71% 45%)" />
+                      <Bar dataKey="Desconectadas" fill="hsl(0 0% 60%)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
+          )}
+          {/* Pendência Fase futura: retenção automática de snapshots por 7/15/30 dias e cron de coleta. */}
+        </div>
+
+
+
         {/* Tabela de conexões */}
         <Card className="overflow-hidden">
           <div className="p-4 border-b">
