@@ -360,12 +360,23 @@ export default function MasterMonitoramento() {
       await loadPersisted();
       if (cancelled) return;
       setLoading(false);
-      loadLive();
+      loadLive(false);
+      loadHistory(period);
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadPersisted, loadLive]);
+
+  useEffect(() => {
+    loadHistory(period);
+  }, [period, loadHistory]);
+
+  const handleRefresh = async () => {
+    await loadLive(true);
+    await loadHistory(period);
+  };
 
   // Apply live state to rows
   const mergedRows = useMemo(() => {
