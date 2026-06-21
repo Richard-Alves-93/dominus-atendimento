@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MasterLayout } from "@/components/MasterLayout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  RefreshCw,
   HelpCircle,
   Mail,
   MessageCircle,
@@ -129,124 +130,196 @@ export default function MasterMonitoramento() {
   const [rows, setRows] = useState<ConnectionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ConnectionRow | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [live, setLive] = useState<{
+    checked_at: string;
+    online: boolean;
+    response_time_ms: number | null;
+    health: Health;
+    error?: string | null;
+    total_instances: number;
+    connected_instances: number;
+    disconnected_instances: number;
+    error_instances: number;
+    liveStateByInstance: Record<string, OpStatus>;
+  } | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  const loadPersisted = useCallback(async () => {
+    const [channelsRes, instancesRes, companiesRes] = await Promise.all([
+      (supabase.from("channels") as any).select(
+        "id, company_id, channel_type, channel_provider, name, status, external_id, phone_number, email_address, metadata, updated_at"
+      ),
+      (supabase.from("whatsapp_instances") as any).select(
+        "id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error, last_settings_sync_at"
+      ),
+      (supabase.from("companies") as any).select("id, name"),
+    ]);
+
+    const companies = new Map<string, string>(
+      (companiesRes.data ?? []).map((c: any) => [c.id, c.name])
+    );
+
+    const list: ConnectionRow[] = [];
+    for (const inst of instancesRes.data ?? []) {
+      const m = mapWhatsAppStatus(inst.status);
+      list.push({
+        id: `inst:${inst.id}`,
+        companyId: inst.company_id,
+        companyName: companies.get(inst.company_id) ?? "—",
+        channelType: "whatsapp",
+        provider: "evolution",
+        name: inst.instance_name ?? "Instância",
+        identifier: inst.phone_number ?? inst.instance_name ?? "—",
+        status: m.status,
+        health: m.health,
+        lastActivityAt: inst.updated_at ?? inst.connected_at ?? null,
+        lastError: inst.settings_sync_error ?? null,
+        raw: inst,
+      });
+    }
+
+    for (const ch of channelsRes.data ?? []) {
+      if (ch.channel_provider === "evolution" || ch.channel_provider === "evogo") continue;
+      const status: OpStatus =
+        ch.status === "connected"
+          ? "connected"
+          : ch.status === "error"
+            ? "error"
+            : ch.status === "disabled"
+              ? "disabled"
+              : ch.status === "pending"
+                ? "connecting"
+                : "disconnected";
+      const health: Health =
+        status === "connected"
+          ? "healthy"
+          : status === "error"
+            ? "critical"
+            : status === "connecting"
+              ? "pending_auth"
+              : "offline";
+      list.push({
+        id: `ch:${ch.id}`,
+        companyId: ch.company_id,
+        companyName: companies.get(ch.company_id) ?? "—",
+        channelType: ch.channel_type,
+        provider: ch.channel_provider,
+        name: ch.name ?? "Canal",
+        identifier: ch.phone_number ?? ch.email_address ?? ch.external_id ?? "—",
+        status,
+        health,
+        lastActivityAt: ch.updated_at ?? null,
+        lastError: null,
+        raw: ch,
+      });
+    }
+
+    setRows(list);
+  }, []);
+
+  const loadLive = useCallback(async () => {
+    setLiveLoading(true);
+    setLiveError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("master-monitoring-status", {
+        body: {},
+      });
+      if (error) throw error;
+      const evo = data?.evolution ?? {};
+      const map: Record<string, OpStatus> = {};
+      for (const c of (data?.connections ?? []) as any[]) {
+        if (c?.provider === "evolution" && c?.instance_name && c?.live_checked) {
+          map[c.instance_name] = c.status as OpStatus;
+        }
+      }
+      setLive({
+        checked_at: data?.checked_at ?? new Date().toISOString(),
+        online: !!evo.online,
+        response_time_ms: evo.response_time_ms ?? null,
+        health: (evo.health as Health) ?? "unknown",
+        error: evo.error ?? null,
+        total_instances: evo.total_instances ?? 0,
+        connected_instances: evo.connected_instances ?? 0,
+        disconnected_instances: evo.disconnected_instances ?? 0,
+        error_instances: evo.error_instances ?? 0,
+        liveStateByInstance: map,
+      });
+    } catch (e: any) {
+      setLiveError(e?.message ?? "Falha ao consultar status real.");
+    } finally {
+      setLiveLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [channelsRes, instancesRes, companiesRes] = await Promise.all([
-        (supabase.from("channels") as any).select(
-          "id, company_id, channel_type, channel_provider, name, status, external_id, phone_number, email_address, metadata, updated_at"
-        ),
-        (supabase.from("whatsapp_instances") as any).select(
-          "id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error, last_settings_sync_at"
-        ),
-        (supabase.from("companies") as any).select("id, name"),
-      ]);
-
+      await loadPersisted();
       if (cancelled) return;
-
-      const companies = new Map<string, string>(
-        (companiesRes.data ?? []).map((c: any) => [c.id, c.name])
-      );
-
-      const list: ConnectionRow[] = [];
-
-      // WhatsApp via instâncias Evolution (fonte principal nesta fase)
-      for (const inst of instancesRes.data ?? []) {
-        const m = mapWhatsAppStatus(inst.status);
-        list.push({
-          id: `inst:${inst.id}`,
-          companyId: inst.company_id,
-          companyName: companies.get(inst.company_id) ?? "—",
-          channelType: "whatsapp",
-          provider: "evolution",
-          name: inst.instance_name ?? "Instância",
-          identifier: inst.phone_number ?? inst.instance_name ?? "—",
-          status: m.status,
-          health: m.health,
-          lastActivityAt: inst.updated_at ?? inst.connected_at ?? null,
-          lastError: inst.settings_sync_error ?? null,
-          raw: inst,
-        });
-      }
-
-      // Outros canais (Meta, e-mail) — estrutura preparada
-      for (const ch of channelsRes.data ?? []) {
-        if (ch.channel_provider === "evolution" || ch.channel_provider === "evogo") continue;
-        const status: OpStatus =
-          ch.status === "connected"
-            ? "connected"
-            : ch.status === "error"
-              ? "error"
-              : ch.status === "disabled"
-                ? "disabled"
-                : ch.status === "pending"
-                  ? "connecting"
-                  : "disconnected";
-        const health: Health =
-          status === "connected"
-            ? "healthy"
-            : status === "error"
-              ? "critical"
-              : status === "connecting"
-                ? "pending_auth"
-                : "offline";
-        list.push({
-          id: `ch:${ch.id}`,
-          companyId: ch.company_id,
-          companyName: companies.get(ch.company_id) ?? "—",
-          channelType: ch.channel_type,
-          provider: ch.channel_provider,
-          name: ch.name ?? "Canal",
-          identifier: ch.phone_number ?? ch.email_address ?? ch.external_id ?? "—",
-          status,
-          health,
-          lastActivityAt: ch.updated_at ?? null,
-          lastError: null,
-          raw: ch,
-        });
-      }
-
-      setRows(list);
       setLoading(false);
+      loadLive();
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadPersisted, loadLive]);
+
+  // Apply live state to rows
+  const mergedRows = useMemo(() => {
+    if (!live) return rows;
+    return rows.map((r) => {
+      if (r.provider !== "evolution") return r;
+      const liveStatus = live.liveStateByInstance[r.name];
+      if (!liveStatus) return r;
+      const m = mapWhatsAppStatus(liveStatus);
+      return { ...r, status: m.status, health: m.health };
+    });
+  }, [rows, live]);
+
 
   const summary = useMemo(() => {
-    const total = rows.length;
-    const healthy = rows.filter((r) => r.health === "healthy").length;
-    const warning = rows.filter((r) =>
+    const total = mergedRows.length;
+    const healthy = mergedRows.filter((r) => r.health === "healthy").length;
+    const warning = mergedRows.filter((r) =>
       ["warning", "pending_qr", "pending_auth", "sync_delayed", "rate_limited"].includes(r.health)
     ).length;
-    const offline = rows.filter((r) => r.health === "offline" || r.status === "disconnected").length;
-    const critical = rows.filter((r) => r.health === "critical").length;
+    const offline = mergedRows.filter((r) => r.health === "offline" || r.status === "disconnected").length;
+    const critical = mergedRows.filter((r) => r.health === "critical").length;
     const companiesWithAlert = new Set(
-      rows
+      mergedRows
         .filter((r) => r.health !== "healthy" && r.companyId)
         .map((r) => r.companyId)
     ).size;
     return { total, healthy, warning, offline, critical, companiesWithAlert };
-  }, [rows]);
+  }, [mergedRows]);
 
-  const evolutionInstances = rows.filter((r) => r.provider === "evolution");
-  const evoStats = {
+  const evolutionInstances = mergedRows.filter((r) => r.provider === "evolution");
+  const persistedEvoStats = {
     total: evolutionInstances.length,
     connected: evolutionInstances.filter((r) => r.status === "connected").length,
     disconnected: evolutionInstances.filter((r) => r.status === "disconnected").length,
     errors: evolutionInstances.filter((r) => r.status === "error").length,
   };
-  const evoProviderHealth: Health =
-    evoStats.total === 0
+  const evoStats = live
+    ? {
+        total: live.total_instances,
+        connected: live.connected_instances,
+        disconnected: live.disconnected_instances,
+        errors: live.error_instances,
+      }
+    : persistedEvoStats;
+  const evoProviderHealth: Health = live
+    ? live.health
+    : evoStats.total === 0
       ? "unknown"
       : evoStats.errors > 0
         ? "critical"
         : evoStats.disconnected > 0
           ? "warning"
           : "healthy";
+
 
   const cards = [
     { label: "Total de conexões", value: summary.total, icon: PlugZap, tone: "bg-primary/10 text-primary" },
@@ -260,12 +333,31 @@ export default function MasterMonitoramento() {
   return (
     <MasterLayout title="Monitoramento Operacional">
       <div className="p-6 space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold">Monitoramento Operacional</h2>
-          <p className="text-sm text-muted-foreground">
-            Saúde dos canais, provedores e conexões do Dominus.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Monitoramento Operacional</h2>
+            <p className="text-sm text-muted-foreground">
+              Saúde dos canais, provedores e conexões do Dominus.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {live && (
+              <span className="text-xs text-muted-foreground">
+                Última verificação: {fmtDate(live.checked_at)}
+              </span>
+            )}
+            <Button variant="outline" size="sm" onClick={loadLive} disabled={liveLoading}>
+              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${liveLoading ? "animate-spin" : ""}`} />
+              Atualizar status
+            </Button>
+          </div>
         </div>
+
+        {liveError && (
+          <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-amber-700 text-sm">
+            Não foi possível consultar o status real da Evolution agora. Exibindo dados persistidos.
+          </Card>
+        )}
 
         {/* Cards de resumo */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -301,6 +393,18 @@ export default function MasterMonitoramento() {
                 </Badge>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className={`text-right font-medium ${live ? (live.online ? "text-emerald-600" : "text-red-600") : "text-muted-foreground"}`}>
+                  {live ? (live.online ? "Online" : "Offline") : liveLoading ? "Verificando..." : "—"}
+                </dd>
+                <dt className="text-muted-foreground">Latência</dt>
+                <dd className="text-right font-medium">
+                  {live?.response_time_ms != null ? `${live.response_time_ms} ms` : "—"}
+                </dd>
+                <dt className="text-muted-foreground">Última verificação</dt>
+                <dd className="text-right text-xs text-muted-foreground">
+                  {live ? fmtDate(live.checked_at) : "—"}
+                </dd>
                 <dt className="text-muted-foreground">Total de instâncias</dt>
                 <dd className="text-right font-medium">{evoStats.total}</dd>
                 <dt className="text-muted-foreground">Conectadas</dt>
@@ -310,9 +414,15 @@ export default function MasterMonitoramento() {
                 <dt className="text-muted-foreground">Com erro</dt>
                 <dd className="text-right font-medium text-red-600">{evoStats.errors}</dd>
               </dl>
-              <p className="text-xs text-muted-foreground mt-3">
-                Status consolidado a partir das instâncias persistidas. Verificação em tempo real fica para Fase 2.
-              </p>
+              {live?.error && (
+                <p className="text-xs text-red-600 mt-3">Erro: {live.error}</p>
+              )}
+              {!live && !liveLoading && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Exibindo dados persistidos. Clique em “Atualizar status” para checar a Evolution agora.
+                </p>
+              )}
+
             </Card>
 
             <Card className="p-5 opacity-80">
@@ -373,14 +483,14 @@ export default function MasterMonitoramento() {
                       Carregando...
                     </td>
                   </tr>
-                ) : rows.length === 0 ? (
+                ) : mergedRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                       Nenhuma conexão registrada.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => {
+                  mergedRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
                     return (
                       <tr key={r.id} className="border-t hover:bg-muted/30">
