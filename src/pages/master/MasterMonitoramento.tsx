@@ -333,12 +333,31 @@ export default function MasterMonitoramento() {
   return (
     <MasterLayout title="Monitoramento Operacional">
       <div className="p-6 space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold">Monitoramento Operacional</h2>
-          <p className="text-sm text-muted-foreground">
-            Saúde dos canais, provedores e conexões do Dominus.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Monitoramento Operacional</h2>
+            <p className="text-sm text-muted-foreground">
+              Saúde dos canais, provedores e conexões do Dominus.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {live && (
+              <span className="text-xs text-muted-foreground">
+                Última verificação: {fmtDate(live.checked_at)}
+              </span>
+            )}
+            <Button variant="outline" size="sm" onClick={loadLive} disabled={liveLoading}>
+              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${liveLoading ? "animate-spin" : ""}`} />
+              Atualizar status
+            </Button>
+          </div>
         </div>
+
+        {liveError && (
+          <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-amber-700 text-sm">
+            Não foi possível consultar o status real da Evolution agora. Exibindo dados persistidos.
+          </Card>
+        )}
 
         {/* Cards de resumo */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
