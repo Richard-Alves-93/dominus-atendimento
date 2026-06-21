@@ -209,6 +209,43 @@ export default function MasterMonitoramento() {
   } | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
 
+  type HistoryPeriod = "1h" | "6h" | "24h";
+  type Snapshot = {
+    id: string;
+    created_at: string;
+    api_online: boolean;
+    health: Health;
+    response_time_ms: number | null;
+    total_instances: number;
+    connected_instances: number;
+    disconnected_instances: number;
+    error_instances: number;
+  };
+  const [history, setHistory] = useState<Snapshot[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [period, setPeriod] = useState<HistoryPeriod>("24h");
+
+  const loadHistory = useCallback(async (p: HistoryPeriod) => {
+    setHistoryLoading(true);
+    try {
+      const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("evolution_health_snapshots") as any)
+        .select(
+          "id, created_at, api_online, health, response_time_ms, total_instances, connected_instances, disconnected_instances, error_instances"
+        )
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      setHistory((data ?? []) as Snapshot[]);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   const loadPersisted = useCallback(async () => {
     const [channelsRes, instancesRes, companiesRes] = await Promise.all([
       (supabase.from("channels") as any).select(
