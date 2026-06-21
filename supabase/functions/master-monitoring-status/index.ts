@@ -46,6 +46,16 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
+    let saveSnapshot = false;
+    let snapshotSource = "manual";
+    if (req.method === "POST") {
+      try {
+        const body = await req.json().catch(() => ({}));
+        saveSnapshot = body?.save_snapshot === true;
+        if (typeof body?.source === "string") snapshotSource = body.source.slice(0, 50);
+      } catch { /* ignore */ }
+    }
+
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -180,6 +190,34 @@ Deno.serve(async (req) => {
         live_checked: false,
       }));
 
+    let snapshotSaved = false;
+    let snapshotId: string | null = null;
+    let snapshotError: string | null = null;
+    if (saveSnapshot) {
+      try {
+        const { data: snap, error: snapErr } = await admin
+          .from("evolution_health_snapshots")
+          .insert({
+            api_online: evoOnline,
+            health,
+            response_time_ms: evoResponseMs,
+            total_instances: evoStats.total_instances,
+            connected_instances: evoStats.connected_instances,
+            disconnected_instances: evoStats.disconnected_instances,
+            error_instances: evoStats.error_instances,
+            source: snapshotSource,
+            metadata: { error: evoError },
+          })
+          .select("id")
+          .maybeSingle();
+        if (snapErr) throw snapErr;
+        snapshotSaved = true;
+        snapshotId = snap?.id ?? null;
+      } catch (e) {
+        snapshotError = (e as Error)?.message?.slice(0, 200) ?? "snapshot_failed";
+      }
+    }
+
     return json({
       checked_at: new Date().toISOString(),
       evolution: {
@@ -191,6 +229,9 @@ Deno.serve(async (req) => {
       },
       connections: [...connections, ...otherChannels],
       fallback: !evoOnline,
+      snapshot_saved: snapshotSaved,
+      snapshot_id: snapshotId,
+      snapshot_error: snapshotError,
     });
   } catch (e) {
     console.error("[master-monitoring-status] error", e);

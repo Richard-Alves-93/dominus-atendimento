@@ -450,6 +450,48 @@ export type Database = {
           },
         ]
       }
+      evolution_health_snapshots: {
+        Row: {
+          api_online: boolean
+          connected_instances: number
+          created_at: string
+          disconnected_instances: number
+          error_instances: number
+          health: string
+          id: string
+          metadata: Json
+          response_time_ms: number | null
+          source: string
+          total_instances: number
+        }
+        Insert: {
+          api_online?: boolean
+          connected_instances?: number
+          created_at?: string
+          disconnected_instances?: number
+          error_instances?: number
+          health?: string
+          id?: string
+          metadata?: Json
+          response_time_ms?: number | null
+          source?: string
+          total_instances?: number
+        }
+        Update: {
+          api_online?: boolean
+          connected_instances?: number
+          created_at?: string
+          disconnected_instances?: number
+          error_instances?: number
+          health?: string
+          id?: string
+          metadata?: Json
+          response_time_ms?: number | null
+          source?: string
+          total_instances?: number
+        }
+        Relationships: []
+      }
       message_favorites: {
         Row: {
           company_id: string

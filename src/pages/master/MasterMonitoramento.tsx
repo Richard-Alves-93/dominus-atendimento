@@ -12,11 +12,24 @@ import {
 } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+} from "recharts";
+import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
   HelpCircle,
+  LineChart as LineChartIcon,
   Mail,
   MessageCircle,
   PlugZap,
@@ -196,6 +209,43 @@ export default function MasterMonitoramento() {
   } | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
 
+  type HistoryPeriod = "1h" | "6h" | "24h";
+  type Snapshot = {
+    id: string;
+    created_at: string;
+    api_online: boolean;
+    health: Health;
+    response_time_ms: number | null;
+    total_instances: number;
+    connected_instances: number;
+    disconnected_instances: number;
+    error_instances: number;
+  };
+  const [history, setHistory] = useState<Snapshot[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [period, setPeriod] = useState<HistoryPeriod>("24h");
+
+  const loadHistory = useCallback(async (p: HistoryPeriod) => {
+    setHistoryLoading(true);
+    try {
+      const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("evolution_health_snapshots") as any)
+        .select(
+          "id, created_at, api_online, health, response_time_ms, total_instances, connected_instances, disconnected_instances, error_instances"
+        )
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      setHistory((data ?? []) as Snapshot[]);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   const loadPersisted = useCallback(async () => {
     const [channelsRes, instancesRes, companiesRes] = await Promise.all([
       (supabase.from("channels") as any).select(
@@ -269,12 +319,12 @@ export default function MasterMonitoramento() {
     setRows(list);
   }, []);
 
-  const loadLive = useCallback(async () => {
+  const loadLive = useCallback(async (saveSnapshot = false) => {
     setLiveLoading(true);
     setLiveError(null);
     try {
       const { data, error } = await supabase.functions.invoke("master-monitoring-status", {
-        body: {},
+        body: { save_snapshot: saveSnapshot, source: saveSnapshot ? "manual_refresh" : "view" },
       });
       if (error) throw error;
       const evo = data?.evolution ?? {};
@@ -310,12 +360,23 @@ export default function MasterMonitoramento() {
       await loadPersisted();
       if (cancelled) return;
       setLoading(false);
-      loadLive();
+      loadLive(false);
+      loadHistory(period);
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadPersisted, loadLive]);
+
+  useEffect(() => {
+    loadHistory(period);
+  }, [period, loadHistory]);
+
+  const handleRefresh = async () => {
+    await loadLive(true);
+    await loadHistory(period);
+  };
 
   // Apply live state to rows
   const mergedRows = useMemo(() => {
@@ -397,7 +458,7 @@ export default function MasterMonitoramento() {
                 Última verificação: {fmtDate(live.checked_at)}
               </span>
             )}
-            <Button variant="outline" size="sm" onClick={loadLive} disabled={liveLoading}>
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={liveLoading}>
               <RefreshCw className={`w-3.5 h-3.5 mr-2 ${liveLoading ? "animate-spin" : ""}`} />
               Atualizar status
             </Button>
@@ -503,6 +564,100 @@ export default function MasterMonitoramento() {
             </Card>
           </div>
         </div>
+
+        {/* Histórico da Evolution */}
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <LineChartIcon className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Histórico da Evolution
+              </h3>
+            </div>
+            <div className="flex items-center gap-1">
+              {(["1h", "6h", "24h"] as HistoryPeriod[]).map((p) => (
+                <Button
+                  key={p}
+                  size="sm"
+                  variant={period === p ? "default" : "outline"}
+                  onClick={() => setPeriod(p)}
+                  disabled={historyLoading}
+                >
+                  {p === "1h" ? "Última 1h" : p === "6h" ? "Últimas 6h" : "Últimas 24h"}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {history.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              {historyLoading
+                ? "Carregando histórico..."
+                : "Ainda não há dados históricos suficientes. Clique em “Atualizar status” para registrar um snapshot."}
+            </Card>
+          ) : (
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card className="p-4">
+                <h4 className="text-sm font-semibold mb-3">Latência (ms)</h4>
+                <div style={{ width: "100%", height: 220 }}>
+                  <ResponsiveContainer>
+                    <LineChart
+                      data={history.map((s) => ({
+                        t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                        latency: s.response_time_ms ?? 0,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="t" fontSize={11} />
+                      <YAxis fontSize={11} />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="latency"
+                        name="Latência (ms)"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h4 className="text-sm font-semibold mb-3">Instâncias conectadas x desconectadas</h4>
+                <div style={{ width: "100%", height: 220 }}>
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={history.map((s) => ({
+                        t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                        Conectadas: s.connected_instances,
+                        Desconectadas: s.disconnected_instances,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="t" fontSize={11} />
+                      <YAxis fontSize={11} allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="Conectadas" fill="hsl(142 71% 45%)" />
+                      <Bar dataKey="Desconectadas" fill="hsl(0 0% 60%)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
+          )}
+          {/* Pendência Fase futura: retenção automática de snapshots por 7/15/30 dias e cron de coleta. */}
+        </div>
+
+
 
         {/* Tabela de conexões */}
         <Card className="overflow-hidden">
