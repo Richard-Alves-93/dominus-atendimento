@@ -83,6 +83,57 @@ const mapWhatsAppStatus = (s: string | null | undefined): { status: OpStatus; he
   }
 };
 
+const healthLabel = (h: Health) => {
+  const map: Record<Health, string> = {
+    healthy: "Saudável",
+    warning: "Atenção",
+    critical: "Crítico",
+    offline: "Offline",
+    pending_auth: "Autenticação pendente",
+    pending_qr: "QR Code pendente",
+    expired_token: "Token expirado",
+    sync_delayed: "Sincronização atrasada",
+    rate_limited: "Limite atingido",
+    unknown: "Desconhecido",
+  };
+  return map[h] ?? h;
+};
+
+const statusLabel = (s: OpStatus) => {
+  const map: Record<OpStatus, string> = {
+    connected: "Conectado",
+    disconnected: "Desconectado",
+    connecting: "Conectando",
+    error: "Erro",
+    paused: "Pausado",
+    disabled: "Desativado",
+    unknown: "Desconhecido",
+  };
+  return map[s] ?? s;
+};
+
+const channelTypeLabel = (t: string) => {
+  const map: Record<string, string> = {
+    whatsapp: "WhatsApp",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    email: "E-mail",
+    telegram: "Telegram",
+  };
+  return map[t] ?? t;
+};
+
+const providerLabel = (p: string) => {
+  const map: Record<string, string> = {
+    evolution: "Evolution",
+    evogo: "EvoGo",
+    meta: "Meta",
+    imap_smtp: "IMAP/SMTP",
+    manual: "Manual",
+  };
+  return map[p] ?? p;
+};
+
 const healthColor = (h: Health) => {
   switch (h) {
     case "healthy":
