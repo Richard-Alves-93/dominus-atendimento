@@ -46,6 +46,16 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
+    let saveSnapshot = false;
+    let snapshotSource = "manual";
+    if (req.method === "POST") {
+      try {
+        const body = await req.json().catch(() => ({}));
+        saveSnapshot = body?.save_snapshot === true;
+        if (typeof body?.source === "string") snapshotSource = body.source.slice(0, 50);
+      } catch { /* ignore */ }
+    }
+
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
