@@ -440,7 +440,7 @@ export default function MasterMonitoramento() {
                   <h4 className="font-semibold">Evolution API</h4>
                 </div>
                 <Badge variant="outline" className={healthColor(evoProviderHealth)}>
-                  {evoProviderHealth}
+                  {healthLabel(evoProviderHealth)}
                 </Badge>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
