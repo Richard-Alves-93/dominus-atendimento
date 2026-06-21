@@ -12,11 +12,24 @@ import {
 } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+} from "recharts";
+import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
   HelpCircle,
+  LineChart as LineChartIcon,
   Mail,
   MessageCircle,
   PlugZap,
