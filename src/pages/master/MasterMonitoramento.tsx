@@ -393,6 +393,18 @@ export default function MasterMonitoramento() {
                 </Badge>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className={`text-right font-medium ${live ? (live.online ? "text-emerald-600" : "text-red-600") : "text-muted-foreground"}`}>
+                  {live ? (live.online ? "Online" : "Offline") : liveLoading ? "Verificando..." : "—"}
+                </dd>
+                <dt className="text-muted-foreground">Latência</dt>
+                <dd className="text-right font-medium">
+                  {live?.response_time_ms != null ? `${live.response_time_ms} ms` : "—"}
+                </dd>
+                <dt className="text-muted-foreground">Última verificação</dt>
+                <dd className="text-right text-xs text-muted-foreground">
+                  {live ? fmtDate(live.checked_at) : "—"}
+                </dd>
                 <dt className="text-muted-foreground">Total de instâncias</dt>
                 <dd className="text-right font-medium">{evoStats.total}</dd>
                 <dt className="text-muted-foreground">Conectadas</dt>
@@ -402,9 +414,15 @@ export default function MasterMonitoramento() {
                 <dt className="text-muted-foreground">Com erro</dt>
                 <dd className="text-right font-medium text-red-600">{evoStats.errors}</dd>
               </dl>
-              <p className="text-xs text-muted-foreground mt-3">
-                Status consolidado a partir das instâncias persistidas. Verificação em tempo real fica para Fase 2.
-              </p>
+              {live?.error && (
+                <p className="text-xs text-red-600 mt-3">Erro: {live.error}</p>
+              )}
+              {!live && !liveLoading && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Exibindo dados persistidos. Clique em “Atualizar status” para checar a Evolution agora.
+                </p>
+              )}
+
             </Card>
 
             <Card className="p-5 opacity-80">
