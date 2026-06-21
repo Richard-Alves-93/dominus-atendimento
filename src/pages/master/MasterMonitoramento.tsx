@@ -549,20 +549,20 @@ export default function MasterMonitoramento() {
                         <td className="px-4 py-2">
                           <span className="inline-flex items-center gap-1.5">
                             <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                            {r.channelType}
+                            {channelTypeLabel(r.channelType)}
                           </span>
                         </td>
-                        <td className="px-4 py-2 capitalize">{r.provider}</td>
+                        <td className="px-4 py-2">{providerLabel(r.provider)}</td>
                         <td className="px-4 py-2">{r.name}</td>
                         <td className="px-4 py-2 font-mono text-xs">{r.identifier}</td>
                         <td className="px-4 py-2">
-                          <Badge variant="outline" className="capitalize">
-                            {r.status}
+                          <Badge variant="outline">
+                            {statusLabel(r.status)}
                           </Badge>
                         </td>
                         <td className="px-4 py-2">
                           <Badge variant="outline" className={healthColor(r.health)}>
-                            {r.health}
+                            {healthLabel(r.health)}
                           </Badge>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground">
