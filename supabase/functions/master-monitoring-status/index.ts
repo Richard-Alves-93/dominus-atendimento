@@ -6,7 +6,20 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const EVO_URL = Deno.env.get("EVOLUTION_API_URL");
 const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY");
-const CRON_SECRET = Deno.env.get("MONITORING_CRON_SECRET");
+// Cron secret is fetched from Vault at request time via SECURITY DEFINER RPC.
+// Env fallback (legacy) kept for compatibility but Vault is the source of truth.
+const CRON_SECRET_ENV = Deno.env.get("MONITORING_CRON_SECRET");
+
+async function getCronSecret(admin: ReturnType<typeof createClient>): Promise<string | null> {
+  try {
+    const { data, error } = await admin.rpc("get_monitoring_cron_secret" as any);
+    if (error) throw error;
+    if (typeof data === "string" && data.length > 0) return data;
+  } catch (_e) {
+    // do not log the secret or detailed vault errors
+  }
+  return CRON_SECRET_ENV ?? null;
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
