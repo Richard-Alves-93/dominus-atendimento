@@ -492,6 +492,51 @@ export type Database = {
         }
         Relationships: []
       }
+      infrastructure_health_snapshots: {
+        Row: {
+          cpu_percent: number | null
+          created_at: string
+          disk_percent: number | null
+          health: string
+          id: string
+          load_average: number | null
+          memory_percent: number | null
+          metadata: Json
+          response_time_ms: number | null
+          source: string
+          status: string
+          uptime_seconds: number | null
+        }
+        Insert: {
+          cpu_percent?: number | null
+          created_at?: string
+          disk_percent?: number | null
+          health?: string
+          id?: string
+          load_average?: number | null
+          memory_percent?: number | null
+          metadata?: Json
+          response_time_ms?: number | null
+          source?: string
+          status?: string
+          uptime_seconds?: number | null
+        }
+        Update: {
+          cpu_percent?: number | null
+          created_at?: string
+          disk_percent?: number | null
+          health?: string
+          id?: string
+          load_average?: number | null
+          memory_percent?: number | null
+          metadata?: Json
+          response_time_ms?: number | null
+          source?: string
+          status?: string
+          uptime_seconds?: number | null
+        }
+        Relationships: []
+      }
       message_favorites: {
         Row: {
           company_id: string
