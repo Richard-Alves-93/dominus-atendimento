@@ -123,7 +123,6 @@ export default function Equipe() {
       phone: m.profile?.phone ?? "",
       role: m.role,
       department_ids: m.departments.map((d) => d.department_id),
-      rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
     });
@@ -131,24 +130,16 @@ export default function Equipe() {
 
   const toggleDept = (id: string) => {
     setForm((f) => {
-      const adding = !f.department_ids.includes(id);
-      const rotation = { ...f.rotation };
-      if (adding && rotation[id] === undefined) rotation[id] = true;
       if (isSingleDeptRole(f.role)) {
-        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id], rotation };
+        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id] };
       }
       return {
         ...f,
         department_ids: f.department_ids.includes(id)
           ? f.department_ids.filter((x) => x !== id)
           : [...f.department_ids, id],
-        rotation,
       };
     });
-  };
-
-  const toggleRotation = (id: string, v: boolean) => {
-    setForm((f) => ({ ...f, rotation: { ...f.rotation, [id]: v } }));
   };
 
   const changeRole = (v: Role) => {
