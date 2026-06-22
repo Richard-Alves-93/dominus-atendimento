@@ -777,11 +777,31 @@ export default function MasterMonitoramento() {
 
         {/* Tabela de conexões */}
         <Card className="overflow-hidden">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold">Conexões e canais</h3>
-            <p className="text-xs text-muted-foreground">
-              Visão multicanal consolidada por empresa.
-            </p>
+          <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold">Conexões e canais</h3>
+              <p className="text-xs text-muted-foreground">
+                Visão multicanal consolidada por empresa.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {([
+                ["all", "Todas"],
+                ["healthy", "Saudáveis"],
+                ["warning", "Atenção"],
+                ["critical", "Críticas"],
+                ["offline", "Offline"],
+              ] as [HealthFilter, string][]).map(([key, label]) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant={healthFilter === key ? "default" : "outline"}
+                  onClick={() => setHealthFilter(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
