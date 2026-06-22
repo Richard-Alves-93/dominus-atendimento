@@ -43,13 +43,21 @@ import {
   computeConnectionAlerts,
   computeOscillationAlert,
   computeVpsAlerts,
+  computeConnectionStability,
+  computeStabilityAlerts,
+  recommendationForConnection,
+  stabilityLabel,
+  stabilityClasses,
+  statusLabelPt,
+  formatAgo,
   formatUptime,
   severityClasses,
   severityLabel,
   severityRank,
-  recommendationFor,
   type OperationalAlert,
   type VpsLive,
+  type StabilityInfo,
+  type ConnectionSnapshot,
 } from "@/lib/monitoringAlerts";
 import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
 
