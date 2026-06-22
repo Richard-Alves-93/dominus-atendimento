@@ -201,6 +201,15 @@ export default function Equipe() {
         ? "Senha provisória enviada por WhatsApp."
         : `Cadastro feito. Envio WhatsApp pendente: ${d?.wa_error ?? "indisponível"}`,
     });
+    // Apply rotation opt-outs created by create-company-user (defaults to true).
+    const optOuts = form.department_ids.filter((dep) => form.rotation[dep] === false);
+    if (optOuts.length && d?.user_id) {
+      await (supabase as any).from("department_users")
+        .update({ participates_in_rotation: false })
+        .eq("company_id", activeCompanyId)
+        .eq("user_id", d.user_id)
+        .in("department_id", optOuts);
+    }
     setCreating(false);
     await load();
   };
