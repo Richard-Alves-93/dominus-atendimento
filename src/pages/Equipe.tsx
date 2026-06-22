@@ -229,6 +229,7 @@ export default function Equipe() {
       const rows = form.department_ids.map((dep) => ({
         user_id: editing.user_id, company_id: activeCompanyId, department_id: dep,
         role: form.role === "manager" ? "manager" : "agent", status: "active",
+        participates_in_rotation: form.rotation[dep] !== false,
       }));
       await (supabase as any).from("department_users").insert(rows);
     }
