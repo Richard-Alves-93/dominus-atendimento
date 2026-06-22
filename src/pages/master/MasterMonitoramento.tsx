@@ -716,6 +716,161 @@ export default function MasterMonitoramento() {
           </div>
         </div>
 
+        {/* Infraestrutura / VPS */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Server className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Infraestrutura
+            </h3>
+          </div>
+
+          {!vps || !vps.configured ? (
+            <Card className="p-5 text-sm text-muted-foreground">
+              Monitoramento da VPS ainda não configurado.
+            </Card>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <Card className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">VPS</p>
+                      <p className="text-base font-semibold mt-1">
+                        {vps.hostname ?? "—"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={
+                        vps.health === "healthy"
+                          ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                          : vps.health === "warning"
+                            ? "bg-amber-500/15 text-amber-600 border-amber-500/30"
+                            : vps.health === "critical"
+                              ? "bg-red-500/15 text-red-600 border-red-500/30"
+                              : "bg-zinc-500/15 text-zinc-600 border-zinc-500/30"
+                      }
+                    >
+                      {vps.health === "healthy"
+                        ? "Saudável"
+                        : vps.health === "warning"
+                          ? "Atenção"
+                          : vps.health === "critical"
+                            ? "Crítico"
+                            : vps.health === "offline"
+                              ? "Offline"
+                              : "Desconhecido"}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-3">
+                    Última verificação: {fmtDate(vps.checked_at)}
+                  </p>
+                  {vps.error && (
+                    <p className="text-[11px] text-red-600 mt-1">Erro: {vps.error}</p>
+                  )}
+                </Card>
+
+                <Card className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">CPU</p>
+                      <p className="text-2xl font-bold mt-1">
+                        {vps.cpu_percent != null ? `${Math.round(vps.cpu_percent)}%` : "—"}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Memória</p>
+                      <p className="text-2xl font-bold mt-1">
+                        {vps.memory_percent != null ? `${Math.round(vps.memory_percent)}%` : "—"}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <MemoryStick className="w-4 h-4" />
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Disco</p>
+                      <p className="text-2xl font-bold mt-1">
+                        {vps.disk_percent != null ? `${Math.round(vps.disk_percent)}%` : "—"}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <HardDrive className="w-4 h-4" />
+                    </div>
+                  </div>
+                  {vps.load_average != null && (
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      Load average: {vps.load_average.toFixed(2)}
+                    </p>
+                  )}
+                </Card>
+
+                <Card className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Uptime</p>
+                      <p className="text-2xl font-bold mt-1">
+                        {formatUptime(vps.uptime_seconds)}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <Timer className="w-4 h-4" />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {infraHistory.length === 0 ? (
+                <Card className="p-5 mt-4 text-center text-sm text-muted-foreground">
+                  Ainda não há dados históricos suficientes da infraestrutura.
+                </Card>
+              ) : (
+                <Card className="p-4 mt-4">
+                  <h4 className="text-sm font-semibold mb-3">CPU · Memória · Disco (%)</h4>
+                  <div style={{ width: "100%", height: 240 }}>
+                    <ResponsiveContainer>
+                      <LineChart
+                        data={infraHistory.map((s) => ({
+                          t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                          CPU: s.cpu_percent ?? null,
+                          Memória: s.memory_percent ?? null,
+                          Disco: s.disk_percent ?? null,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="t" fontSize={11} />
+                        <YAxis fontSize={11} domain={[0, 100]} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="CPU" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="Memória" stroke="hsl(38 92% 50%)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="Disco" stroke="hsl(142 71% 45%)" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              )}
+            </>
+          )}
+        </div>
+
+
         {/* Histórico da Evolution */}
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
