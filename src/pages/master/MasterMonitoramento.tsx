@@ -251,6 +251,65 @@ export default function MasterMonitoramento() {
   };
   const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
 
+  type ConfigStats = {
+    lastCronEvo: string | null;
+    lastManualEvo: string | null;
+    lastCronInfra: string | null;
+    evoCount24h: number;
+    infraCount24h: number;
+    evoFails24h: number;
+    infraFails24h: number;
+    vpsConfigured: boolean;
+  };
+  const [configStats, setConfigStats] = useState<ConfigStats | null>(null);
+
+  const loadConfigStats = useCallback(async () => {
+    try {
+      const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const [lastCronEvoRes, lastManualEvoRes, lastCronInfraRes, evo24hRes, infra24hRes] =
+        await Promise.all([
+          (supabase.from("evolution_health_snapshots") as any)
+            .select("created_at")
+            .eq("source", "cron")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          (supabase.from("evolution_health_snapshots") as any)
+            .select("created_at")
+            .neq("source", "cron")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          (supabase.from("infrastructure_health_snapshots") as any)
+            .select("created_at")
+            .eq("source", "cron")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          (supabase.from("evolution_health_snapshots") as any)
+            .select("api_online", { count: "exact" })
+            .gte("created_at", since24h),
+          (supabase.from("infrastructure_health_snapshots") as any)
+            .select("status", { count: "exact" })
+            .gte("created_at", since24h),
+        ]);
+      const evoRows = (evo24hRes.data ?? []) as Array<{ api_online: boolean }>;
+      const infraRows = (infra24hRes.data ?? []) as Array<{ status: string }>;
+      setConfigStats({
+        lastCronEvo: lastCronEvoRes.data?.created_at ?? null,
+        lastManualEvo: lastManualEvoRes.data?.created_at ?? null,
+        lastCronInfra: lastCronInfraRes.data?.created_at ?? null,
+        evoCount24h: evo24hRes.count ?? evoRows.length,
+        infraCount24h: infra24hRes.count ?? infraRows.length,
+        evoFails24h: evoRows.filter((r) => r.api_online === false).length,
+        infraFails24h: infraRows.filter((r) => r.status !== "online").length,
+        vpsConfigured: (lastCronInfraRes.data?.created_at ?? null) !== null,
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const loadInfraHistory = useCallback(async (p: HistoryPeriod) => {
     try {
       const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
@@ -266,6 +325,7 @@ export default function MasterMonitoramento() {
       setInfraHistory([]);
     }
   }, []);
+
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
     setHistoryLoading(true);
