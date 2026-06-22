@@ -64,6 +64,19 @@ import {
   type ConnectionSnapshot,
   type MessageFlow,
 } from "@/lib/monitoringAlerts";
+import {
+  computeEvolutionLatencyTrend,
+  computeVpsTrendAlerts,
+  computeFlowTrendAlerts,
+  rowsToCsv,
+  downloadCsv,
+  exportPeriodHours,
+  EXPORT_MAX_ROWS,
+  type ExportPeriod,
+  type FlowTrendSnap,
+} from "@/lib/monitoringTrends";
+import { Download } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
 
 
@@ -269,6 +282,12 @@ export default function MasterMonitoramento() {
   };
   const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
 
+  // Fase 2.10: snapshots de fluxo recentes (todas as conexões) para tendência
+  const [flowTrendSnaps, setFlowTrendSnaps] = useState<FlowTrendSnap[]>([]);
+  // Fase 2.11: período de exportação
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriod>("24h");
+  const [exporting, setExporting] = useState<string | null>(null);
+
   // Snapshots por conexão (Fase 2.7)
   type ConnHealthRow = {
     connection_id: string | null;
@@ -411,6 +430,24 @@ export default function MasterMonitoramento() {
       setConnHistory([]);
     }
   }, []);
+
+  // Fase 2.10: snapshots recentes de fluxo para análise de tendência
+  const loadFlowTrendSnaps = useCallback(async () => {
+    try {
+      const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("connection_message_flow_snapshots") as any)
+        .select("created_at, connection_id, failed_count_24h, pending_count_24h")
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(3000);
+      if (error) throw error;
+      setFlowTrendSnaps((data ?? []) as FlowTrendSnap[]);
+    } catch {
+      setFlowTrendSnaps([]);
+    }
+  }, []);
+
+
 
 
 
@@ -575,6 +612,7 @@ export default function MasterMonitoramento() {
       loadInfraHistory(period);
       loadConnHistory(period);
       loadConfigStats();
+      loadFlowTrendSnaps();
     })();
     return () => {
       cancelled = true;
@@ -600,6 +638,7 @@ export default function MasterMonitoramento() {
     await loadInfraHistory(period);
     await loadConnHistory(period);
     await loadConfigStats();
+    await loadFlowTrendSnaps();
   };
 
 
@@ -761,11 +800,35 @@ export default function MasterMonitoramento() {
       );
     }
     list.push(...computeVpsAlerts(vps));
+
+    // Fase 2.10 — Alertas por tendência
+    const latencyTrend = computeEvolutionLatencyTrend(
+      history.map((h) => ({ created_at: h.created_at, response_time_ms: h.response_time_ms })),
+    );
+    if (latencyTrend) list.push(latencyTrend);
+    list.push(...computeVpsTrendAlerts(infraHistory, vps));
+
+    // Mapa de conexões para tendência de fluxo
+    const connInfoMap = new Map<string, { id: string; companyName: string; name: string; offline: boolean }>();
+    for (const r of mergedRows) {
+      const raw = r.raw as any;
+      const connId = raw?.id ?? raw?.channel_id;
+      if (!connId) continue;
+      const offline = r.status === "disconnected" || r.health === "offline" || r.status === "error";
+      connInfoMap.set(String(connId), {
+        id: r.id,
+        companyName: r.companyName,
+        name: r.name,
+        offline,
+      });
+    }
+    list.push(...computeFlowTrendAlerts(flowTrendSnaps, connInfoMap));
+
     // Dedup por id
     const seen = new Set<string>();
     const dedup = list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
     return dedup.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows, vps, stabilityByRow, flowByRow]);
+  }, [live, history, mergedRows, vps, stabilityByRow, flowByRow, infraHistory, flowTrendSnaps]);
 
 
   const filteredRows = useMemo(() => {
@@ -802,6 +865,99 @@ export default function MasterMonitoramento() {
     { label: "Críticas", value: summary.critical, icon: Activity, tone: "bg-red-500/15 text-red-600" },
     { label: "Empresas com alerta", value: summary.companiesWithAlert, icon: Server, tone: "bg-primary/10 text-primary" },
   ];
+
+  // Fase 2.11 — Exportação CSV de histórico (Master)
+  const handleExportCsv = useCallback(
+    async (kind: "evolution" | "vps" | "connections" | "flow") => {
+      try {
+        setExporting(kind);
+        const hours = exportPeriodHours(exportPeriod);
+        const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+        const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+
+        let csv = "";
+        let filename = "";
+        let rowCount = 0;
+
+        if (kind === "evolution") {
+          const cols = [
+            "created_at","api_online","health","response_time_ms",
+            "total_instances","connected_instances","disconnected_instances","error_instances","source",
+          ] as const;
+          const { data, error } = await (supabase.from("evolution_health_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `evolution-${exportPeriod}-${stamp}.csv`;
+        } else if (kind === "vps") {
+          const cols = [
+            "created_at","status","health","cpu_percent","memory_percent","disk_percent",
+            "load_average","uptime_seconds","response_time_ms","source",
+          ] as const;
+          const { data, error } = await (supabase.from("infrastructure_health_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `vps-${exportPeriod}-${stamp}.csv`;
+        } else if (kind === "connections") {
+          const cols = [
+            "created_at","company_id","connection_id","channel","provider","instance_name","identifier",
+            "status","health","last_activity_at","error_count","reconnect_count","source",
+          ] as const;
+          const { data, error } = await (supabase.from("connection_health_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `conexoes-${exportPeriod}-${stamp}.csv`;
+        } else {
+          const cols = [
+            "created_at","company_id","connection_id","channel","provider","instance_name","identifier",
+            "inbound_count_24h","outbound_count_24h","failed_count_24h","pending_count_24h",
+            "last_inbound_at","last_outbound_at","last_webhook_at","health","source",
+          ] as const;
+          const { data, error } = await (supabase.from("connection_message_flow_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `fluxo-${exportPeriod}-${stamp}.csv`;
+        }
+
+        downloadCsv(filename, csv);
+        toast({
+          title: "Exportação concluída",
+          description:
+            rowCount >= EXPORT_MAX_ROWS
+              ? `Exportação limitada aos ${EXPORT_MAX_ROWS} registros mais recentes.`
+              : `${rowCount} registro(s) exportado(s).`,
+        });
+      } catch (e: any) {
+        toast({
+          title: "Falha na exportação",
+          description: e?.message ?? "Não foi possível exportar agora.",
+          variant: "destructive",
+        });
+      } finally {
+        setExporting(null);
+      }
+    },
+    [exportPeriod],
+  );
 
 
   return (
@@ -957,7 +1113,53 @@ export default function MasterMonitoramento() {
         })()}
 
 
+        {/* Fase 2.11 — Exportar histórico (CSV) */}
+        <Card className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-base font-semibold">Exportar histórico</h3>
+              <p className="text-xs text-muted-foreground">
+                Baixe o histórico operacional em CSV. Apenas métricas seguras — sem secrets, tokens ou payload bruto. Limite de {EXPORT_MAX_ROWS.toLocaleString("pt-BR")} linhas por arquivo.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Período:</span>
+              {(["1h", "6h", "24h"] as ExportPeriod[]).map((p) => (
+                <Button
+                  key={p}
+                  variant={exportPeriod === p ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setExportPeriod(p)}
+                >
+                  {p === "1h" ? "Última 1h" : p === "6h" ? "Últimas 6h" : "Últimas 24h"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {([
+              { k: "evolution" as const, label: "Evolution" },
+              { k: "vps" as const, label: "VPS" },
+              { k: "connections" as const, label: "Conexões" },
+              { k: "flow" as const, label: "Fluxo de mensagens" },
+            ]).map((opt) => (
+              <Button
+                key={opt.k}
+                variant="outline"
+                size="sm"
+                onClick={() => handleExportCsv(opt.k)}
+                disabled={exporting !== null}
+                className="justify-start"
+              >
+                <Download className={`w-3.5 h-3.5 mr-2 ${exporting === opt.k ? "animate-pulse" : ""}`} />
+                Baixar CSV — {opt.label}
+              </Button>
+            ))}
+          </div>
+        </Card>
+
         {/* Cards de resumo */}
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {cards.map((c) => (
             <Card key={c.label} className="p-4">
