@@ -388,6 +388,7 @@ export default function MasterMonitoramento() {
         error_instances: evo.error_instances ?? 0,
         liveStateByInstance: map,
       });
+      if (data?.infrastructure) setVps(data.infrastructure);
     } catch (e: any) {
       setLiveError(e?.message ?? "Falha ao consultar status real.");
     } finally {
