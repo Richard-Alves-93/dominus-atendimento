@@ -59,12 +59,13 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
   const [instancesRes, channelsRes, companiesRes] = await Promise.all([
     admin
       .from("whatsapp_instances")
-      .select("id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error"),
+      .select("id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error, last_webhook_at"),
     admin
       .from("channels")
       .select("id, company_id, channel_type, channel_provider, name, status, phone_number, email_address, external_id, updated_at"),
     admin.from("companies").select("id, name"),
   ]);
+
 
   const companies = new Map<string, string>(
     (companiesRes.data ?? []).map((c: any) => [c.id, c.name])
