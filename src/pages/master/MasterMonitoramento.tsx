@@ -445,6 +445,57 @@ export default function MasterMonitoramento() {
           : "healthy";
 
 
+  const alerts: OperationalAlert[] = useMemo(() => {
+    const list: OperationalAlert[] = [];
+    list.push(...computeEvolutionAlerts(live));
+    const osc = computeOscillationAlert(
+      history.map((h) => ({ created_at: h.created_at, api_online: h.api_online })),
+    );
+    if (osc) list.push(osc);
+    list.push(
+      ...computeConnectionAlerts(
+        mergedRows.map((r) => ({
+          id: r.id,
+          companyName: r.companyName,
+          channelType: r.channelType,
+          provider: r.provider,
+          name: r.name,
+          health: r.health,
+          status: r.status,
+          lastActivityAt: r.lastActivityAt,
+          lastError: r.lastError,
+        })),
+      ),
+    );
+    return list.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+  }, [live, history, mergedRows]);
+
+  const filteredRows = useMemo(() => {
+    if (healthFilter === "all") return mergedRows;
+    return mergedRows.filter((r) => {
+      switch (healthFilter) {
+        case "healthy":
+          return r.health === "healthy";
+        case "warning":
+          return ["warning", "pending_qr", "pending_auth", "sync_delayed", "rate_limited"].includes(
+            r.health,
+          );
+        case "critical":
+          return r.health === "critical" || r.status === "error";
+        case "offline":
+          return r.health === "offline" || r.status === "disconnected";
+        default:
+          return true;
+      }
+    });
+  }, [mergedRows, healthFilter]);
+
+  const rowHighlight = (h: Health, s: OpStatus) => {
+    if (h === "critical" || s === "error") return "bg-red-500/5 border-l-2 border-l-red-500";
+    if (h === "offline" || s === "disconnected") return "bg-zinc-500/5 border-l-2 border-l-zinc-400";
+    return "";
+  };
+
   const cards = [
     { label: "Total de conexões", value: summary.total, icon: PlugZap, tone: "bg-primary/10 text-primary" },
     { label: "Saudáveis", value: summary.healthy, icon: CheckCircle2, tone: "bg-emerald-500/15 text-emerald-600" },
@@ -453,6 +504,7 @@ export default function MasterMonitoramento() {
     { label: "Críticas", value: summary.critical, icon: Activity, tone: "bg-red-500/15 text-red-600" },
     { label: "Empresas com alerta", value: summary.companiesWithAlert, icon: Server, tone: "bg-primary/10 text-primary" },
   ];
+
 
   return (
     <MasterLayout title="Monitoramento Operacional">
