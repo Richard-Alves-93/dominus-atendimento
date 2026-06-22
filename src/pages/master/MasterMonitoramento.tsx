@@ -633,6 +633,21 @@ export default function MasterMonitoramento() {
     return map;
   }, [connHistory, mergedRows]);
 
+  // Phase 2.8: lookup flow per row using channel_id
+  const flowByRow = useMemo(() => {
+    const m = new Map<string, NonNullable<MessageFlow>>();
+    for (const r of mergedRows) {
+      const raw = r.raw as any;
+      const chId = raw?.channel_id ?? raw?.id; // instance has channel_id; channel row has id
+      if (chId) {
+        const f = flowByChannel.get(String(chId));
+        if (f) m.set(r.id, f);
+      }
+    }
+    return m;
+  }, [mergedRows, flowByChannel]);
+
+
   const alerts: OperationalAlert[] = useMemo(() => {
     const list: OperationalAlert[] = [];
     list.push(...computeEvolutionAlerts(live));
