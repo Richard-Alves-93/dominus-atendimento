@@ -501,8 +501,9 @@ export default function MasterMonitoramento() {
         })),
       ),
     );
+    list.push(...computeVpsAlerts(vps));
     return list.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows]);
+  }, [live, history, mergedRows, vps]);
 
   const filteredRows = useMemo(() => {
     if (healthFilter === "all") return mergedRows;
