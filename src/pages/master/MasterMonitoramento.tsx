@@ -1368,6 +1368,15 @@ export default function MasterMonitoramento() {
                   filteredRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
                     const info = stabilityByRow.get(r.id);
+                    const flow = flowByRow.get(r.id) ?? null;
+                    const diag = computeFlowDiagnosis(
+                      {
+                        id: r.id, companyName: r.companyName, channelType: r.channelType,
+                        provider: r.provider, name: r.name, health: r.health, status: r.status,
+                        lastActivityAt: r.lastActivityAt, lastError: r.lastError,
+                      },
+                      flow,
+                    );
                     return (
                       <tr key={r.id} className={`border-t hover:bg-muted/30 ${rowHighlight(r.health, r.status)}`}>
                         <td className="px-4 py-2">{r.companyName}</td>
@@ -1398,10 +1407,25 @@ export default function MasterMonitoramento() {
                             {stabilityLabel(info?.stability ?? "unknown")}
                           </Badge>
                         </td>
+                        <td className="px-4 py-2">
+                          <Badge variant="outline" className={flowHealthClasses(diag.health)}>
+                            {flowHealthLabel(diag.health)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {flow ? (
+                            <span className={flow.failed_24h > 0 ? "text-red-600 font-medium" : "text-muted-foreground"}>
+                              {flow.failed_24h}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-muted-foreground">
                           <div>{formatAgo(r.lastActivityAt)}</div>
                           <div className="text-[10px] opacity-70">{fmtDate(r.lastActivityAt)}</div>
                         </td>
+
                         <td className="px-4 py-2 text-right">
                           <Button variant="ghost" size="sm" onClick={() => setSelected(r)}>
                             Ver detalhes
