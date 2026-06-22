@@ -961,6 +961,59 @@ export type Database = {
           },
         ]
       }
+      monitoring_events: {
+        Row: {
+          channel: string | null
+          company_id: string | null
+          connection_id: string | null
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          provider: string | null
+          severity: string
+          source: string
+          title: string
+        }
+        Insert: {
+          channel?: string | null
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          description?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          provider?: string | null
+          severity?: string
+          source?: string
+          title: string
+        }
+        Update: {
+          channel?: string | null
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          provider?: string | null
+          severity?: string
+          source?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monitoring_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pinned_messages: {
         Row: {
           company_id: string
@@ -1600,6 +1653,45 @@ export type Database = {
         Returns: boolean
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
+      master_connection_aggregates: {
+        Args: { _days: number; _limit?: number }
+        Returns: {
+          channel: string
+          company_id: string
+          connection_id: string
+          error_count: number
+          identifier: string
+          instance_name: string
+          last_event_at: string
+          offline_count: number
+          provider: string
+          total_snapshots: number
+        }[]
+      }
+      master_evolution_aggregates: {
+        Args: { _days: number }
+        Returns: {
+          avg_connected: number
+          avg_disconnected: number
+          avg_latency_ms: number
+          max_latency_ms: number
+          min_latency_ms: number
+          offline_snapshots: number
+          online_pct: number
+          online_snapshots: number
+          total_errors: number
+          total_snapshots: number
+        }[]
+      }
+      master_flow_aggregates: {
+        Args: { _days: number }
+        Returns: {
+          total_failed: number
+          total_inbound: number
+          total_outbound: number
+          total_pending: number
+        }[]
+      }
       master_message_flow_24h: {
         Args: never
         Returns: {
@@ -1611,6 +1703,37 @@ export type Database = {
           outbound_24h: number
           pending_24h: number
         }[]
+      }
+      master_vps_aggregates: {
+        Args: { _days: number }
+        Returns: {
+          avg_cpu: number
+          avg_disk: number
+          avg_memory: number
+          critical_snapshots: number
+          healthy_pct: number
+          healthy_snapshots: number
+          max_cpu: number
+          max_disk: number
+          max_memory: number
+          total_snapshots: number
+        }[]
+      }
+      monitoring_events_cleanup: { Args: never; Returns: undefined }
+      monitoring_events_log: {
+        Args: {
+          _channel: string
+          _company_id: string
+          _connection_id: string
+          _description: string
+          _event_type: string
+          _metadata: Json
+          _provider: string
+          _severity: string
+          _source: string
+          _title: string
+        }
+        Returns: string
       }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
       try_monitoring_cron_lock: { Args: never; Returns: boolean }
