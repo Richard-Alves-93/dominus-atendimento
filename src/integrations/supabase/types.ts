@@ -370,6 +370,80 @@ export type Database = {
           },
         ]
       }
+      connection_message_flow_snapshots: {
+        Row: {
+          channel: string
+          channel_id: string | null
+          company_id: string | null
+          connection_id: string | null
+          created_at: string
+          failed_count_24h: number
+          health: string
+          id: string
+          identifier: string | null
+          inbound_count_24h: number
+          instance_name: string | null
+          last_inbound_at: string | null
+          last_outbound_at: string | null
+          last_webhook_at: string | null
+          metadata: Json
+          outbound_count_24h: number
+          pending_count_24h: number
+          provider: string
+          source: string
+        }
+        Insert: {
+          channel: string
+          channel_id?: string | null
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          failed_count_24h?: number
+          health?: string
+          id?: string
+          identifier?: string | null
+          inbound_count_24h?: number
+          instance_name?: string | null
+          last_inbound_at?: string | null
+          last_outbound_at?: string | null
+          last_webhook_at?: string | null
+          metadata?: Json
+          outbound_count_24h?: number
+          pending_count_24h?: number
+          provider: string
+          source?: string
+        }
+        Update: {
+          channel?: string
+          channel_id?: string | null
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          failed_count_24h?: number
+          health?: string
+          id?: string
+          identifier?: string | null
+          inbound_count_24h?: number
+          instance_name?: string | null
+          last_inbound_at?: string | null
+          last_outbound_at?: string | null
+          last_webhook_at?: string | null
+          metadata?: Json
+          outbound_count_24h?: number
+          pending_count_24h?: number
+          provider?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_message_flow_snapshots_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           avatar_url: string | null
@@ -1508,6 +1582,7 @@ export type Database = {
     }
     Functions: {
       connection_health_cleanup: { Args: never; Returns: undefined }
+      connection_message_flow_cleanup: { Args: never; Returns: undefined }
       evolution_health_cleanup: { Args: never; Returns: undefined }
       generate_ticket_protocol: {
         Args: { _company_id: string }
