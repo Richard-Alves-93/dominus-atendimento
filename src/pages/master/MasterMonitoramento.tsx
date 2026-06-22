@@ -501,6 +501,7 @@ export default function MasterMonitoramento() {
       loadLive(false);
       loadHistory(period);
       loadInfraHistory(period);
+      loadConnHistory(period);
       loadConfigStats();
     })();
     return () => {
@@ -512,12 +513,14 @@ export default function MasterMonitoramento() {
   useEffect(() => {
     loadHistory(period);
     loadInfraHistory(period);
-  }, [period, loadHistory, loadInfraHistory]);
+    loadConnHistory(period);
+  }, [period, loadHistory, loadInfraHistory, loadConnHistory]);
 
   const handleRefresh = async () => {
     await loadLive(true);
     await loadHistory(period);
     await loadInfraHistory(period);
+    await loadConnHistory(period);
     await loadConfigStats();
   };
 
