@@ -38,6 +38,16 @@ import {
   Server,
   Wifi,
 } from "lucide-react";
+import {
+  computeEvolutionAlerts,
+  computeConnectionAlerts,
+  computeOscillationAlert,
+  severityClasses,
+  severityLabel,
+  severityRank,
+  recommendationFor,
+  type OperationalAlert,
+} from "@/lib/monitoringAlerts";
 
 // Estados padronizados (preparados para multicanal)
 type OpStatus =
@@ -224,6 +234,8 @@ export default function MasterMonitoramento() {
   const [history, setHistory] = useState<Snapshot[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [period, setPeriod] = useState<HistoryPeriod>("24h");
+  type HealthFilter = "all" | "healthy" | "warning" | "critical" | "offline";
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
     setHistoryLoading(true);
@@ -433,6 +445,57 @@ export default function MasterMonitoramento() {
           : "healthy";
 
 
+  const alerts: OperationalAlert[] = useMemo(() => {
+    const list: OperationalAlert[] = [];
+    list.push(...computeEvolutionAlerts(live));
+    const osc = computeOscillationAlert(
+      history.map((h) => ({ created_at: h.created_at, api_online: h.api_online })),
+    );
+    if (osc) list.push(osc);
+    list.push(
+      ...computeConnectionAlerts(
+        mergedRows.map((r) => ({
+          id: r.id,
+          companyName: r.companyName,
+          channelType: r.channelType,
+          provider: r.provider,
+          name: r.name,
+          health: r.health,
+          status: r.status,
+          lastActivityAt: r.lastActivityAt,
+          lastError: r.lastError,
+        })),
+      ),
+    );
+    return list.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+  }, [live, history, mergedRows]);
+
+  const filteredRows = useMemo(() => {
+    if (healthFilter === "all") return mergedRows;
+    return mergedRows.filter((r) => {
+      switch (healthFilter) {
+        case "healthy":
+          return r.health === "healthy";
+        case "warning":
+          return ["warning", "pending_qr", "pending_auth", "sync_delayed", "rate_limited"].includes(
+            r.health,
+          );
+        case "critical":
+          return r.health === "critical" || r.status === "error";
+        case "offline":
+          return r.health === "offline" || r.status === "disconnected";
+        default:
+          return true;
+      }
+    });
+  }, [mergedRows, healthFilter]);
+
+  const rowHighlight = (h: Health, s: OpStatus) => {
+    if (h === "critical" || s === "error") return "bg-red-500/5 border-l-2 border-l-red-500";
+    if (h === "offline" || s === "disconnected") return "bg-zinc-500/5 border-l-2 border-l-zinc-400";
+    return "";
+  };
+
   const cards = [
     { label: "Total de conexões", value: summary.total, icon: PlugZap, tone: "bg-primary/10 text-primary" },
     { label: "Saudáveis", value: summary.healthy, icon: CheckCircle2, tone: "bg-emerald-500/15 text-emerald-600" },
@@ -441,6 +504,7 @@ export default function MasterMonitoramento() {
     { label: "Críticas", value: summary.critical, icon: Activity, tone: "bg-red-500/15 text-red-600" },
     { label: "Empresas com alerta", value: summary.companiesWithAlert, icon: Server, tone: "bg-primary/10 text-primary" },
   ];
+
 
   return (
     <MasterLayout title="Monitoramento Operacional">
@@ -487,6 +551,58 @@ export default function MasterMonitoramento() {
             </Card>
           ))}
         </div>
+
+        {/* Alertas operacionais */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Alertas operacionais
+            </h3>
+          </div>
+          {alerts.length === 0 ? (
+            <Card className="p-5 flex items-center gap-3 border-emerald-500/30 bg-emerald-500/5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <div>
+                <p className="text-sm font-medium text-emerald-700">Tudo certo no momento</p>
+                <p className="text-xs text-muted-foreground">
+                  Nenhum problema operacional detectado na última verificação.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-3">
+              {alerts.map((a) => (
+                <Card key={a.id} className={`p-4 border ${severityClasses(a.severity)}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className={severityClasses(a.severity)}>
+                          {severityLabel(a.severity)}
+                        </Badge>
+                        {a.scope && (
+                          <span className="text-xs text-muted-foreground truncate">{a.scope}</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold leading-tight">{a.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{a.description}</p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {fmtDate(a.detectedAt)}
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+          {history.length < 4 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Dados históricos insuficientes para detectar oscilação.
+            </p>
+          )}
+        </div>
+
+
 
         {/* Provedores */}
         <div>
@@ -661,11 +777,31 @@ export default function MasterMonitoramento() {
 
         {/* Tabela de conexões */}
         <Card className="overflow-hidden">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold">Conexões e canais</h3>
-            <p className="text-xs text-muted-foreground">
-              Visão multicanal consolidada por empresa.
-            </p>
+          <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold">Conexões e canais</h3>
+              <p className="text-xs text-muted-foreground">
+                Visão multicanal consolidada por empresa.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {([
+                ["all", "Todas"],
+                ["healthy", "Saudáveis"],
+                ["warning", "Atenção"],
+                ["critical", "Críticas"],
+                ["offline", "Offline"],
+              ] as [HealthFilter, string][]).map(([key, label]) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant={healthFilter === key ? "default" : "outline"}
+                  onClick={() => setHealthFilter(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -689,17 +825,17 @@ export default function MasterMonitoramento() {
                       Carregando...
                     </td>
                   </tr>
-                ) : mergedRows.length === 0 ? (
+                ) : filteredRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
-                      Nenhuma conexão registrada.
+                      Nenhuma conexão para o filtro selecionado.
                     </td>
                   </tr>
                 ) : (
-                  mergedRows.map((r) => {
+                  filteredRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
                     return (
-                      <tr key={r.id} className="border-t hover:bg-muted/30">
+                      <tr key={r.id} className={`border-t hover:bg-muted/30 ${rowHighlight(r.health, r.status)}`}>
                         <td className="px-4 py-2">{r.companyName}</td>
                         <td className="px-4 py-2">
                           <span className="inline-flex items-center gap-1.5">
@@ -762,6 +898,34 @@ export default function MasterMonitoramento() {
                 value={fmtDate((selected.raw as any)?.updated_at ?? null)}
               />
               <Field label="Último erro" value={selected.lastError ?? "Nenhum"} />
+
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Saúde operacional
+                </h4>
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="outline" className={healthColor(selected.health)}>
+                    {healthLabel(selected.health)}
+                  </Badge>
+                  <Badge variant="outline">{statusLabel(selected.status)}</Badge>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+                  <p className="font-medium mb-1 text-foreground">Recomendação</p>
+                  <p className="text-muted-foreground">
+                    {recommendationFor({
+                      id: selected.id,
+                      companyName: selected.companyName,
+                      channelType: selected.channelType,
+                      provider: selected.provider,
+                      name: selected.name,
+                      health: selected.health,
+                      status: selected.status,
+                      lastActivityAt: selected.lastActivityAt,
+                      lastError: selected.lastError,
+                    })}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </SheetContent>
