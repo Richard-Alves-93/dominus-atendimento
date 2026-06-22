@@ -596,6 +596,7 @@ Deno.serve(async (req) => {
 
     const data = await collectEvolutionHealth(admin);
     const vps = await collectVpsHealth();
+    const flow = await collectMessageFlow(admin);
 
     let snapshotSaved = false;
     let snapshotId: string | null = null;
@@ -615,6 +616,11 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error("[saveConnectionSnapshots manual] failed", (e as Error)?.message);
       }
+      try {
+        await saveFlowSnapshots(admin, data, flow, snapshotSource);
+      } catch (e) {
+        console.error("[saveFlowSnapshots manual] failed", (e as Error)?.message);
+      }
     }
 
     return json({
@@ -627,7 +633,7 @@ Deno.serve(async (req) => {
         ...data.evoStats,
       },
       infrastructure: vps,
-      connections: attachFlow([...data.connections, ...data.otherChannels], await collectMessageFlow(admin)),
+      connections: attachFlow([...data.connections, ...data.otherChannels], flow),
       fallback: !data.evoOnline,
       snapshot_saved: snapshotSaved,
       snapshot_id: snapshotId,
