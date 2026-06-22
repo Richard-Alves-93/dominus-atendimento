@@ -405,6 +405,7 @@ export default function MasterMonitoramento() {
       setLoading(false);
       loadLive(false);
       loadHistory(period);
+      loadInfraHistory(period);
     })();
     return () => {
       cancelled = true;
@@ -414,11 +415,13 @@ export default function MasterMonitoramento() {
 
   useEffect(() => {
     loadHistory(period);
-  }, [period, loadHistory]);
+    loadInfraHistory(period);
+  }, [period, loadHistory, loadInfraHistory]);
 
   const handleRefresh = async () => {
     await loadLive(true);
     await loadHistory(period);
+    await loadInfraHistory(period);
   };
 
   // Apply live state to rows
