@@ -203,7 +203,12 @@ Deno.serve(async (req) => {
 
     // ---------- CRON MODE ----------
     const cronHeader = req.headers.get("x-cron-secret");
-    if (cronHeader && CRON_SECRET && cronHeader === CRON_SECRET) {
+    if (cronHeader) {
+      const expected = await getCronSecret(admin);
+      if (!expected || cronHeader !== expected) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+      {
       const data = await collectEvolutionHealth(admin);
       let snapshotId: string | null = null;
       let snapshotError: string | null = null;
