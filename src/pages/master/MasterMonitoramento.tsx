@@ -1297,6 +1297,7 @@ export default function MasterMonitoramento() {
                 ) : (
                   filteredRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
+                    const info = stabilityByRow.get(r.id);
                     return (
                       <tr key={r.id} className={`border-t hover:bg-muted/30 ${rowHighlight(r.health, r.status)}`}>
                         <td className="px-4 py-2">{r.companyName}</td>
@@ -1319,8 +1320,17 @@ export default function MasterMonitoramento() {
                             {healthLabel(r.health)}
                           </Badge>
                         </td>
+                        <td className="px-4 py-2">
+                          <Badge
+                            variant="outline"
+                            className={stabilityClasses(info?.stability ?? "unknown")}
+                          >
+                            {stabilityLabel(info?.stability ?? "unknown")}
+                          </Badge>
+                        </td>
                         <td className="px-4 py-2 text-muted-foreground">
-                          {fmtDate(r.lastActivityAt)}
+                          <div>{formatAgo(r.lastActivityAt)}</div>
+                          <div className="text-[10px] opacity-70">{fmtDate(r.lastActivityAt)}</div>
                         </td>
                         <td className="px-4 py-2 text-right">
                           <Button variant="ghost" size="sm" onClick={() => setSelected(r)}>
