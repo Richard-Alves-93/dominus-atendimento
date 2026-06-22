@@ -132,16 +132,24 @@ export default function Equipe() {
 
   const toggleDept = (id: string) => {
     setForm((f) => {
+      const adding = !f.department_ids.includes(id);
+      const rotation = { ...f.rotation };
+      if (adding && rotation[id] === undefined) rotation[id] = true;
       if (isSingleDeptRole(f.role)) {
-        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id] };
+        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id], rotation };
       }
       return {
         ...f,
         department_ids: f.department_ids.includes(id)
           ? f.department_ids.filter((x) => x !== id)
           : [...f.department_ids, id],
+        rotation,
       };
     });
+  };
+
+  const toggleRotation = (id: string, v: boolean) => {
+    setForm((f) => ({ ...f, rotation: { ...f.rotation, [id]: v } }));
   };
 
   const changeRole = (v: Role) => {
