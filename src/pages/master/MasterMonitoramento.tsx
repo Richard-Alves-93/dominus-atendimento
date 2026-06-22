@@ -259,6 +259,16 @@ export default function MasterMonitoramento() {
   };
   const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
 
+  // Snapshots por conexão (Fase 2.7)
+  type ConnHealthRow = {
+    connection_id: string | null;
+    instance_name: string | null;
+    created_at: string;
+    status: string;
+    health: string;
+  };
+  const [connHistory, setConnHistory] = useState<ConnHealthRow[]>([]);
+
   type ConfigStats = {
     lastCronEvo: string | null;
     lastManualEvo: string | null;
