@@ -681,6 +681,8 @@ export default function MasterMonitoramento() {
       loadConnHistory(period);
       loadConfigStats();
       loadFlowTrendSnaps();
+      loadAggregates(aggPeriod);
+      loadLogs();
     })();
     return () => {
       cancelled = true;
@@ -693,6 +695,11 @@ export default function MasterMonitoramento() {
     loadInfraHistory(period);
     loadConnHistory(period);
   }, [period, loadHistory, loadInfraHistory, loadConnHistory]);
+
+  // Fase 2.12: recarregar agregados ao trocar período
+  useEffect(() => {
+    loadAggregates(aggPeriod);
+  }, [aggPeriod, loadAggregates]);
 
   // Phase 2.9: carregar histórico de fluxo ao abrir/trocar período do drawer
   useEffect(() => {
@@ -707,7 +714,10 @@ export default function MasterMonitoramento() {
     await loadConnHistory(period);
     await loadConfigStats();
     await loadFlowTrendSnaps();
+    await loadAggregates(aggPeriod);
+    await loadLogs();
   };
+
 
 
   // Apply live state to rows
