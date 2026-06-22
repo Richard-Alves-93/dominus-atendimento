@@ -42,7 +42,9 @@ interface Department {
   created_at: string;
   allow_general_queue?: boolean;
   allow_stalled_takeover?: boolean;
+  assignment_mode?: "manual" | "round_robin";
 }
+
 
 const badge: Record<string, string> = {
   active: "bg-success/10 text-success border-success/20",
@@ -63,7 +65,7 @@ export default function Setores() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Department | null>(null);
   const [targetId, setTargetId] = useState<string>("");
-  const [form, setForm] = useState({ name: "", description: "", status: "active" as "active" | "inactive", allow_general_queue: false, allow_stalled_takeover: false });
+  const [form, setForm] = useState({ name: "", description: "", status: "active" as "active" | "inactive", allow_general_queue: false, allow_stalled_takeover: false, assignment_mode: "manual" as "manual" | "round_robin" });
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -71,7 +73,7 @@ export default function Setores() {
     setLoading(true);
     const { data } = await (supabase as any)
       .from("departments")
-      .select("id, company_id, name, description, status, deleted_at, created_at, allow_general_queue, allow_stalled_takeover")
+      .select("id, company_id, name, description, status, deleted_at, created_at, allow_general_queue, allow_stalled_takeover, assignment_mode")
       .eq("company_id", activeCompanyId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
@@ -85,12 +87,12 @@ export default function Setores() {
   }, [activeCompanyId]);
 
   const openCreate = () => {
-    setForm({ name: "", description: "", status: "active", allow_general_queue: false, allow_stalled_takeover: false });
+    setForm({ name: "", description: "", status: "active", allow_general_queue: false, allow_stalled_takeover: false, assignment_mode: "manual" });
     setCreating(true);
   };
 
   const openEdit = (d: Department) => {
-    setForm({ name: d.name, description: d.description ?? "", status: d.status, allow_general_queue: !!d.allow_general_queue, allow_stalled_takeover: !!d.allow_stalled_takeover });
+    setForm({ name: d.name, description: d.description ?? "", status: d.status, allow_general_queue: !!d.allow_general_queue, allow_stalled_takeover: !!d.allow_stalled_takeover, assignment_mode: (d.assignment_mode ?? "manual") });
     setEditing(d);
   };
 
@@ -104,7 +106,7 @@ export default function Setores() {
     if (editing) {
       const { error } = await (supabase as any)
         .from("departments")
-        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status, allow_general_queue: form.allow_general_queue, allow_stalled_takeover: form.allow_stalled_takeover })
+        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status, allow_general_queue: form.allow_general_queue, allow_stalled_takeover: form.allow_stalled_takeover, assignment_mode: form.assignment_mode })
         .eq("id", editing.id);
       setBusy(false);
       if (error) {
@@ -121,6 +123,7 @@ export default function Setores() {
         status: form.status,
         allow_general_queue: form.allow_general_queue,
         allow_stalled_takeover: form.allow_stalled_takeover,
+        assignment_mode: form.assignment_mode,
       });
       setBusy(false);
       if (error) {
@@ -390,6 +393,30 @@ export default function Setores() {
                 checked={form.allow_stalled_takeover}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, allow_stalled_takeover: !!v }))}
               />
+            </div>
+            <div className="space-y-1.5 rounded-md border p-3">
+              <Label className="text-sm">Distribuição de atendimentos</Label>
+              <Select
+                value={form.assignment_mode}
+                onValueChange={(v) => setForm((f) => ({ ...f, assignment_mode: v as "manual" | "round_robin" }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="round_robin">Rotativo entre atendentes</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.assignment_mode === "round_robin" ? (
+                <p className="text-xs text-muted-foreground">
+                  Novos atendimentos deste setor poderão ser distribuídos automaticamente entre os atendentes habilitados no rodízio. A aplicação real da distribuição será ativada em uma etapa posterior.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Os atendimentos entram na fila do setor e precisam ser assumidos manualmente.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
