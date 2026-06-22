@@ -344,6 +344,23 @@ export default function MasterMonitoramento() {
     }
   }, []);
 
+  const loadConnHistory = useCallback(async (p: HistoryPeriod) => {
+    try {
+      const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("connection_health_snapshots") as any)
+        .select("connection_id, instance_name, created_at, status, health")
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(5000);
+      if (error) throw error;
+      setConnHistory((data ?? []) as ConnHealthRow[]);
+    } catch {
+      setConnHistory([]);
+    }
+  }, []);
+
+
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
     setHistoryLoading(true);
