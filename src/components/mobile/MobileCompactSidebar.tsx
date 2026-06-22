@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Tag,
   Settings,
+  UserCircle,
   LogOut,
   Zap,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const items: Item[] = [
   { title: "Equipe", url: "/app/equipe", icon: UsersRound, adminOnly: true },
   { title: "Tags", url: "/app/tags", icon: Tag, adminOnly: true },
   { title: "Configurações", url: "/app/configuracoes", icon: Settings, adminOnly: true },
+  { title: "Meu Perfil", url: "/app/perfil", icon: UserCircle },
 ];
 
 export function MobileCompactSidebar() {
