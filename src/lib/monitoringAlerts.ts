@@ -23,6 +23,17 @@ export type EvoLive = {
   error?: string | null;
 } | null;
 
+export type VpsLive = {
+  configured: boolean;
+  ok: boolean;
+  checked_at: string;
+  cpu_percent: number | null;
+  memory_percent: number | null;
+  disk_percent: number | null;
+  health: string;
+  error?: string | null;
+} | null;
+
 export type SnapshotLite = {
   created_at: string;
   api_online: boolean;
