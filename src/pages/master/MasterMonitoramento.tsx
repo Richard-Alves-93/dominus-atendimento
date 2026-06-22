@@ -42,12 +42,16 @@ import {
   computeEvolutionAlerts,
   computeConnectionAlerts,
   computeOscillationAlert,
+  computeVpsAlerts,
+  formatUptime,
   severityClasses,
   severityLabel,
   severityRank,
   recommendationFor,
   type OperationalAlert,
+  type VpsLive,
 } from "@/lib/monitoringAlerts";
+import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
 
 // Estados padronizados (preparados para multicanal)
 type OpStatus =
