@@ -234,6 +234,8 @@ export default function MasterMonitoramento() {
   const [history, setHistory] = useState<Snapshot[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [period, setPeriod] = useState<HistoryPeriod>("24h");
+  type HealthFilter = "all" | "healthy" | "warning" | "critical" | "offline";
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
     setHistoryLoading(true);
