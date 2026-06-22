@@ -12,6 +12,7 @@ import {
   Zap,
   Building,
   UsersRound,
+  UserCircle,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -45,6 +46,7 @@ const configItems = [
   { title: "Equipe", url: "/app/equipe", icon: UsersRound, adminOnly: true },
   { title: "Tags", url: "/app/tags", icon: Tag, adminOnly: true },
   { title: "Configurações", url: "/app/configuracoes", icon: Settings, adminOnly: true },
+  { title: "Meu Perfil", url: "/app/perfil", icon: UserCircle },
 ];
 
 export function AppSidebar() {
