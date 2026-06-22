@@ -96,6 +96,19 @@ export default function Setores() {
     setEditing(d);
   };
 
+  const writeAudit = async (event_type: string, department_id: string, metadata: Record<string, any>) => {
+    try {
+      await (supabase as any).from("audit_logs").insert({
+        company_id: activeCompanyId,
+        event_type,
+        changed_by: profile?.id ?? null,
+        metadata: { department_id, ...metadata },
+      });
+    } catch {
+      // auditoria não deve quebrar fluxo principal
+    }
+  };
+
   const submit = async () => {
     if (!canManage || !activeCompanyId) return;
     if (!form.name.trim()) {
@@ -104,19 +117,45 @@ export default function Setores() {
     }
     setBusy(true);
     if (editing) {
+      const prev = {
+        name: editing.name,
+        status: editing.status,
+        assignment_mode: editing.assignment_mode ?? "manual",
+      };
+      const next = {
+        name: form.name.trim(),
+        status: form.status,
+        assignment_mode: form.assignment_mode,
+      };
       const { error } = await (supabase as any)
         .from("departments")
-        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status, allow_general_queue: form.allow_general_queue, allow_stalled_takeover: form.allow_stalled_takeover, assignment_mode: form.assignment_mode })
+        .update({ name: next.name, description: form.description.trim() || null, status: next.status, allow_general_queue: form.allow_general_queue, allow_stalled_takeover: form.allow_stalled_takeover, assignment_mode: next.assignment_mode })
         .eq("id", editing.id);
       setBusy(false);
       if (error) {
         toast({ title: "Erro", description: error.message, variant: "destructive" });
         return;
       }
+      if (prev.assignment_mode !== next.assignment_mode) {
+        await writeAudit("department.assignment_mode_changed", editing.id, {
+          department_name: next.name,
+          old_assignment_mode: prev.assignment_mode,
+          new_assignment_mode: next.assignment_mode,
+        });
+      }
+      const changed: Record<string, { from: any; to: any }> = {};
+      if (prev.name !== next.name) changed.name = { from: prev.name, to: next.name };
+      if (prev.status !== next.status) changed.status = { from: prev.status, to: next.status };
+      if (Object.keys(changed).length > 0) {
+        await writeAudit("department.updated", editing.id, {
+          department_name: next.name,
+          changes: changed,
+        });
+      }
       toast({ title: "Setor atualizado" });
       setEditing(null);
     } else {
-      const { error } = await (supabase as any).from("departments").insert({
+      const { data: created, error } = await (supabase as any).from("departments").insert({
         company_id: activeCompanyId,
         name: form.name.trim(),
         description: form.description.trim() || null,
@@ -124,11 +163,18 @@ export default function Setores() {
         allow_general_queue: form.allow_general_queue,
         allow_stalled_takeover: form.allow_stalled_takeover,
         assignment_mode: form.assignment_mode,
-      });
+      }).select("id").single();
       setBusy(false);
       if (error) {
         toast({ title: "Erro", description: error.message, variant: "destructive" });
         return;
+      }
+      if (created?.id) {
+        await writeAudit("department.created", created.id, {
+          department_name: form.name.trim(),
+          assignment_mode: form.assignment_mode,
+          status: form.status,
+        });
       }
       toast({ title: "Setor criado" });
       setCreating(false);
