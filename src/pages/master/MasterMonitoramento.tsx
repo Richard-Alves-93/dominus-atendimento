@@ -800,11 +800,35 @@ export default function MasterMonitoramento() {
       );
     }
     list.push(...computeVpsAlerts(vps));
+
+    // Fase 2.10 — Alertas por tendência
+    const latencyTrend = computeEvolutionLatencyTrend(
+      history.map((h) => ({ created_at: h.created_at, response_time_ms: h.response_time_ms })),
+    );
+    if (latencyTrend) list.push(latencyTrend);
+    list.push(...computeVpsTrendAlerts(infraHistory, vps));
+
+    // Mapa de conexões para tendência de fluxo
+    const connInfoMap = new Map<string, { id: string; companyName: string; name: string; offline: boolean }>();
+    for (const r of mergedRows) {
+      const raw = r.raw as any;
+      const connId = raw?.id ?? raw?.channel_id;
+      if (!connId) continue;
+      const offline = r.status === "disconnected" || r.health === "offline" || r.status === "error";
+      connInfoMap.set(String(connId), {
+        id: r.id,
+        companyName: r.companyName,
+        name: r.name,
+        offline,
+      });
+    }
+    list.push(...computeFlowTrendAlerts(flowTrendSnaps, connInfoMap));
+
     // Dedup por id
     const seen = new Set<string>();
     const dedup = list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
     return dedup.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows, vps, stabilityByRow, flowByRow]);
+  }, [live, history, mergedRows, vps, stabilityByRow, flowByRow, infraHistory, flowTrendSnaps]);
 
 
   const filteredRows = useMemo(() => {
