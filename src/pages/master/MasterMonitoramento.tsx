@@ -474,6 +474,47 @@ export default function MasterMonitoramento() {
     }
   }, []);
 
+  // Fase 2.12: carregar agregados (7/30 dias)
+  const loadAggregates = useCallback(async (days: AggPeriod) => {
+    setAggLoading(true);
+    try {
+      const [evo, vps, flow, conn] = await Promise.all([
+        (supabase as any).rpc("master_evolution_aggregates", { _days: days }),
+        (supabase as any).rpc("master_vps_aggregates", { _days: days }),
+        (supabase as any).rpc("master_flow_aggregates", { _days: days }),
+        (supabase as any).rpc("master_connection_aggregates", { _days: days, _limit: 10 }),
+      ]);
+      setAggEvo(Array.isArray(evo.data) ? evo.data[0] ?? null : evo.data ?? null);
+      setAggVps(Array.isArray(vps.data) ? vps.data[0] ?? null : vps.data ?? null);
+      setAggFlow(Array.isArray(flow.data) ? flow.data[0] ?? null : flow.data ?? null);
+      setAggTopConn(Array.isArray(conn.data) ? conn.data : []);
+    } catch {
+      setAggEvo(null); setAggVps(null); setAggFlow(null); setAggTopConn([]);
+    } finally {
+      setAggLoading(false);
+    }
+  }, []);
+
+  // Fase 2.13: carregar logs do monitoramento
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const { data, error } = await (supabase.from("monitoring_events") as any)
+        .select("id, created_at, event_type, severity, source, provider, channel, company_id, connection_id, title, description")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      setLogs((data ?? []) as MonitoringLog[]);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
+
+
+
 
 
 
