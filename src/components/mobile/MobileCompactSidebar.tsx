@@ -8,6 +8,9 @@ import {
   Building,
   UsersRound,
   CalendarDays,
+  Tag,
+  Settings,
+  LogOut,
   Zap,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -35,6 +38,8 @@ const items: Item[] = [
   { title: "Conexões", url: "/app/conexoes", icon: Phone, adminOnly: true },
   { title: "Setores", url: "/app/setores", icon: Building, adminOnly: true },
   { title: "Equipe", url: "/app/equipe", icon: UsersRound, adminOnly: true },
+  { title: "Tags", url: "/app/tags", icon: Tag, adminOnly: true },
+  { title: "Configurações", url: "/app/configuracoes", icon: Settings, adminOnly: true },
 ];
 
 export function MobileCompactSidebar() {
