@@ -1394,6 +1394,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      evolution_health_cleanup: { Args: never; Returns: undefined }
       generate_ticket_protocol: {
         Args: { _company_id: string }
         Returns: string
