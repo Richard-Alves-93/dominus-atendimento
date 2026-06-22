@@ -30,6 +30,40 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function logEvent(
+  admin: ReturnType<typeof createClient>,
+  args: {
+    event_type: string;
+    severity?: "info" | "warning" | "critical";
+    source?: string;
+    provider?: string | null;
+    channel?: string | null;
+    company_id?: string | null;
+    connection_id?: string | null;
+    title: string;
+    description?: string | null;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  try {
+    await admin.rpc("monitoring_events_log" as any, {
+      _event_type: args.event_type,
+      _severity: args.severity ?? "info",
+      _source: args.source ?? "monitoring",
+      _provider: args.provider ?? null,
+      _channel: args.channel ?? null,
+      _company_id: args.company_id ?? null,
+      _connection_id: args.connection_id ?? null,
+      _title: args.title,
+      _description: args.description ?? null,
+      _metadata: args.metadata ?? {},
+    });
+  } catch (_e) {
+    // never break monitoring because logging failed
+  }
+}
+
+
 function evoBase() {
   return (EVO_URL ?? "").replace(/\/$/, "");
 }
