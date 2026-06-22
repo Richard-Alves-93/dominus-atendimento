@@ -638,6 +638,7 @@ export default function MasterMonitoramento() {
     await loadInfraHistory(period);
     await loadConnHistory(period);
     await loadConfigStats();
+    await loadFlowTrendSnaps();
   };
 
 
