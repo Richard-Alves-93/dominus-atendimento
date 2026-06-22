@@ -515,6 +515,7 @@ Deno.serve(async (req) => {
       try {
         const data = await collectEvolutionHealth(admin);
         const vps = await collectVpsHealth();
+        const flow = await collectMessageFlow(admin);
         let snapshotId: string | null = null;
         let snapshotError: string | null = null;
         try {
@@ -532,9 +533,16 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error("[saveConnectionSnapshots cron] failed", (e as Error)?.message);
         }
+        let flowSnapshotsCount = 0;
+        try {
+          flowSnapshotsCount = await saveFlowSnapshots(admin, data, flow, "cron");
+        } catch (e) {
+          console.error("[saveFlowSnapshots cron] failed", (e as Error)?.message);
+        }
         await cleanupOldSnapshots(admin);
         await cleanupOldInfraSnapshots(admin);
         await cleanupOldConnectionSnapshots(admin);
+        await cleanupOldFlowSnapshots(admin);
         return json({
           mode: "cron",
           checked_at: new Date().toISOString(),
