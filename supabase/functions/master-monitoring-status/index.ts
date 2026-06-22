@@ -116,6 +116,7 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
     const m = mapWaStatus(effective);
     return {
       connection_id: inst.id,
+      channel_id: inst.channel_id ?? null,
       company_id: inst.company_id,
       company_name: companies.get(inst.company_id) ?? "—",
       channel: "whatsapp",
@@ -125,11 +126,13 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
       status: m.status,
       health: m.health,
       last_activity_at: inst.updated_at ?? inst.connected_at ?? null,
+      last_webhook_at: inst.last_webhook_at ?? null,
       last_checked_at: new Date().toISOString(),
       error: inst.settings_sync_error ?? null,
       live_checked: liveState !== null && liveState !== undefined,
     };
   });
+
 
   const evoStats = {
     total_instances: connections.length,
