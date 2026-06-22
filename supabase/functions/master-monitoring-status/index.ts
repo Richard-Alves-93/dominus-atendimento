@@ -528,6 +528,13 @@ Deno.serve(async (req) => {
     if (cronHeader) {
       const expected = await getCronSecret(admin);
       if (!expected || cronHeader !== expected) {
+        await logEvent(admin, {
+          event_type: "cron.unauthorized",
+          severity: "warning",
+          source: "cron",
+          title: "Tentativa de cron sem secret válido",
+          description: "Requisição rejeitada (401).",
+        });
         return json({ error: "Unauthorized" }, 401);
       }
       // Prevent overlapping cron executions using a Postgres advisory lock.
