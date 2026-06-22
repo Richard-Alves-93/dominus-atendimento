@@ -1533,8 +1533,63 @@ export default function MasterMonitoramento() {
                   );
                 })()}
               </div>
+
+              {/* Fluxo de mensagens (Fase 2.8) */}
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Fluxo de mensagens
+                </h4>
+                {(() => {
+                  const flow = flowByRow.get(selected.id) ?? null;
+                  const conn = {
+                    id: selected.id, companyName: selected.companyName, channelType: selected.channelType,
+                    provider: selected.provider, name: selected.name, health: selected.health,
+                    status: selected.status, lastActivityAt: selected.lastActivityAt, lastError: selected.lastError,
+                  };
+                  const diag = computeFlowDiagnosis(conn, flow);
+                  if (!flow) {
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        Sem dados suficientes para diagnóstico.
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <Badge variant="outline" className={flowHealthClasses(diag.health)}>
+                          {flowHealthLabel(diag.health)}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                        <div className="text-muted-foreground">Último webhook</div>
+                        <div className="text-right">{formatAgo(flow.last_webhook_at)}</div>
+                        <div className="text-muted-foreground">Última recebida</div>
+                        <div className="text-right">{formatAgo(flow.last_inbound_at)}</div>
+                        <div className="text-muted-foreground">Última enviada</div>
+                        <div className="text-right">{formatAgo(flow.last_outbound_at)}</div>
+                        <div className="text-muted-foreground">Recebidas 24h</div>
+                        <div className="text-right">{flow.inbound_24h}</div>
+                        <div className="text-muted-foreground">Enviadas 24h</div>
+                        <div className="text-right">{flow.outbound_24h}</div>
+                        <div className="text-muted-foreground">Falhas 24h</div>
+                        <div className={`text-right ${flow.failed_24h > 0 ? "text-red-600 font-medium" : ""}`}>
+                          {flow.failed_24h}
+                        </div>
+                        <div className="text-muted-foreground">Pendentes 24h</div>
+                        <div className="text-right">{flow.pending_24h}</div>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1 text-foreground">Diagnóstico</p>
+                        <p className="text-muted-foreground">{diag.diagnosis}</p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           )}
+
         </SheetContent>
       </Sheet>
     </MasterLayout>
