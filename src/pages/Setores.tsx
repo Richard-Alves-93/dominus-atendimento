@@ -73,7 +73,7 @@ export default function Setores() {
     setLoading(true);
     const { data } = await (supabase as any)
       .from("departments")
-      .select("id, company_id, name, description, status, deleted_at, created_at, allow_general_queue, allow_stalled_takeover")
+      .select("id, company_id, name, description, status, deleted_at, created_at, allow_general_queue, allow_stalled_takeover, assignment_mode")
       .eq("company_id", activeCompanyId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
