@@ -365,6 +365,19 @@ Deno.serve(async (req) => {
       if (!expected || cronHeader !== expected) {
         return json({ error: "Unauthorized" }, 401);
       }
+      // Prevent overlapping cron executions using a Postgres advisory lock.
+      // Lock key is an arbitrary stable int chosen for this job.
+      const LOCK_KEY = 91823471;
+      const { data: lockRow } = await admin.rpc("pg_try_advisory_lock" as any, { key: LOCK_KEY }).maybeSingle?.() ?? { data: null };
+      let gotLock = false;
+      try {
+        const r = await admin.rpc("pg_try_advisory_lock" as any, { key: LOCK_KEY });
+        gotLock = r?.data === true;
+      } catch { gotLock = true; /* fallback: proceed if RPC missing */ }
+      if (!gotLock) {
+        return json({ mode: "cron", skipped: true, reason: "already_running", checked_at: new Date().toISOString() });
+      }
+      try {
       const data = await collectEvolutionHealth(admin);
       const vps = await collectVpsHealth();
       let snapshotId: string | null = null;
