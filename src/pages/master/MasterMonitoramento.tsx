@@ -288,6 +288,33 @@ export default function MasterMonitoramento() {
   const [exportPeriod, setExportPeriod] = useState<ExportPeriod>("24h");
   const [exporting, setExporting] = useState<string | null>(null);
 
+  // Fase 2.12: agregados semanais/mensais
+  type AggPeriod = 7 | 30;
+  const [aggPeriod, setAggPeriod] = useState<AggPeriod>(7);
+  const [aggEvo, setAggEvo] = useState<any | null>(null);
+  const [aggVps, setAggVps] = useState<any | null>(null);
+  const [aggFlow, setAggFlow] = useState<any | null>(null);
+  const [aggTopConn, setAggTopConn] = useState<any[]>([]);
+  const [aggLoading, setAggLoading] = useState(false);
+
+  // Fase 2.13: logs do monitoramento
+  type MonitoringLog = {
+    id: string;
+    created_at: string;
+    event_type: string;
+    severity: string;
+    source: string;
+    provider: string | null;
+    channel: string | null;
+    company_id: string | null;
+    connection_id: string | null;
+    title: string;
+    description: string | null;
+  };
+  const [logs, setLogs] = useState<MonitoringLog[]>([]);
+  const [logsFilter, setLogsFilter] = useState<string>("todos");
+  const [logsLoading, setLogsLoading] = useState(false);
+
   // Snapshots por conexão (Fase 2.7)
   type ConnHealthRow = {
     connection_id: string | null;
