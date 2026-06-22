@@ -510,6 +510,11 @@ Deno.serve(async (req) => {
       try {
         if (vps.configured) await saveVpsSnapshot(admin, vps, snapshotSource);
       } catch (_e) { /* ignore */ }
+      try {
+        await saveConnectionSnapshots(admin, data, snapshotSource);
+      } catch (e) {
+        console.error("[saveConnectionSnapshots manual] failed", (e as Error)?.message);
+      }
     }
 
     return json({
