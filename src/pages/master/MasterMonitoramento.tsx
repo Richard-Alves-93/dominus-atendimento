@@ -257,6 +257,10 @@ export default function MasterMonitoramento() {
 
   const [vps, setVps] = useState<NonNullable<VpsLive> | null>(null);
 
+  // Phase 2.8: message-flow map keyed by channel_id
+  const [flowByChannel, setFlowByChannel] = useState<Map<string, NonNullable<MessageFlow>>>(new Map());
+
+
   type InfraSnapshot = {
     created_at: string;
     cpu_percent: number | null;
