@@ -30,7 +30,12 @@ export type VpsLive = {
   cpu_percent: number | null;
   memory_percent: number | null;
   disk_percent: number | null;
+  load_average: number | null;
+  uptime_seconds: number | null;
+  hostname: string | null;
   health: string;
+  response_time_ms?: number | null;
+  status?: string;
   error?: string | null;
 } | null;
 
