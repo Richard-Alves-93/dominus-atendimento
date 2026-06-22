@@ -124,6 +124,7 @@ export default function Equipe() {
       phone: m.profile?.phone ?? "",
       role: m.role,
       department_ids: m.departments.map((d) => d.department_id),
+      rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
     });
