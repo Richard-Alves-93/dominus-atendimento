@@ -38,6 +38,16 @@ import {
   Server,
   Wifi,
 } from "lucide-react";
+import {
+  computeEvolutionAlerts,
+  computeConnectionAlerts,
+  computeOscillationAlert,
+  severityClasses,
+  severityLabel,
+  severityRank,
+  recommendationFor,
+  type OperationalAlert,
+} from "@/lib/monitoringAlerts";
 
 // Estados padronizados (preparados para multicanal)
 type OpStatus =
