@@ -69,7 +69,6 @@ export default function Equipe() {
     full_name: "", email: "", phone: "",
     role: "agent" as Role,
     department_ids: [] as string[],
-    rotation: {} as Record<string, boolean>,
     signature: "", signature_enabled: true,
   };
   const [form, setForm] = useState(empty);
@@ -124,7 +123,6 @@ export default function Equipe() {
       phone: m.profile?.phone ?? "",
       role: m.role,
       department_ids: m.departments.map((d) => d.department_id),
-      rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
     });
@@ -132,24 +130,16 @@ export default function Equipe() {
 
   const toggleDept = (id: string) => {
     setForm((f) => {
-      const adding = !f.department_ids.includes(id);
-      const rotation = { ...f.rotation };
-      if (adding && rotation[id] === undefined) rotation[id] = true;
       if (isSingleDeptRole(f.role)) {
-        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id], rotation };
+        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id] };
       }
       return {
         ...f,
         department_ids: f.department_ids.includes(id)
           ? f.department_ids.filter((x) => x !== id)
           : [...f.department_ids, id],
-        rotation,
       };
     });
-  };
-
-  const toggleRotation = (id: string, v: boolean) => {
-    setForm((f) => ({ ...f, rotation: { ...f.rotation, [id]: v } }));
   };
 
   const changeRole = (v: Role) => {
@@ -201,15 +191,6 @@ export default function Equipe() {
         ? "Senha provisória enviada por WhatsApp."
         : `Cadastro feito. Envio WhatsApp pendente: ${d?.wa_error ?? "indisponível"}`,
     });
-    // Apply rotation opt-outs created by create-company-user (defaults to true).
-    const optOuts = form.department_ids.filter((dep) => form.rotation[dep] === false);
-    if (optOuts.length && d?.user_id) {
-      await (supabase as any).from("department_users")
-        .update({ participates_in_rotation: false })
-        .eq("company_id", activeCompanyId)
-        .eq("user_id", d.user_id)
-        .in("department_id", optOuts);
-    }
     setCreating(false);
     await load();
   };
@@ -238,7 +219,6 @@ export default function Equipe() {
       const rows = form.department_ids.map((dep) => ({
         user_id: editing.user_id, company_id: activeCompanyId, department_id: dep,
         role: form.role === "manager" ? "manager" : "agent", status: "active",
-        participates_in_rotation: form.rotation[dep] !== false,
       }));
       await (supabase as any).from("department_users").insert(rows);
     }
@@ -450,37 +430,14 @@ export default function Equipe() {
                   )}
                   {depts.map((d) => {
                     const selected = form.department_ids.includes(d.id);
-                    const isRR = d.assignment_mode === "round_robin";
-                    const rot = form.rotation[d.id] !== false;
                     return (
-                      <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer flex-1 min-w-0">
-                          <Checkbox checked={selected} onCheckedChange={() => toggleDept(d.id)} />
-                          <span className="truncate">{d.name}</span>
-                          {isRR && <Badge variant="outline" className="text-[10px] py-0">Rodízio</Badge>}
-                        </label>
-                        {selected && isRR && (
-                          <div className="flex items-center gap-2 pl-6 sm:pl-0">
-                            <Switch
-                              id={`rot-${d.id}`}
-                              checked={rot}
-                              onCheckedChange={(v) => toggleRotation(d.id, v)}
-                              disabled={!canManage}
-                            />
-                            <Label htmlFor={`rot-${d.id}`} className="text-xs cursor-pointer text-muted-foreground">
-                              Participa do rodízio
-                            </Label>
-                          </div>
-                        )}
-                      </div>
+                      <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={selected} onCheckedChange={() => toggleDept(d.id)} />
+                        <span className="truncate">{d.name}</span>
+                      </label>
                     );
                   })}
                 </div>
-                {form.department_ids.some((id) => depts.find((d) => d.id === id)?.assignment_mode === "round_robin") && (
-                  <p className="text-xs text-muted-foreground">
-                    Quando o setor está em modo rotativo, apenas usuários marcados receberão atendimentos automaticamente (aplicação real virá em uma próxima fase).
-                  </p>
-                )}
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Assinatura</Label>
