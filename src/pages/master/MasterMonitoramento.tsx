@@ -476,11 +476,31 @@ export default function MasterMonitoramento() {
       if (error) throw error;
       const evo = data?.evolution ?? {};
       const map: Record<string, OpStatus> = {};
+      const flowMap = new Map<string, NonNullable<MessageFlow>>();
       for (const c of (data?.connections ?? []) as any[]) {
         if (c?.provider === "evolution" && c?.instance_name && c?.live_checked) {
           map[c.instance_name] = c.status as OpStatus;
         }
+        if (c?.channel_id && c?.flow) {
+          flowMap.set(String(c.channel_id), {
+            inbound_24h: Number(c.flow.inbound_24h ?? 0),
+            outbound_24h: Number(c.flow.outbound_24h ?? 0),
+            failed_24h: Number(c.flow.failed_24h ?? 0),
+            pending_24h: Number(c.flow.pending_24h ?? 0),
+            last_inbound_at: c.flow.last_inbound_at ?? null,
+            last_outbound_at: c.flow.last_outbound_at ?? null,
+            last_webhook_at: c.last_webhook_at ?? null,
+          });
+        } else if (c?.channel_id && c?.last_webhook_at) {
+          flowMap.set(String(c.channel_id), {
+            inbound_24h: 0, outbound_24h: 0, failed_24h: 0, pending_24h: 0,
+            last_inbound_at: null, last_outbound_at: null,
+            last_webhook_at: c.last_webhook_at,
+          });
+        }
       }
+      setFlowByChannel(flowMap);
+
       setLive({
         checked_at: data?.checked_at ?? new Date().toISOString(),
         online: !!evo.online,
