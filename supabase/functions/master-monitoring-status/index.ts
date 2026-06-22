@@ -197,6 +197,161 @@ async function cleanupOldSnapshots(admin: ReturnType<typeof createClient>) {
   }
 }
 
+type VpsHealth = {
+  configured: boolean;
+  ok: boolean;
+  checked_at: string;
+  response_time_ms: number | null;
+  status: string;
+  health: "healthy" | "warning" | "critical" | "offline" | "unknown" | "not_configured";
+  cpu_percent: number | null;
+  memory_percent: number | null;
+  disk_percent: number | null;
+  load_average: number | null;
+  uptime_seconds: number | null;
+  hostname: string | null;
+  error: string | null;
+};
+
+function num(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function vpsHealthFrom(cpu: number | null, mem: number | null, disk: number | null, ok: boolean): VpsHealth["health"] {
+  if (!ok) return "offline";
+  const crit =
+    (cpu != null && cpu >= 95) ||
+    (mem != null && mem >= 95) ||
+    (disk != null && disk >= 90);
+  if (crit) return "critical";
+  const warn =
+    (cpu != null && cpu >= 85) ||
+    (mem != null && mem >= 85) ||
+    (disk != null && disk >= 80);
+  if (warn) return "warning";
+  return "healthy";
+}
+
+async function collectVpsHealth(): Promise<VpsHealth> {
+  const now = new Date().toISOString();
+  if (!VPS_URL || !VPS_SECRET) {
+    return {
+      configured: false,
+      ok: false,
+      checked_at: now,
+      response_time_ms: null,
+      status: "not_configured",
+      health: "not_configured",
+      cpu_percent: null,
+      memory_percent: null,
+      disk_percent: null,
+      load_average: null,
+      uptime_seconds: null,
+      hostname: null,
+      error: null,
+    };
+  }
+  const started = Date.now();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(VPS_URL, {
+      headers: { "x-monitoring-secret": VPS_SECRET, "Content-Type": "application/json" },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    const rtt = Date.now() - started;
+    if (!res.ok) {
+      return {
+        configured: true,
+        ok: false,
+        checked_at: now,
+        response_time_ms: rtt,
+        status: "error",
+        health: "offline",
+        cpu_percent: null,
+        memory_percent: null,
+        disk_percent: null,
+        load_average: null,
+        uptime_seconds: null,
+        hostname: null,
+        error: `HTTP ${res.status}`,
+      };
+    }
+    const body = await res.json().catch(() => ({} as any));
+    const cpu = num(body?.cpu_percent ?? body?.cpu);
+    const mem = num(body?.memory_percent ?? body?.memory);
+    const disk = num(body?.disk_percent ?? body?.disk);
+    const load = num(body?.load_average ?? body?.load);
+    const up = num(body?.uptime_seconds ?? body?.uptime);
+    const ok = body?.ok !== false;
+    return {
+      configured: true,
+      ok,
+      checked_at: typeof body?.checked_at === "string" ? body.checked_at : now,
+      response_time_ms: rtt,
+      status: ok ? "online" : "offline",
+      health: vpsHealthFrom(cpu, mem, disk, ok),
+      cpu_percent: cpu,
+      memory_percent: mem,
+      disk_percent: disk,
+      load_average: load,
+      uptime_seconds: up != null ? Math.trunc(up) : null,
+      hostname: typeof body?.hostname === "string" ? body.hostname.slice(0, 80) : null,
+      error: null,
+    };
+  } catch (e) {
+    return {
+      configured: true,
+      ok: false,
+      checked_at: now,
+      response_time_ms: Date.now() - started,
+      status: "error",
+      health: "offline",
+      cpu_percent: null,
+      memory_percent: null,
+      disk_percent: null,
+      load_average: null,
+      uptime_seconds: null,
+      hostname: null,
+      error: (e as Error)?.message?.slice(0, 120) ?? "fetch_failed",
+    };
+  }
+}
+
+async function saveVpsSnapshot(admin: ReturnType<typeof createClient>, v: VpsHealth, source: string) {
+  if (!v.configured) return null;
+  const { data, error } = await admin
+    .from("infrastructure_health_snapshots")
+    .insert({
+      source,
+      status: v.status,
+      health: v.health,
+      cpu_percent: v.cpu_percent,
+      memory_percent: v.memory_percent,
+      disk_percent: v.disk_percent,
+      load_average: v.load_average,
+      uptime_seconds: v.uptime_seconds,
+      response_time_ms: v.response_time_ms,
+      metadata: { hostname: v.hostname, error: v.error },
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+async function cleanupOldInfraSnapshots(admin: ReturnType<typeof createClient>) {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await admin.from("infrastructure_health_snapshots").delete().lt("created_at", cutoff);
+  } catch (e) {
+    console.error("[cleanupOldInfraSnapshots] failed", (e as Error)?.message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
