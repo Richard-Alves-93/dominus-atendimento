@@ -319,3 +319,160 @@ export function formatUptime(seconds: number | null | undefined): string {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
+
+// ===== Stability per connection =====
+
+export type ConnectionSnapshot = {
+  created_at: string;
+  status: string;
+  health: string;
+};
+
+export type Stability = "stable" | "warning" | "unstable" | "critical" | "unknown";
+
+export function stabilityLabel(s: Stability): string {
+  switch (s) {
+    case "stable": return "Estável";
+    case "warning": return "Atenção";
+    case "unstable": return "Instável";
+    case "critical": return "Crítica";
+    default: return "Sem dados";
+  }
+}
+
+export function stabilityClasses(s: Stability): string {
+  switch (s) {
+    case "stable": return "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
+    case "warning": return "bg-amber-500/15 text-amber-600 border-amber-500/30";
+    case "unstable": return "bg-orange-500/15 text-orange-600 border-orange-500/30";
+    case "critical": return "bg-red-500/15 text-red-600 border-red-500/30";
+    default: return "bg-zinc-500/15 text-zinc-600 border-zinc-500/30";
+  }
+}
+
+export type StabilityInfo = {
+  stability: Stability;
+  transitions: number;
+  connectedDisconnectedFlips: number;
+  sampleSize: number;
+  recentStates: string[];
+};
+
+export function computeConnectionStability(snaps: ConnectionSnapshot[]): StabilityInfo {
+  if (!snaps || snaps.length < 3) {
+    return {
+      stability: "unknown",
+      transitions: 0,
+      connectedDisconnectedFlips: 0,
+      sampleSize: snaps?.length ?? 0,
+      recentStates: snaps?.slice(-5).map((s) => s.status) ?? [],
+    };
+  }
+  const recent = snaps.slice(-10);
+  let transitions = 0;
+  let flips = 0;
+  for (let i = 1; i < recent.length; i++) {
+    if (recent[i].status !== recent[i - 1].status) {
+      transitions++;
+      const a = recent[i - 1].status;
+      const b = recent[i].status;
+      if ((a === "connected" && b === "disconnected") || (a === "disconnected" && b === "connected")) {
+        flips++;
+      }
+    }
+  }
+  let stability: Stability = "stable";
+  if (transitions >= 4) stability = "critical";
+  else if (flips >= 2) stability = "unstable";
+  else if (transitions >= 2) stability = "warning";
+  return {
+    stability,
+    transitions,
+    connectedDisconnectedFlips: flips,
+    sampleSize: recent.length,
+    recentStates: recent.map((s) => s.status),
+  };
+}
+
+export function recommendationForConnection(
+  conn: ConnLite,
+  info: StabilityInfo,
+): string {
+  if (info.stability === "unknown") {
+    return "Dados históricos insuficientes para diagnóstico.";
+  }
+  if (conn.health === "critical" || conn.status === "error") {
+    return "Conexão crítica. Verifique se a Evolution está respondendo e se a instância exige novo QR Code.";
+  }
+  if (conn.status === "disconnected" || conn.health === "offline") {
+    return "Conexão offline. Verifique QR Code ou sessão da Evolution.";
+  }
+  if (info.stability === "critical" || info.stability === "unstable") {
+    return "Conexão oscilando. Verifique instabilidade da Evolution ou rede da VPS.";
+  }
+  if (info.stability === "warning") {
+    return "Conexão com pequenas oscilações no período recente. Acompanhar.";
+  }
+  if (conn.lastActivityAt) {
+    const ageMs = Date.now() - new Date(conn.lastActivityAt).getTime();
+    if (ageMs > 72 * 60 * 60 * 1000) {
+      return "Conexão sem atividade há mais de 72h. Verifique se o número ainda está em uso.";
+    }
+    if (ageMs > 24 * 60 * 60 * 1000) {
+      return "Conexão sem atividade recente. Verifique se o número ainda está em uso.";
+    }
+  }
+  return "Conexão estável no período recente.";
+}
+
+export function statusLabelPt(s: string): string {
+  switch ((s ?? "").toLowerCase()) {
+    case "connected": return "Conectado";
+    case "disconnected": return "Desconectado";
+    case "connecting": return "Conectando";
+    case "error": return "Erro";
+    case "disabled": return "Desativado";
+    case "unknown": return "Desconhecido";
+    default: return s ?? "Desconhecido";
+  }
+}
+
+export function formatAgo(iso: string | null | undefined): string {
+  if (!iso) return "Sem registro";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "Agora mesmo";
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+export function computeStabilityAlerts(
+  conn: ConnLite,
+  info: StabilityInfo,
+): OperationalAlert[] {
+  const alerts: OperationalAlert[] = [];
+  if (info.stability === "critical") {
+    alerts.push({
+      id: `conn-osc-critical-${conn.id}`,
+      severity: "critical",
+      title: "Conexão oscilando",
+      description: `${conn.companyName} · ${conn.name}: ${info.transitions} mudanças de estado nos últimos ${info.sampleSize} snapshots.`,
+      scope: `${conn.companyName} · ${conn.name}`,
+      detectedAt: now(),
+    });
+  } else if (info.stability === "unstable" || info.stability === "warning") {
+    alerts.push({
+      id: `conn-osc-warning-${conn.id}`,
+      severity: "warning",
+      title: "Conexão com oscilação",
+      description: `${conn.companyName} · ${conn.name}: ${info.transitions} mudanças nos últimos ${info.sampleSize} snapshots.`,
+      scope: `${conn.companyName} · ${conn.name}`,
+      detectedAt: now(),
+    });
+  }
+  return alerts;
+}
