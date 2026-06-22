@@ -959,7 +959,7 @@ const TicketsDesktopLayout = () => {
   });
   const fetchMessagesForTicket = async (ticketId: string) => {
     const t0 = performance.now();
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("messages")
       .select(MESSAGE_SELECT_FIELDS)
       .eq("company_id", activeCompanyId!)
