@@ -1399,6 +1399,7 @@ export type Database = {
         Args: { _company_id: string }
         Returns: string
       }
+      get_monitoring_cron_secret: { Args: never; Returns: string }
       has_schedule_conflict: {
         Args: {
           p_assigned_user_id: string
