@@ -691,12 +691,34 @@ export default function MasterMonitoramento() {
         ),
       );
     }
+    // Alertas de fluxo de mensagens por conexão (Fase 2.8)
+    for (const r of mergedRows) {
+      const flow = flowByRow.get(r.id) ?? null;
+      if (!flow) continue;
+      list.push(
+        ...computeFlowAlerts(
+          {
+            id: r.id,
+            companyName: r.companyName,
+            channelType: r.channelType,
+            provider: r.provider,
+            name: r.name,
+            health: r.health,
+            status: r.status,
+            lastActivityAt: r.lastActivityAt,
+            lastError: r.lastError,
+          },
+          flow,
+        ),
+      );
+    }
     list.push(...computeVpsAlerts(vps));
     // Dedup por id
     const seen = new Set<string>();
     const dedup = list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
     return dedup.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows, vps, stabilityByRow]);
+  }, [live, history, mergedRows, vps, stabilityByRow, flowByRow]);
+
 
   const filteredRows = useMemo(() => {
     if (healthFilter === "all") return mergedRows;
