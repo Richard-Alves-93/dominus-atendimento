@@ -64,6 +64,19 @@ import {
   type ConnectionSnapshot,
   type MessageFlow,
 } from "@/lib/monitoringAlerts";
+import {
+  computeEvolutionLatencyTrend,
+  computeVpsTrendAlerts,
+  computeFlowTrendAlerts,
+  rowsToCsv,
+  downloadCsv,
+  exportPeriodHours,
+  EXPORT_MAX_ROWS,
+  type ExportPeriod,
+  type FlowTrendSnap,
+} from "@/lib/monitoringTrends";
+import { Download } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
 
 
