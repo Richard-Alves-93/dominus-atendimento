@@ -1113,7 +1113,53 @@ export default function MasterMonitoramento() {
         })()}
 
 
+        {/* Fase 2.11 — Exportar histórico (CSV) */}
+        <Card className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-base font-semibold">Exportar histórico</h3>
+              <p className="text-xs text-muted-foreground">
+                Baixe o histórico operacional em CSV. Apenas métricas seguras — sem secrets, tokens ou payload bruto. Limite de {EXPORT_MAX_ROWS.toLocaleString("pt-BR")} linhas por arquivo.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Período:</span>
+              {(["1h", "6h", "24h"] as ExportPeriod[]).map((p) => (
+                <Button
+                  key={p}
+                  variant={exportPeriod === p ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setExportPeriod(p)}
+                >
+                  {p === "1h" ? "Última 1h" : p === "6h" ? "Últimas 6h" : "Últimas 24h"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {([
+              { k: "evolution" as const, label: "Evolution" },
+              { k: "vps" as const, label: "VPS" },
+              { k: "connections" as const, label: "Conexões" },
+              { k: "flow" as const, label: "Fluxo de mensagens" },
+            ]).map((opt) => (
+              <Button
+                key={opt.k}
+                variant="outline"
+                size="sm"
+                onClick={() => handleExportCsv(opt.k)}
+                disabled={exporting !== null}
+                className="justify-start"
+              >
+                <Download className={`w-3.5 h-3.5 mr-2 ${exporting === opt.k ? "animate-pulse" : ""}`} />
+                Baixar CSV — {opt.label}
+              </Button>
+            ))}
+          </div>
+        </Card>
+
         {/* Cards de resumo */}
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {cards.map((c) => (
             <Card key={c.label} className="p-4">
