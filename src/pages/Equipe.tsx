@@ -42,10 +42,10 @@ interface Member {
     id: string; full_name: string | null; email: string | null; phone: string | null;
     signature: string | null; signature_enabled: boolean;
   } | null;
-  departments: { department_id: string }[];
+  departments: { department_id: string; participates_in_rotation: boolean }[];
 }
 
-interface Dept { id: string; name: string; status: string }
+interface Dept { id: string; name: string; status: string; assignment_mode?: "manual" | "round_robin" }
 
 export default function Equipe() {
   const { profile } = useAuth();
