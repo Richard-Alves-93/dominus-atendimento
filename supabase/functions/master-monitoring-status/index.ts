@@ -429,6 +429,7 @@ Deno.serve(async (req) => {
     if (!isMaster) return json({ error: "Forbidden" }, 403);
 
     const data = await collectEvolutionHealth(admin);
+    const vps = await collectVpsHealth();
 
     let snapshotSaved = false;
     let snapshotId: string | null = null;
@@ -440,6 +441,9 @@ Deno.serve(async (req) => {
       } catch (e) {
         snapshotError = (e as Error)?.message?.slice(0, 200) ?? "snapshot_failed";
       }
+      try {
+        if (vps.configured) await saveVpsSnapshot(admin, vps, snapshotSource);
+      } catch (_e) { /* ignore */ }
     }
 
     return json({
@@ -451,6 +455,7 @@ Deno.serve(async (req) => {
         error: data.evoError,
         ...data.evoStats,
       },
+      infrastructure: vps,
       connections: [...data.connections, ...data.otherChannels],
       fallback: !data.evoOnline,
       snapshot_saved: snapshotSaved,
