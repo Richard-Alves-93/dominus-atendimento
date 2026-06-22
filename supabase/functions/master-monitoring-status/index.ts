@@ -208,7 +208,6 @@ Deno.serve(async (req) => {
       if (!expected || cronHeader !== expected) {
         return json({ error: "Unauthorized" }, 401);
       }
-      {
       const data = await collectEvolutionHealth(admin);
       let snapshotId: string | null = null;
       let snapshotError: string | null = null;
@@ -234,8 +233,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // If x-cron-secret was sent but invalid, refuse
-    if (cronHeader) return json({ error: "Unauthorized" }, 401);
 
     // ---------- MASTER MODE (JWT) ----------
     const authHeader = req.headers.get("Authorization") ?? "";
