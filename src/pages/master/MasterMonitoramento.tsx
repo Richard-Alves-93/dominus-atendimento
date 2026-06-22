@@ -431,6 +431,24 @@ export default function MasterMonitoramento() {
     }
   }, []);
 
+  // Fase 2.10: snapshots recentes de fluxo para análise de tendência
+  const loadFlowTrendSnaps = useCallback(async () => {
+    try {
+      const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("connection_message_flow_snapshots") as any)
+        .select("created_at, connection_id, failed_count_24h, pending_count_24h")
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(3000);
+      if (error) throw error;
+      setFlowTrendSnaps((data ?? []) as FlowTrendSnap[]);
+    } catch {
+      setFlowTrendSnaps([]);
+    }
+  }, []);
+
+
+
 
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
