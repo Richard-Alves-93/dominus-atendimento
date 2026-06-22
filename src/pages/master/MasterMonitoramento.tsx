@@ -288,6 +288,33 @@ export default function MasterMonitoramento() {
   const [exportPeriod, setExportPeriod] = useState<ExportPeriod>("24h");
   const [exporting, setExporting] = useState<string | null>(null);
 
+  // Fase 2.12: agregados semanais/mensais
+  type AggPeriod = 7 | 30;
+  const [aggPeriod, setAggPeriod] = useState<AggPeriod>(7);
+  const [aggEvo, setAggEvo] = useState<any | null>(null);
+  const [aggVps, setAggVps] = useState<any | null>(null);
+  const [aggFlow, setAggFlow] = useState<any | null>(null);
+  const [aggTopConn, setAggTopConn] = useState<any[]>([]);
+  const [aggLoading, setAggLoading] = useState(false);
+
+  // Fase 2.13: logs do monitoramento
+  type MonitoringLog = {
+    id: string;
+    created_at: string;
+    event_type: string;
+    severity: string;
+    source: string;
+    provider: string | null;
+    channel: string | null;
+    company_id: string | null;
+    connection_id: string | null;
+    title: string;
+    description: string | null;
+  };
+  const [logs, setLogs] = useState<MonitoringLog[]>([]);
+  const [logsFilter, setLogsFilter] = useState<string>("todos");
+  const [logsLoading, setLogsLoading] = useState(false);
+
   // Snapshots por conexão (Fase 2.7)
   type ConnHealthRow = {
     connection_id: string | null;
@@ -446,6 +473,47 @@ export default function MasterMonitoramento() {
       setFlowTrendSnaps([]);
     }
   }, []);
+
+  // Fase 2.12: carregar agregados (7/30 dias)
+  const loadAggregates = useCallback(async (days: AggPeriod) => {
+    setAggLoading(true);
+    try {
+      const [evo, vps, flow, conn] = await Promise.all([
+        (supabase as any).rpc("master_evolution_aggregates", { _days: days }),
+        (supabase as any).rpc("master_vps_aggregates", { _days: days }),
+        (supabase as any).rpc("master_flow_aggregates", { _days: days }),
+        (supabase as any).rpc("master_connection_aggregates", { _days: days, _limit: 10 }),
+      ]);
+      setAggEvo(Array.isArray(evo.data) ? evo.data[0] ?? null : evo.data ?? null);
+      setAggVps(Array.isArray(vps.data) ? vps.data[0] ?? null : vps.data ?? null);
+      setAggFlow(Array.isArray(flow.data) ? flow.data[0] ?? null : flow.data ?? null);
+      setAggTopConn(Array.isArray(conn.data) ? conn.data : []);
+    } catch {
+      setAggEvo(null); setAggVps(null); setAggFlow(null); setAggTopConn([]);
+    } finally {
+      setAggLoading(false);
+    }
+  }, []);
+
+  // Fase 2.13: carregar logs do monitoramento
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const { data, error } = await (supabase.from("monitoring_events") as any)
+        .select("id, created_at, event_type, severity, source, provider, channel, company_id, connection_id, title, description")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      setLogs((data ?? []) as MonitoringLog[]);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
+
+
 
 
 
@@ -613,6 +681,8 @@ export default function MasterMonitoramento() {
       loadConnHistory(period);
       loadConfigStats();
       loadFlowTrendSnaps();
+      loadAggregates(aggPeriod);
+      loadLogs();
     })();
     return () => {
       cancelled = true;
@@ -625,6 +695,11 @@ export default function MasterMonitoramento() {
     loadInfraHistory(period);
     loadConnHistory(period);
   }, [period, loadHistory, loadInfraHistory, loadConnHistory]);
+
+  // Fase 2.12: recarregar agregados ao trocar período
+  useEffect(() => {
+    loadAggregates(aggPeriod);
+  }, [aggPeriod, loadAggregates]);
 
   // Phase 2.9: carregar histórico de fluxo ao abrir/trocar período do drawer
   useEffect(() => {
@@ -639,7 +714,10 @@ export default function MasterMonitoramento() {
     await loadConnHistory(period);
     await loadConfigStats();
     await loadFlowTrendSnaps();
+    await loadAggregates(aggPeriod);
+    await loadLogs();
   };
+
 
 
   // Apply live state to rows
@@ -1157,6 +1235,176 @@ export default function MasterMonitoramento() {
             ))}
           </div>
         </Card>
+
+        {/* Fase 2.12 — Resumo operacional (7/30 dias) */}
+        <Card className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-base font-semibold">Resumo operacional</h3>
+              <p className="text-xs text-muted-foreground">
+                Visão agregada dos últimos {aggPeriod} dias. Atualizado a partir dos snapshots persistidos.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Período:</span>
+              {([7, 30] as AggPeriod[]).map((d) => (
+                <Button
+                  key={d}
+                  variant={aggPeriod === d ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAggPeriod(d)}
+                >
+                  Últimos {d} dias
+                </Button>
+              ))}
+            </div>
+          </div>
+          {aggLoading ? (
+            <p className="text-xs text-muted-foreground">Carregando agregados…</p>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                {[
+                  { label: "Disponibilidade Evolution", value: aggEvo?.online_pct != null ? `${aggEvo.online_pct}%` : "—" },
+                  { label: "Latência média", value: aggEvo?.avg_latency_ms != null ? `${aggEvo.avg_latency_ms} ms` : "—" },
+                  { label: "CPU média", value: aggVps?.avg_cpu != null ? `${aggVps.avg_cpu}%` : "—" },
+                  { label: "Memória média", value: aggVps?.avg_memory != null ? `${aggVps.avg_memory}%` : "—" },
+                  { label: "Disco médio", value: aggVps?.avg_disk != null ? `${aggVps.avg_disk}%` : "—" },
+                  { label: "Mensagens recebidas", value: aggFlow?.total_inbound != null ? Number(aggFlow.total_inbound).toLocaleString("pt-BR") : "—" },
+                  { label: "Mensagens enviadas", value: aggFlow?.total_outbound != null ? Number(aggFlow.total_outbound).toLocaleString("pt-BR") : "—" },
+                  { label: "Falhas de envio", value: aggFlow?.total_failed != null ? Number(aggFlow.total_failed).toLocaleString("pt-BR") : "—" },
+                  { label: "Pendentes", value: aggFlow?.total_pending != null ? Number(aggFlow.total_pending).toLocaleString("pt-BR") : "—" },
+                  { label: "Snapshots Evolution", value: aggEvo?.total_snapshots != null ? Number(aggEvo.total_snapshots).toLocaleString("pt-BR") : "—" },
+                  { label: "Snapshots VPS saudáveis", value: aggVps?.healthy_pct != null ? `${aggVps.healthy_pct}%` : "—" },
+                  { label: "Conexões instáveis", value: aggTopConn.filter((c: any) => Number(c.offline_count) > 0).length.toString() },
+                ].map((c) => (
+                  <Card key={c.label} className="p-3">
+                    <p className="text-[11px] text-muted-foreground">{c.label}</p>
+                    <p className="text-lg font-semibold mt-1">{c.value}</p>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="mt-5">
+                <h4 className="text-sm font-semibold mb-2">Top conexões com atenção</h4>
+                {aggTopConn.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma conexão com ocorrências relevantes no período.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="text-muted-foreground border-b">
+                        <tr>
+                          <th className="text-left py-2 px-2">Conexão</th>
+                          <th className="text-left py-2 px-2">Canal</th>
+                          <th className="text-left py-2 px-2">Provedor</th>
+                          <th className="text-right py-2 px-2">Quedas (offline)</th>
+                          <th className="text-right py-2 px-2">Erros</th>
+                          <th className="text-right py-2 px-2">Snapshots</th>
+                          <th className="text-left py-2 px-2">Último evento</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aggTopConn.map((c: any) => (
+                          <tr key={c.connection_id} className="border-b last:border-0">
+                            <td className="py-2 px-2 font-medium">{c.instance_name ?? c.identifier ?? "—"}</td>
+                            <td className="py-2 px-2">{c.channel ?? "—"}</td>
+                            <td className="py-2 px-2">{c.provider ?? "—"}</td>
+                            <td className="py-2 px-2 text-right">{Number(c.offline_count).toLocaleString("pt-BR")}</td>
+                            <td className="py-2 px-2 text-right">{Number(c.error_count).toLocaleString("pt-BR")}</td>
+                            <td className="py-2 px-2 text-right">{Number(c.total_snapshots).toLocaleString("pt-BR")}</td>
+                            <td className="py-2 px-2">{c.last_event_at ? new Date(c.last_event_at).toLocaleString("pt-BR") : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* Fase 2.13 — Logs do monitoramento */}
+        <Card className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-base font-semibold">Logs do monitoramento</h3>
+              <p className="text-xs text-muted-foreground">
+                Eventos do próprio monitoramento (cron, coleta, alertas). Não contém secrets, tokens ou payload bruto. Retenção de 30 dias.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { k: "todos", label: "Todos" },
+                { k: "info", label: "Informação" },
+                { k: "warning", label: "Atenção" },
+                { k: "critical", label: "Crítico" },
+                { k: "evolution", label: "Evolution" },
+                { k: "vps", label: "VPS" },
+                { k: "connection", label: "Conexões" },
+                { k: "flow", label: "Fluxo" },
+                { k: "cron", label: "Cron" },
+              ].map((f) => (
+                <Button
+                  key={f.k}
+                  variant={logsFilter === f.k ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setLogsFilter(f.k)}
+                >
+                  {f.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {logsLoading ? (
+            <p className="text-xs text-muted-foreground">Carregando logs…</p>
+          ) : (() => {
+            const filtered = logs.filter((l) => {
+              if (logsFilter === "todos") return true;
+              if (["info", "warning", "critical"].includes(logsFilter)) return l.severity === logsFilter;
+              return (l.event_type ?? "").toLowerCase().includes(logsFilter)
+                || (l.source ?? "").toLowerCase().includes(logsFilter)
+                || (l.provider ?? "").toLowerCase().includes(logsFilter);
+            });
+            if (filtered.length === 0) {
+              return <p className="text-xs text-muted-foreground">Nenhum evento registrado para o filtro selecionado.</p>;
+            }
+            return (
+              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-muted-foreground border-b sticky top-0 bg-background">
+                    <tr>
+                      <th className="text-left py-2 px-2">Data/hora</th>
+                      <th className="text-left py-2 px-2">Severidade</th>
+                      <th className="text-left py-2 px-2">Tipo</th>
+                      <th className="text-left py-2 px-2">Origem</th>
+                      <th className="text-left py-2 px-2">Título</th>
+                      <th className="text-left py-2 px-2">Descrição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((l) => (
+                      <tr key={l.id} className="border-b last:border-0 align-top">
+                        <td className="py-2 px-2 whitespace-nowrap">{new Date(l.created_at).toLocaleString("pt-BR")}</td>
+                        <td className="py-2 px-2">
+                          <Badge variant="outline" className={severityClasses(l.severity as any)}>
+                            {severityLabel(l.severity as any)}
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-2">{l.event_type}</td>
+                        <td className="py-2 px-2">{l.source}{l.provider ? ` · ${l.provider}` : ""}</td>
+                        <td className="py-2 px-2 font-medium">{l.title}</td>
+                        <td className="py-2 px-2 text-muted-foreground">{l.description ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </Card>
+
+
 
         {/* Cards de resumo */}
 

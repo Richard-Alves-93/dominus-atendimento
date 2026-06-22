@@ -30,6 +30,40 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function logEvent(
+  admin: ReturnType<typeof createClient>,
+  args: {
+    event_type: string;
+    severity?: "info" | "warning" | "critical";
+    source?: string;
+    provider?: string | null;
+    channel?: string | null;
+    company_id?: string | null;
+    connection_id?: string | null;
+    title: string;
+    description?: string | null;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  try {
+    await admin.rpc("monitoring_events_log" as any, {
+      _event_type: args.event_type,
+      _severity: args.severity ?? "info",
+      _source: args.source ?? "monitoring",
+      _provider: args.provider ?? null,
+      _channel: args.channel ?? null,
+      _company_id: args.company_id ?? null,
+      _connection_id: args.connection_id ?? null,
+      _title: args.title,
+      _description: args.description ?? null,
+      _metadata: args.metadata ?? {},
+    });
+  } catch (_e) {
+    // never break monitoring because logging failed
+  }
+}
+
+
 function evoBase() {
   return (EVO_URL ?? "").replace(/\/$/, "");
 }
@@ -494,6 +528,13 @@ Deno.serve(async (req) => {
     if (cronHeader) {
       const expected = await getCronSecret(admin);
       if (!expected || cronHeader !== expected) {
+        await logEvent(admin, {
+          event_type: "cron.unauthorized",
+          severity: "warning",
+          source: "cron",
+          title: "Tentativa de cron sem secret válido",
+          description: "Requisição rejeitada (401).",
+        });
         return json({ error: "Unauthorized" }, 401);
       }
       // Prevent overlapping cron executions using a Postgres advisory lock.
@@ -516,33 +557,114 @@ Deno.serve(async (req) => {
         const data = await collectEvolutionHealth(admin);
         const vps = await collectVpsHealth();
         const flow = await collectMessageFlow(admin);
+
+        // Log cron run
+        await logEvent(admin, {
+          event_type: "cron.run",
+          severity: "info",
+          source: "cron",
+          title: "Cron de monitoramento executado",
+          description: `Evolution: ${data.evoOnline ? "online" : "offline"} · VPS: ${vps.configured ? vps.status : "não configurada"}`,
+        });
+
+        // Evolution offline
+        if (!data.evoOnline) {
+          await logEvent(admin, {
+            event_type: "evolution.offline",
+            severity: "critical",
+            source: "evolution",
+            provider: "evolution",
+            title: "Evolution API offline",
+            description: data.evoError ? `Erro: ${data.evoError}` : "API não respondeu na coleta.",
+          });
+        }
+        // VPS offline / erro
+        if (vps.configured && !vps.ok) {
+          await logEvent(admin, {
+            event_type: "vps.offline",
+            severity: "critical",
+            source: "vps",
+            title: "VPS de monitoramento offline",
+            description: vps.error ? `Erro: ${vps.error}` : "VPS não respondeu na coleta.",
+          });
+        }
+
         let snapshotId: string | null = null;
         let snapshotError: string | null = null;
         try {
           snapshotId = await saveEvolutionSnapshot(admin, data, "cron");
         } catch (e) {
           snapshotError = (e as Error)?.message?.slice(0, 200) ?? "snapshot_failed";
+          await logEvent(admin, {
+            event_type: "snapshot.failed",
+            severity: "critical",
+            source: "evolution",
+            title: "Falha ao salvar snapshot Evolution",
+            description: snapshotError,
+          });
         }
         let vpsSnapshotId: string | null = null;
         try {
           if (vps.configured) vpsSnapshotId = await saveVpsSnapshot(admin, vps, "cron");
-        } catch (_e) { /* ignore */ }
+        } catch (e) {
+          await logEvent(admin, {
+            event_type: "snapshot.failed",
+            severity: "critical",
+            source: "vps",
+            title: "Falha ao salvar snapshot VPS",
+            description: (e as Error)?.message?.slice(0, 200) ?? null,
+          });
+        }
         let connSnapshotsCount = 0;
         try {
           connSnapshotsCount = await saveConnectionSnapshots(admin, data, "cron");
         } catch (e) {
           console.error("[saveConnectionSnapshots cron] failed", (e as Error)?.message);
+          await logEvent(admin, {
+            event_type: "snapshot.failed",
+            severity: "warning",
+            source: "connection",
+            title: "Falha ao salvar snapshots de conexões",
+            description: (e as Error)?.message?.slice(0, 200) ?? null,
+          });
         }
         let flowSnapshotsCount = 0;
         try {
           flowSnapshotsCount = await saveFlowSnapshots(admin, data, flow, "cron");
         } catch (e) {
           console.error("[saveFlowSnapshots cron] failed", (e as Error)?.message);
+          await logEvent(admin, {
+            event_type: "snapshot.failed",
+            severity: "warning",
+            source: "flow",
+            title: "Falha ao salvar snapshots de fluxo",
+            description: (e as Error)?.message?.slice(0, 200) ?? null,
+          });
         }
+
+        // Conexões críticas detectadas
+        for (const c of data.connections) {
+          if (c.health === "critical" || c.status === "error") {
+            await logEvent(admin, {
+              event_type: "connection.critical",
+              severity: "critical",
+              source: "connection",
+              provider: c.provider,
+              channel: c.channel,
+              company_id: c.company_id ?? null,
+              connection_id: c.connection_id ?? null,
+              title: `Conexão crítica: ${c.instance_name ?? c.identifier ?? c.connection_id}`,
+              description: c.error ? String(c.error).slice(0, 200) : `Status ${c.status}`,
+            });
+          }
+        }
+
         await cleanupOldSnapshots(admin);
         await cleanupOldInfraSnapshots(admin);
         await cleanupOldConnectionSnapshots(admin);
         await cleanupOldFlowSnapshots(admin);
+        try { await admin.rpc("monitoring_events_cleanup" as any); } catch { /* ignore */ }
+
         return json({
           mode: "cron",
           checked_at: new Date().toISOString(),
