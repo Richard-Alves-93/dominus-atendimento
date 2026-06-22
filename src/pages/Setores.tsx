@@ -106,7 +106,7 @@ export default function Setores() {
     if (editing) {
       const { error } = await (supabase as any)
         .from("departments")
-        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status, allow_general_queue: form.allow_general_queue, allow_stalled_takeover: form.allow_stalled_takeover })
+        .update({ name: form.name.trim(), description: form.description.trim() || null, status: form.status, allow_general_queue: form.allow_general_queue, allow_stalled_takeover: form.allow_stalled_takeover, assignment_mode: form.assignment_mode })
         .eq("id", editing.id);
       setBusy(false);
       if (error) {
@@ -123,6 +123,7 @@ export default function Setores() {
         status: form.status,
         allow_general_queue: form.allow_general_queue,
         allow_stalled_takeover: form.allow_stalled_takeover,
+        assignment_mode: form.assignment_mode,
       });
       setBusy(false);
       if (error) {
