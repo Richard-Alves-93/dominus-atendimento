@@ -898,6 +898,34 @@ export default function MasterMonitoramento() {
                 value={fmtDate((selected.raw as any)?.updated_at ?? null)}
               />
               <Field label="Último erro" value={selected.lastError ?? "Nenhum"} />
+
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Saúde operacional
+                </h4>
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="outline" className={healthColor(selected.health)}>
+                    {healthLabel(selected.health)}
+                  </Badge>
+                  <Badge variant="outline">{statusLabel(selected.status)}</Badge>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+                  <p className="font-medium mb-1 text-foreground">Recomendação</p>
+                  <p className="text-muted-foreground">
+                    {recommendationFor({
+                      id: selected.id,
+                      companyName: selected.companyName,
+                      channelType: selected.channelType,
+                      provider: selected.provider,
+                      name: selected.name,
+                      health: selected.health,
+                      status: selected.status,
+                      lastActivityAt: selected.lastActivityAt,
+                      lastError: selected.lastError,
+                    })}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </SheetContent>
