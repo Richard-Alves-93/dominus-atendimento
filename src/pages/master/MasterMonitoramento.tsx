@@ -282,6 +282,12 @@ export default function MasterMonitoramento() {
   };
   const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
 
+  // Fase 2.10: snapshots de fluxo recentes (todas as conexões) para tendência
+  const [flowTrendSnaps, setFlowTrendSnaps] = useState<FlowTrendSnap[]>([]);
+  // Fase 2.11: período de exportação
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriod>("24h");
+  const [exporting, setExporting] = useState<string | null>(null);
+
   // Snapshots por conexão (Fase 2.7)
   type ConnHealthRow = {
     connection_id: string | null;
