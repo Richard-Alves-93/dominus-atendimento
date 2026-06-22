@@ -410,11 +410,11 @@ export default function Setores() {
               </Select>
               {form.assignment_mode === "round_robin" ? (
                 <p className="text-xs text-muted-foreground">
-                  Novos atendimentos deste setor poderão ser distribuídos automaticamente entre os atendentes habilitados no rodízio. A aplicação real da distribuição será ativada em uma etapa posterior.
+                  Todos os usuários ativos vinculados a este setor participarão do rodízio automático de atendimentos. A aplicação real da distribuição será ativada em uma etapa posterior.
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Os atendimentos entram na fila do setor e precisam ser assumidos manualmente.
+                  Os atendimentos ficarão na fila do setor e deverão ser assumidos manualmente.
                 </p>
               )}
             </div>
