@@ -142,8 +142,11 @@ interface MessageRow {
   _optimistic?: boolean;
 }
 
+// Fase 2.3.x — performance: NÃO buscar `raw` JSONB completo na listagem.
+// Era o gargalo ao abrir conversas (até 500 mensagens com payloads grandes).
+// Projetamos apenas o campo realmente usado pela UI: raw.forwarded.
 const MESSAGE_SELECT_FIELDS =
-  "id, ticket_id, direction, from_me, body, raw_body, raw, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at";
+  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at, is_forwarded:raw->forwarded";
 
 const MIN_BODY_MATCH_CHARS = 8;
 const BODY_MATCH_WINDOW_MS = 10 * 60 * 1000;
@@ -956,7 +959,7 @@ const TicketsDesktopLayout = () => {
   });
   const fetchMessagesForTicket = async (ticketId: string) => {
     const t0 = performance.now();
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("messages")
       .select(MESSAGE_SELECT_FIELDS)
       .eq("company_id", activeCompanyId!)
@@ -3207,7 +3210,7 @@ const TicketsDesktopLayout = () => {
                             </div>
                           </button>
                         )}
-                        {((m as any).raw?.forwarded === true) && (
+                        {(((m as any).is_forwarded === true) || ((m as any).raw?.forwarded === true)) && (
                           <div className={`flex items-center gap-1 text-[11px] italic mb-0.5 ${m.from_me ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                             <Forward className="w-3 h-3" /> Encaminhada
                           </div>
