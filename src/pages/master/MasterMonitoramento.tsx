@@ -241,6 +241,32 @@ export default function MasterMonitoramento() {
   type HealthFilter = "all" | "healthy" | "warning" | "critical" | "offline";
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
 
+  const [vps, setVps] = useState<NonNullable<VpsLive> | null>(null);
+
+  type InfraSnapshot = {
+    created_at: string;
+    cpu_percent: number | null;
+    memory_percent: number | null;
+    disk_percent: number | null;
+  };
+  const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
+
+  const loadInfraHistory = useCallback(async (p: HistoryPeriod) => {
+    try {
+      const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("infrastructure_health_snapshots") as any)
+        .select("created_at, cpu_percent, memory_percent, disk_percent")
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      setInfraHistory((data ?? []) as InfraSnapshot[]);
+    } catch {
+      setInfraHistory([]);
+    }
+  }, []);
+
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
     setHistoryLoading(true);
     try {
