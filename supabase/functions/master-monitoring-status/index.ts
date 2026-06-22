@@ -59,12 +59,13 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
   const [instancesRes, channelsRes, companiesRes] = await Promise.all([
     admin
       .from("whatsapp_instances")
-      .select("id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error"),
+      .select("id, company_id, channel_id, instance_name, phone_number, status, connected_at, disconnected_at, updated_at, settings_sync_error, last_webhook_at"),
     admin
       .from("channels")
       .select("id, company_id, channel_type, channel_provider, name, status, phone_number, email_address, external_id, updated_at"),
     admin.from("companies").select("id, name"),
   ]);
+
 
   const companies = new Map<string, string>(
     (companiesRes.data ?? []).map((c: any) => [c.id, c.name])
@@ -115,6 +116,7 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
     const m = mapWaStatus(effective);
     return {
       connection_id: inst.id,
+      channel_id: inst.channel_id ?? null,
       company_id: inst.company_id,
       company_name: companies.get(inst.company_id) ?? "—",
       channel: "whatsapp",
@@ -124,11 +126,13 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
       status: m.status,
       health: m.health,
       last_activity_at: inst.updated_at ?? inst.connected_at ?? null,
+      last_webhook_at: inst.last_webhook_at ?? null,
       last_checked_at: new Date().toISOString(),
       error: inst.settings_sync_error ?? null,
       live_checked: liveState !== null && liveState !== undefined,
     };
   });
+
 
   const evoStats = {
     total_instances: connections.length,
@@ -147,6 +151,7 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
     .filter((c: any) => c.channel_provider !== "evolution" && c.channel_provider !== "evogo")
     .map((c: any) => ({
       connection_id: c.id,
+      channel_id: c.id,
       company_id: c.company_id,
       company_name: companies.get(c.company_id) ?? "—",
       channel: c.channel_type,
@@ -156,6 +161,7 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
       status: c.status ?? "unknown",
       health: "unknown" as Health,
       last_activity_at: c.updated_at ?? null,
+      last_webhook_at: null,
       last_checked_at: new Date().toISOString(),
       error: null,
       live_checked: false,
@@ -163,6 +169,50 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
 
   return { evoOnline, evoResponseMs, evoError, evoStats, health, connections, otherChannels };
 }
+
+type FlowRow = {
+  inbound_24h: number;
+  outbound_24h: number;
+  failed_24h: number;
+  pending_24h: number;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+};
+
+async function collectMessageFlow(
+  admin: ReturnType<typeof createClient>,
+): Promise<Map<string, FlowRow>> {
+  const map = new Map<string, FlowRow>();
+  try {
+    const { data, error } = await admin.rpc("master_message_flow_24h" as any);
+    if (error) throw error;
+    for (const r of (data as any[]) ?? []) {
+      if (!r?.channel_id) continue;
+      map.set(String(r.channel_id), {
+        inbound_24h: Number(r.inbound_24h ?? 0),
+        outbound_24h: Number(r.outbound_24h ?? 0),
+        failed_24h: Number(r.failed_24h ?? 0),
+        pending_24h: Number(r.pending_24h ?? 0),
+        last_inbound_at: r.last_inbound_at ?? null,
+        last_outbound_at: r.last_outbound_at ?? null,
+      });
+    }
+  } catch (e) {
+    console.error("[collectMessageFlow] failed", (e as Error)?.message);
+  }
+  return map;
+}
+
+function attachFlow<T extends { channel_id?: string | null }>(
+  rows: T[],
+  flow: Map<string, FlowRow>,
+): (T & { flow: FlowRow | null })[] {
+  return rows.map((r) => ({
+    ...r,
+    flow: r.channel_id ? flow.get(String(r.channel_id)) ?? null : null,
+  }));
+}
+
 
 async function saveEvolutionSnapshot(
   admin: ReturnType<typeof createClient>,
@@ -527,7 +577,7 @@ Deno.serve(async (req) => {
         ...data.evoStats,
       },
       infrastructure: vps,
-      connections: [...data.connections, ...data.otherChannels],
+      connections: attachFlow([...data.connections, ...data.otherChannels], await collectMessageFlow(admin)),
       fallback: !data.evoOnline,
       snapshot_saved: snapshotSaved,
       snapshot_id: snapshotId,

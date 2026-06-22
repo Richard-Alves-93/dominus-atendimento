@@ -1441,6 +1441,7 @@ export type Database = {
           id: string
           instance_name: string
           last_settings_sync_at: string | null
+          last_webhook_at: string | null
           phone_number: string | null
           qr_code: string | null
           settings_sync_error: string | null
@@ -1458,6 +1459,7 @@ export type Database = {
           id?: string
           instance_name: string
           last_settings_sync_at?: string | null
+          last_webhook_at?: string | null
           phone_number?: string | null
           qr_code?: string | null
           settings_sync_error?: string | null
@@ -1475,6 +1477,7 @@ export type Database = {
           id?: string
           instance_name?: string
           last_settings_sync_at?: string | null
+          last_webhook_at?: string | null
           phone_number?: string | null
           qr_code?: string | null
           settings_sync_error?: string | null
@@ -1522,6 +1525,18 @@ export type Database = {
         Returns: boolean
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
+      master_message_flow_24h: {
+        Args: never
+        Returns: {
+          channel_id: string
+          failed_24h: number
+          inbound_24h: number
+          last_inbound_at: string
+          last_outbound_at: string
+          outbound_24h: number
+          pending_24h: number
+        }[]
+      }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
       try_monitoring_cron_lock: { Args: never; Returns: boolean }
       user_belongs_to_company: {

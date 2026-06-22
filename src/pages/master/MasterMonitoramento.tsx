@@ -45,6 +45,10 @@ import {
   computeVpsAlerts,
   computeConnectionStability,
   computeStabilityAlerts,
+  computeFlowDiagnosis,
+  computeFlowAlerts,
+  flowHealthLabel,
+  flowHealthClasses,
   recommendationForConnection,
   stabilityLabel,
   stabilityClasses,
@@ -58,8 +62,10 @@ import {
   type VpsLive,
   type StabilityInfo,
   type ConnectionSnapshot,
+  type MessageFlow,
 } from "@/lib/monitoringAlerts";
 import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
+
 
 // Estados padronizados (preparados para multicanal)
 type OpStatus =
@@ -250,6 +256,10 @@ export default function MasterMonitoramento() {
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
 
   const [vps, setVps] = useState<NonNullable<VpsLive> | null>(null);
+
+  // Phase 2.8: message-flow map keyed by channel_id
+  const [flowByChannel, setFlowByChannel] = useState<Map<string, NonNullable<MessageFlow>>>(new Map());
+
 
   type InfraSnapshot = {
     created_at: string;
@@ -466,11 +476,31 @@ export default function MasterMonitoramento() {
       if (error) throw error;
       const evo = data?.evolution ?? {};
       const map: Record<string, OpStatus> = {};
+      const flowMap = new Map<string, NonNullable<MessageFlow>>();
       for (const c of (data?.connections ?? []) as any[]) {
         if (c?.provider === "evolution" && c?.instance_name && c?.live_checked) {
           map[c.instance_name] = c.status as OpStatus;
         }
+        if (c?.channel_id && c?.flow) {
+          flowMap.set(String(c.channel_id), {
+            inbound_24h: Number(c.flow.inbound_24h ?? 0),
+            outbound_24h: Number(c.flow.outbound_24h ?? 0),
+            failed_24h: Number(c.flow.failed_24h ?? 0),
+            pending_24h: Number(c.flow.pending_24h ?? 0),
+            last_inbound_at: c.flow.last_inbound_at ?? null,
+            last_outbound_at: c.flow.last_outbound_at ?? null,
+            last_webhook_at: c.last_webhook_at ?? null,
+          });
+        } else if (c?.channel_id && c?.last_webhook_at) {
+          flowMap.set(String(c.channel_id), {
+            inbound_24h: 0, outbound_24h: 0, failed_24h: 0, pending_24h: 0,
+            last_inbound_at: null, last_outbound_at: null,
+            last_webhook_at: c.last_webhook_at,
+          });
+        }
       }
+      setFlowByChannel(flowMap);
+
       setLive({
         checked_at: data?.checked_at ?? new Date().toISOString(),
         online: !!evo.online,
@@ -603,6 +633,21 @@ export default function MasterMonitoramento() {
     return map;
   }, [connHistory, mergedRows]);
 
+  // Phase 2.8: lookup flow per row using channel_id
+  const flowByRow = useMemo(() => {
+    const m = new Map<string, NonNullable<MessageFlow>>();
+    for (const r of mergedRows) {
+      const raw = r.raw as any;
+      const chId = raw?.channel_id ?? raw?.id; // instance has channel_id; channel row has id
+      if (chId) {
+        const f = flowByChannel.get(String(chId));
+        if (f) m.set(r.id, f);
+      }
+    }
+    return m;
+  }, [mergedRows, flowByChannel]);
+
+
   const alerts: OperationalAlert[] = useMemo(() => {
     const list: OperationalAlert[] = [];
     list.push(...computeEvolutionAlerts(live));
@@ -646,12 +691,34 @@ export default function MasterMonitoramento() {
         ),
       );
     }
+    // Alertas de fluxo de mensagens por conexão (Fase 2.8)
+    for (const r of mergedRows) {
+      const flow = flowByRow.get(r.id) ?? null;
+      if (!flow) continue;
+      list.push(
+        ...computeFlowAlerts(
+          {
+            id: r.id,
+            companyName: r.companyName,
+            channelType: r.channelType,
+            provider: r.provider,
+            name: r.name,
+            health: r.health,
+            status: r.status,
+            lastActivityAt: r.lastActivityAt,
+            lastError: r.lastError,
+          },
+          flow,
+        ),
+      );
+    }
     list.push(...computeVpsAlerts(vps));
     // Dedup por id
     const seen = new Set<string>();
     const dedup = list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
     return dedup.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows, vps, stabilityByRow]);
+  }, [live, history, mergedRows, vps, stabilityByRow, flowByRow]);
+
 
   const filteredRows = useMemo(() => {
     if (healthFilter === "all") return mergedRows;
@@ -1277,6 +1344,8 @@ export default function MasterMonitoramento() {
                   <th className="text-left px-4 py-2 font-medium">Status</th>
                   <th className="text-left px-4 py-2 font-medium">Saúde</th>
                   <th className="text-left px-4 py-2 font-medium">Estabilidade</th>
+                  <th className="text-left px-4 py-2 font-medium">Fluxo</th>
+                  <th className="text-right px-4 py-2 font-medium">Falhas 24h</th>
                   <th className="text-left px-4 py-2 font-medium">Última atividade</th>
                   <th className="text-right px-4 py-2 font-medium">Ações</th>
                 </tr>
@@ -1284,20 +1353,30 @@ export default function MasterMonitoramento() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={12} className="px-4 py-10 text-center text-muted-foreground">
                       Carregando...
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={12} className="px-4 py-10 text-center text-muted-foreground">
                       Nenhuma conexão para o filtro selecionado.
                     </td>
                   </tr>
+
                 ) : (
                   filteredRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
                     const info = stabilityByRow.get(r.id);
+                    const flow = flowByRow.get(r.id) ?? null;
+                    const diag = computeFlowDiagnosis(
+                      {
+                        id: r.id, companyName: r.companyName, channelType: r.channelType,
+                        provider: r.provider, name: r.name, health: r.health, status: r.status,
+                        lastActivityAt: r.lastActivityAt, lastError: r.lastError,
+                      },
+                      flow,
+                    );
                     return (
                       <tr key={r.id} className={`border-t hover:bg-muted/30 ${rowHighlight(r.health, r.status)}`}>
                         <td className="px-4 py-2">{r.companyName}</td>
@@ -1328,10 +1407,25 @@ export default function MasterMonitoramento() {
                             {stabilityLabel(info?.stability ?? "unknown")}
                           </Badge>
                         </td>
+                        <td className="px-4 py-2">
+                          <Badge variant="outline" className={flowHealthClasses(diag.health)}>
+                            {flowHealthLabel(diag.health)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {flow ? (
+                            <span className={flow.failed_24h > 0 ? "text-red-600 font-medium" : "text-muted-foreground"}>
+                              {flow.failed_24h}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-muted-foreground">
                           <div>{formatAgo(r.lastActivityAt)}</div>
                           <div className="text-[10px] opacity-70">{fmtDate(r.lastActivityAt)}</div>
                         </td>
+
                         <td className="px-4 py-2 text-right">
                           <Button variant="ghost" size="sm" onClick={() => setSelected(r)}>
                             Ver detalhes
@@ -1439,8 +1533,63 @@ export default function MasterMonitoramento() {
                   );
                 })()}
               </div>
+
+              {/* Fluxo de mensagens (Fase 2.8) */}
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Fluxo de mensagens
+                </h4>
+                {(() => {
+                  const flow = flowByRow.get(selected.id) ?? null;
+                  const conn = {
+                    id: selected.id, companyName: selected.companyName, channelType: selected.channelType,
+                    provider: selected.provider, name: selected.name, health: selected.health,
+                    status: selected.status, lastActivityAt: selected.lastActivityAt, lastError: selected.lastError,
+                  };
+                  const diag = computeFlowDiagnosis(conn, flow);
+                  if (!flow) {
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        Sem dados suficientes para diagnóstico.
+                      </p>
+                    );
+                  }
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <Badge variant="outline" className={flowHealthClasses(diag.health)}>
+                          {flowHealthLabel(diag.health)}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                        <div className="text-muted-foreground">Último webhook</div>
+                        <div className="text-right">{formatAgo(flow.last_webhook_at)}</div>
+                        <div className="text-muted-foreground">Última recebida</div>
+                        <div className="text-right">{formatAgo(flow.last_inbound_at)}</div>
+                        <div className="text-muted-foreground">Última enviada</div>
+                        <div className="text-right">{formatAgo(flow.last_outbound_at)}</div>
+                        <div className="text-muted-foreground">Recebidas 24h</div>
+                        <div className="text-right">{flow.inbound_24h}</div>
+                        <div className="text-muted-foreground">Enviadas 24h</div>
+                        <div className="text-right">{flow.outbound_24h}</div>
+                        <div className="text-muted-foreground">Falhas 24h</div>
+                        <div className={`text-right ${flow.failed_24h > 0 ? "text-red-600 font-medium" : ""}`}>
+                          {flow.failed_24h}
+                        </div>
+                        <div className="text-muted-foreground">Pendentes 24h</div>
+                        <div className="text-right">{flow.pending_24h}</div>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1 text-foreground">Diagnóstico</p>
+                        <p className="text-muted-foreground">{diag.diagnosis}</p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           )}
+
         </SheetContent>
       </Sheet>
     </MasterLayout>

@@ -476,3 +476,169 @@ export function computeStabilityAlerts(
   }
   return alerts;
 }
+
+// ===== Phase 2.8: Message-flow per connection =====
+
+export type MessageFlow = {
+  inbound_24h: number;
+  outbound_24h: number;
+  failed_24h: number;
+  pending_24h: number;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  last_webhook_at: string | null;
+} | null;
+
+export type FlowHealth =
+  | "flowing"
+  | "warning"
+  | "stalled"
+  | "failing"
+  | "no_data";
+
+export function flowHealthLabel(h: FlowHealth): string {
+  switch (h) {
+    case "flowing": return "Fluindo";
+    case "warning": return "Atenção";
+    case "stalled": return "Parado";
+    case "failing": return "Com falhas";
+    default: return "Sem dados";
+  }
+}
+
+export function flowHealthClasses(h: FlowHealth): string {
+  switch (h) {
+    case "flowing": return "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
+    case "warning": return "bg-amber-500/15 text-amber-600 border-amber-500/30";
+    case "stalled": return "bg-zinc-500/15 text-zinc-600 border-zinc-500/30";
+    case "failing": return "bg-red-500/15 text-red-600 border-red-500/30";
+    default: return "bg-muted text-muted-foreground border-border";
+  }
+}
+
+const MIN = 60 * 1000;
+const HOUR = 60 * MIN;
+
+export type FlowDiagnosis = {
+  health: FlowHealth;
+  webhookStatus: "ok" | "stale" | "missing" | "critical" | "unknown";
+  diagnosis: string;
+};
+
+export function computeFlowDiagnosis(
+  conn: ConnLite,
+  flow: MessageFlow,
+): FlowDiagnosis {
+  if (!flow) {
+    return { health: "no_data", webhookStatus: "unknown", diagnosis: "Sem dados suficientes para diagnóstico." };
+  }
+  const connected = conn.status === "connected" || conn.health === "healthy";
+  const total24 = flow.inbound_24h + flow.outbound_24h;
+
+  // Webhook status (only meaningful when connected)
+  let webhookStatus: FlowDiagnosis["webhookStatus"] = "unknown";
+  if (flow.last_webhook_at) {
+    const age = Date.now() - new Date(flow.last_webhook_at).getTime();
+    if (age <= 30 * MIN) webhookStatus = "ok";
+    else if (age <= 2 * HOUR) webhookStatus = "stale";
+    else webhookStatus = "critical";
+  } else if (connected && total24 > 0) {
+    webhookStatus = "missing";
+  }
+
+  // Failures dominate
+  if (flow.failed_24h >= 10) {
+    return { health: "failing", webhookStatus, diagnosis: `Há ${flow.failed_24h} falhas de envio nas últimas 24h.` };
+  }
+  if (flow.failed_24h > 0) {
+    return { health: "warning", webhookStatus, diagnosis: `Há ${flow.failed_24h} falha(s) de envio nas últimas 24h.` };
+  }
+
+  if (!connected) {
+    return { health: "no_data", webhookStatus, diagnosis: "Conexão fora do ar. Diagnóstico de fluxo indisponível." };
+  }
+
+  if (webhookStatus === "critical") {
+    return { health: "stalled", webhookStatus, diagnosis: "Conexão conectada, mas sem webhook há mais de 2h." };
+  }
+  if (webhookStatus === "stale") {
+    return { health: "warning", webhookStatus, diagnosis: "Conexão conectada, mas sem webhook recente." };
+  }
+  if (total24 === 0) {
+    return { health: "warning", webhookStatus, diagnosis: "Conexão conectada, sem entrada/saída de mensagens nas últimas 24h." };
+  }
+  return { health: "flowing", webhookStatus, diagnosis: "Fluxo normal nas últimas 24h." };
+}
+
+export function computeFlowAlerts(
+  conn: ConnLite,
+  flow: MessageFlow,
+): OperationalAlert[] {
+  const alerts: OperationalAlert[] = [];
+  if (!flow) return alerts;
+  const scope = `${conn.companyName} · ${conn.name}`;
+  const connected = conn.status === "connected" || conn.health === "healthy";
+
+  // Avoid duplicating "offline" alerts for already-offline connections
+  if (!connected) return alerts;
+
+  if (flow.failed_24h >= 10) {
+    alerts.push({
+      id: `flow-fail-critical-${conn.id}`,
+      severity: "critical",
+      title: "Muitas falhas de envio",
+      description: `${scope}: ${flow.failed_24h} falhas nas últimas 24h.`,
+      scope,
+      detectedAt: now(),
+    });
+  } else if (flow.failed_24h > 0) {
+    alerts.push({
+      id: `flow-fail-warning-${conn.id}`,
+      severity: "warning",
+      title: "Falhas de envio recentes",
+      description: `${scope}: ${flow.failed_24h} falha(s) nas últimas 24h.`,
+      scope,
+      detectedAt: now(),
+    });
+  }
+
+  if (flow.last_webhook_at) {
+    const age = Date.now() - new Date(flow.last_webhook_at).getTime();
+    if (age > 2 * HOUR) {
+      alerts.push({
+        id: `flow-webhook-critical-${conn.id}`,
+        severity: "critical",
+        title: "Webhook sem atividade há mais de 2h",
+        description: `${scope}: último webhook em ${new Date(flow.last_webhook_at).toLocaleString("pt-BR")}.`,
+        scope,
+        detectedAt: now(),
+      });
+    } else if (age > 30 * MIN) {
+      alerts.push({
+        id: `flow-webhook-warning-${conn.id}`,
+        severity: "warning",
+        title: "Sem webhook recente",
+        description: `${scope}: último webhook em ${new Date(flow.last_webhook_at).toLocaleString("pt-BR")}.`,
+        scope,
+        detectedAt: now(),
+      });
+    }
+  }
+
+  // Fluxo parado: conectado mas sem inbound/outbound em 24h E sem webhook nas últimas 24h
+  const total24 = flow.inbound_24h + flow.outbound_24h;
+  if (total24 === 0 && flow.last_webhook_at) {
+    const age = Date.now() - new Date(flow.last_webhook_at).getTime();
+    if (age > 24 * HOUR) {
+      alerts.push({
+        id: `flow-stalled-${conn.id}`,
+        severity: "warning",
+        title: "Fluxo parado",
+        description: `${scope}: sem mensagens nas últimas 24h.`,
+        scope,
+        detectedAt: now(),
+      });
+    }
+  }
+  return alerts;
+}
