@@ -279,6 +279,48 @@ export default function MasterMonitoramento() {
   };
   const [connHistory, setConnHistory] = useState<ConnHealthRow[]>([]);
 
+  // Phase 2.9: histórico de fluxo por conexão (drawer)
+  type FlowSnapshotRow = {
+    created_at: string;
+    inbound_count_24h: number;
+    outbound_count_24h: number;
+    failed_count_24h: number;
+    pending_count_24h: number;
+  };
+  const [flowHistory, setFlowHistory] = useState<FlowSnapshotRow[]>([]);
+  const [flowHistoryPeriod, setFlowHistoryPeriod] = useState<HistoryPeriod>("24h");
+  const [flowHistoryLoading, setFlowHistoryLoading] = useState(false);
+
+  const loadFlowHistory = useCallback(
+    async (connectionId: string | null, p: HistoryPeriod) => {
+      if (!connectionId) {
+        setFlowHistory([]);
+        return;
+      }
+      setFlowHistoryLoading(true);
+      try {
+        const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+        const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+        const { data, error } = await (supabase
+          .from("connection_message_flow_snapshots") as any)
+          .select(
+            "created_at, inbound_count_24h, outbound_count_24h, failed_count_24h, pending_count_24h",
+          )
+          .eq("connection_id", connectionId)
+          .gte("created_at", since)
+          .order("created_at", { ascending: true })
+          .limit(500);
+        if (error) throw error;
+        setFlowHistory((data ?? []) as FlowSnapshotRow[]);
+      } catch {
+        setFlowHistory([]);
+      } finally {
+        setFlowHistoryLoading(false);
+      }
+    },
+    [],
+  );
+
   type ConfigStats = {
     lastCronEvo: string | null;
     lastManualEvo: string | null;
@@ -545,6 +587,12 @@ export default function MasterMonitoramento() {
     loadInfraHistory(period);
     loadConnHistory(period);
   }, [period, loadHistory, loadInfraHistory, loadConnHistory]);
+
+  // Phase 2.9: carregar histórico de fluxo ao abrir/trocar período do drawer
+  useEffect(() => {
+    const realId = (selected?.raw as any)?.id as string | undefined;
+    loadFlowHistory(realId ?? null, flowHistoryPeriod);
+  }, [selected, flowHistoryPeriod, loadFlowHistory]);
 
   const handleRefresh = async () => {
     await loadLive(true);
@@ -1586,6 +1634,90 @@ export default function MasterMonitoramento() {
                     </>
                   );
                 })()}
+
+                {/* Phase 2.9: histórico do fluxo */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-foreground">Histórico do fluxo</p>
+                    <div className="flex items-center gap-1">
+                      {(["1h", "6h", "24h"] as HistoryPeriod[]).map((p) => (
+                        <Button
+                          key={p}
+                          size="sm"
+                          variant={flowHistoryPeriod === p ? "default" : "outline"}
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => setFlowHistoryPeriod(p)}
+                        >
+                          {p === "1h" ? "1h" : p === "6h" ? "6h" : "24h"}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  {flowHistoryLoading ? (
+                    <p className="text-xs text-muted-foreground">Carregando histórico...</p>
+                  ) : flowHistory.length < 2 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Ainda não há dados históricos suficientes.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          Recebidas x Enviadas (acumulado 24h por snapshot)
+                        </p>
+                        <div className="h-32">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={flowHistory.map((s) => ({
+                                t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }),
+                                Recebidas: s.inbound_count_24h,
+                                Enviadas: s.outbound_count_24h,
+                              }))}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                              <XAxis dataKey="t" fontSize={9} />
+                              <YAxis fontSize={9} allowDecimals={false} />
+                              <Tooltip />
+                              <Legend wrapperStyle={{ fontSize: 10 }} />
+                              <Line type="monotone" dataKey="Recebidas" stroke="#10b981" dot={false} />
+                              <Line type="monotone" dataKey="Enviadas" stroke="#3b82f6" dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          Falhas e Pendentes (acumulado 24h por snapshot)
+                        </p>
+                        <div className="h-32">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={flowHistory.map((s) => ({
+                                t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }),
+                                Falhas: s.failed_count_24h,
+                                Pendentes: s.pending_count_24h,
+                              }))}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                              <XAxis dataKey="t" fontSize={9} />
+                              <YAxis fontSize={9} allowDecimals={false} />
+                              <Tooltip />
+                              <Legend wrapperStyle={{ fontSize: 10 }} />
+                              <Bar dataKey="Falhas" fill="#ef4444" />
+                              <Bar dataKey="Pendentes" fill="#f59e0b" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

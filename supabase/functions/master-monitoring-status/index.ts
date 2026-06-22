@@ -441,6 +441,48 @@ async function cleanupOldConnectionSnapshots(admin: ReturnType<typeof createClie
   }
 }
 
+async function saveFlowSnapshots(
+  admin: ReturnType<typeof createClient>,
+  data: Awaited<ReturnType<typeof collectEvolutionHealth>>,
+  flow: Map<string, FlowRow>,
+  source: string,
+) {
+  const all = [...data.connections, ...data.otherChannels];
+  if (all.length === 0) return 0;
+  const rows = all.map((c) => {
+    const f = c.channel_id ? flow.get(String(c.channel_id)) : null;
+    return {
+      company_id: c.company_id ?? null,
+      connection_id: c.connection_id ?? null,
+      channel_id: c.channel_id ?? null,
+      channel: c.channel,
+      provider: c.provider,
+      instance_name: c.instance_name ?? null,
+      identifier: c.identifier ?? null,
+      inbound_count_24h: f?.inbound_24h ?? 0,
+      outbound_count_24h: f?.outbound_24h ?? 0,
+      failed_count_24h: f?.failed_24h ?? 0,
+      pending_count_24h: f?.pending_24h ?? 0,
+      last_inbound_at: f?.last_inbound_at ?? null,
+      last_outbound_at: f?.last_outbound_at ?? null,
+      last_webhook_at: (c as any).last_webhook_at ?? null,
+      health: c.health ?? "unknown",
+      source,
+    };
+  });
+  const { error } = await admin.from("connection_message_flow_snapshots").insert(rows);
+  if (error) throw error;
+  return rows.length;
+}
+
+async function cleanupOldFlowSnapshots(admin: ReturnType<typeof createClient>) {
+  try {
+    await admin.rpc("connection_message_flow_cleanup" as any);
+  } catch (e) {
+    console.error("[cleanupOldFlowSnapshots] failed", (e as Error)?.message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -473,6 +515,7 @@ Deno.serve(async (req) => {
       try {
         const data = await collectEvolutionHealth(admin);
         const vps = await collectVpsHealth();
+        const flow = await collectMessageFlow(admin);
         let snapshotId: string | null = null;
         let snapshotError: string | null = null;
         try {
@@ -490,9 +533,16 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error("[saveConnectionSnapshots cron] failed", (e as Error)?.message);
         }
+        let flowSnapshotsCount = 0;
+        try {
+          flowSnapshotsCount = await saveFlowSnapshots(admin, data, flow, "cron");
+        } catch (e) {
+          console.error("[saveFlowSnapshots cron] failed", (e as Error)?.message);
+        }
         await cleanupOldSnapshots(admin);
         await cleanupOldInfraSnapshots(admin);
         await cleanupOldConnectionSnapshots(admin);
+        await cleanupOldFlowSnapshots(admin);
         return json({
           mode: "cron",
           checked_at: new Date().toISOString(),
@@ -546,6 +596,7 @@ Deno.serve(async (req) => {
 
     const data = await collectEvolutionHealth(admin);
     const vps = await collectVpsHealth();
+    const flow = await collectMessageFlow(admin);
 
     let snapshotSaved = false;
     let snapshotId: string | null = null;
@@ -565,6 +616,11 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error("[saveConnectionSnapshots manual] failed", (e as Error)?.message);
       }
+      try {
+        await saveFlowSnapshots(admin, data, flow, snapshotSource);
+      } catch (e) {
+        console.error("[saveFlowSnapshots manual] failed", (e as Error)?.message);
+      }
     }
 
     return json({
@@ -577,7 +633,7 @@ Deno.serve(async (req) => {
         ...data.evoStats,
       },
       infrastructure: vps,
-      connections: attachFlow([...data.connections, ...data.otherChannels], await collectMessageFlow(admin)),
+      connections: attachFlow([...data.connections, ...data.otherChannels], flow),
       fallback: !data.evoOnline,
       snapshot_saved: snapshotSaved,
       snapshot_id: snapshotId,
