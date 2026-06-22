@@ -1394,10 +1394,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      evolution_health_cleanup: { Args: never; Returns: undefined }
       generate_ticket_protocol: {
         Args: { _company_id: string }
         Returns: string
       }
+      get_monitoring_cron_secret: { Args: never; Returns: string }
       has_schedule_conflict: {
         Args: {
           p_assigned_user_id: string
