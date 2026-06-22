@@ -42,7 +42,9 @@ interface Department {
   created_at: string;
   allow_general_queue?: boolean;
   allow_stalled_takeover?: boolean;
+  assignment_mode?: "manual" | "round_robin";
 }
+
 
 const badge: Record<string, string> = {
   active: "bg-success/10 text-success border-success/20",
