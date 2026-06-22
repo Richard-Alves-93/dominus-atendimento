@@ -434,8 +434,15 @@ Deno.serve(async (req) => {
         try {
           if (vps.configured) vpsSnapshotId = await saveVpsSnapshot(admin, vps, "cron");
         } catch (_e) { /* ignore */ }
+        let connSnapshotsCount = 0;
+        try {
+          connSnapshotsCount = await saveConnectionSnapshots(admin, data, "cron");
+        } catch (e) {
+          console.error("[saveConnectionSnapshots cron] failed", (e as Error)?.message);
+        }
         await cleanupOldSnapshots(admin);
         await cleanupOldInfraSnapshots(admin);
+        await cleanupOldConnectionSnapshots(admin);
         return json({
           mode: "cron",
           checked_at: new Date().toISOString(),
