@@ -1477,6 +1477,15 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "unknown instance" });
     }
 
+    // Phase 2.8: record last webhook timestamp (fire-and-forget, never blocks).
+    admin
+      .from("whatsapp_instances")
+      .update({ last_webhook_at: new Date().toISOString() })
+      .eq("id", inst.id)
+      .then(() => undefined, () => undefined);
+
+
+
 
     const normalized = event.toUpperCase().replace(/\./g, "_");
 
