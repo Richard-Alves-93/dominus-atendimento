@@ -270,3 +270,47 @@ export function recommendationFor(conn: ConnLite): string {
   }
   return "Sem dados suficientes para diagnóstico.";
 }
+
+export function computeVpsAlerts(v: VpsLive): OperationalAlert[] {
+  const alerts: OperationalAlert[] = [];
+  if (!v || !v.configured) return alerts;
+  const when = v.checked_at ?? now();
+  if (!v.ok) {
+    alerts.push({
+      id: "vps-offline",
+      severity: "critical",
+      title: "VPS sem resposta",
+      description: v.error ? `Fonte da VPS indisponível: ${v.error}` : "A fonte de métricas da VPS não respondeu.",
+      scope: "Infraestrutura",
+      detectedAt: when,
+    });
+    return alerts;
+  }
+  const push = (id: string, sev: AlertSeverity, title: string, description: string) =>
+    alerts.push({ id, severity: sev, title, description, scope: "Infraestrutura", detectedAt: when });
+
+  if (v.cpu_percent != null) {
+    if (v.cpu_percent >= 95) push("vps-cpu-critical", "critical", "CPU crítica na VPS", `Uso de CPU em ${v.cpu_percent.toFixed(0)}% (≥ 95%).`);
+    else if (v.cpu_percent >= 85) push("vps-cpu-warning", "warning", "CPU alta na VPS", `Uso de CPU em ${v.cpu_percent.toFixed(0)}% (≥ 85%).`);
+  }
+  if (v.memory_percent != null) {
+    if (v.memory_percent >= 95) push("vps-mem-critical", "critical", "Memória crítica na VPS", `Uso de memória em ${v.memory_percent.toFixed(0)}% (≥ 95%).`);
+    else if (v.memory_percent >= 85) push("vps-mem-warning", "warning", "Memória alta na VPS", `Uso de memória em ${v.memory_percent.toFixed(0)}% (≥ 85%).`);
+  }
+  if (v.disk_percent != null) {
+    if (v.disk_percent >= 90) push("vps-disk-critical", "critical", "Disco crítico na VPS", `Uso de disco em ${v.disk_percent.toFixed(0)}% (≥ 90%).`);
+    else if (v.disk_percent >= 80) push("vps-disk-warning", "warning", "Disco alto na VPS", `Uso de disco em ${v.disk_percent.toFixed(0)}% (≥ 80%).`);
+  }
+  return alerts;
+}
+
+export function formatUptime(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds)) return "—";
+  const s = Math.max(0, Math.trunc(seconds));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
