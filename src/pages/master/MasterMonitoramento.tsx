@@ -866,6 +866,99 @@ export default function MasterMonitoramento() {
     { label: "Empresas com alerta", value: summary.companiesWithAlert, icon: Server, tone: "bg-primary/10 text-primary" },
   ];
 
+  // Fase 2.11 — Exportação CSV de histórico (Master)
+  const handleExportCsv = useCallback(
+    async (kind: "evolution" | "vps" | "connections" | "flow") => {
+      try {
+        setExporting(kind);
+        const hours = exportPeriodHours(exportPeriod);
+        const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+        const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+
+        let csv = "";
+        let filename = "";
+        let rowCount = 0;
+
+        if (kind === "evolution") {
+          const cols = [
+            "created_at","api_online","health","response_time_ms",
+            "total_instances","connected_instances","disconnected_instances","error_instances","source",
+          ] as const;
+          const { data, error } = await (supabase.from("evolution_health_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `evolution-${exportPeriod}-${stamp}.csv`;
+        } else if (kind === "vps") {
+          const cols = [
+            "created_at","status","health","cpu_percent","memory_percent","disk_percent",
+            "load_average","uptime_seconds","response_time_ms","source",
+          ] as const;
+          const { data, error } = await (supabase.from("infrastructure_health_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `vps-${exportPeriod}-${stamp}.csv`;
+        } else if (kind === "connections") {
+          const cols = [
+            "created_at","company_id","connection_id","channel","provider","instance_name","identifier",
+            "status","health","last_activity_at","error_count","reconnect_count","source",
+          ] as const;
+          const { data, error } = await (supabase.from("connection_health_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `conexoes-${exportPeriod}-${stamp}.csv`;
+        } else {
+          const cols = [
+            "created_at","company_id","connection_id","channel","provider","instance_name","identifier",
+            "inbound_count_24h","outbound_count_24h","failed_count_24h","pending_count_24h",
+            "last_inbound_at","last_outbound_at","last_webhook_at","health","source",
+          ] as const;
+          const { data, error } = await (supabase.from("connection_message_flow_snapshots") as any)
+            .select(cols.join(","))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(EXPORT_MAX_ROWS);
+          if (error) throw error;
+          rowCount = (data ?? []).length;
+          csv = rowsToCsv((data ?? []) as any[], cols as unknown as string[]);
+          filename = `fluxo-${exportPeriod}-${stamp}.csv`;
+        }
+
+        downloadCsv(filename, csv);
+        toast({
+          title: "Exportação concluída",
+          description:
+            rowCount >= EXPORT_MAX_ROWS
+              ? `Exportação limitada aos ${EXPORT_MAX_ROWS} registros mais recentes.`
+              : `${rowCount} registro(s) exportado(s).`,
+        });
+      } catch (e: any) {
+        toast({
+          title: "Falha na exportação",
+          description: e?.message ?? "Não foi possível exportar agora.",
+          variant: "destructive",
+        });
+      } finally {
+        setExporting(null);
+      }
+    },
+    [exportPeriod],
+  );
+
 
   return (
     <MasterLayout title="Monitoramento Operacional">
