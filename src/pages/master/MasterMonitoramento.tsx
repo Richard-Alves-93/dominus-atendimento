@@ -466,6 +466,7 @@ export default function MasterMonitoramento() {
       loadLive(false);
       loadHistory(period);
       loadInfraHistory(period);
+      loadConfigStats();
     })();
     return () => {
       cancelled = true;
@@ -482,7 +483,9 @@ export default function MasterMonitoramento() {
     await loadLive(true);
     await loadHistory(period);
     await loadInfraHistory(period);
+    await loadConfigStats();
   };
+
 
   // Apply live state to rows
   const mergedRows = useMemo(() => {
