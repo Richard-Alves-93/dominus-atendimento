@@ -552,6 +552,58 @@ export default function MasterMonitoramento() {
           ))}
         </div>
 
+        {/* Alertas operacionais */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Alertas operacionais
+            </h3>
+          </div>
+          {alerts.length === 0 ? (
+            <Card className="p-5 flex items-center gap-3 border-emerald-500/30 bg-emerald-500/5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <div>
+                <p className="text-sm font-medium text-emerald-700">Tudo certo no momento</p>
+                <p className="text-xs text-muted-foreground">
+                  Nenhum problema operacional detectado na última verificação.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-3">
+              {alerts.map((a) => (
+                <Card key={a.id} className={`p-4 border ${severityClasses(a.severity)}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className={severityClasses(a.severity)}>
+                          {severityLabel(a.severity)}
+                        </Badge>
+                        {a.scope && (
+                          <span className="text-xs text-muted-foreground truncate">{a.scope}</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold leading-tight">{a.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{a.description}</p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {fmtDate(a.detectedAt)}
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+          {history.length < 4 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Dados históricos insuficientes para detectar oscilação.
+            </p>
+          )}
+        </div>
+
+
+
         {/* Provedores */}
         <div>
           <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">
