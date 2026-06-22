@@ -394,6 +394,30 @@ export default function Setores() {
                 onCheckedChange={(v) => setForm((f) => ({ ...f, allow_stalled_takeover: !!v }))}
               />
             </div>
+            <div className="space-y-1.5 rounded-md border p-3">
+              <Label className="text-sm">Distribuição de atendimentos</Label>
+              <Select
+                value={form.assignment_mode}
+                onValueChange={(v) => setForm((f) => ({ ...f, assignment_mode: v as "manual" | "round_robin" }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="round_robin">Rotativo entre atendentes</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.assignment_mode === "round_robin" ? (
+                <p className="text-xs text-muted-foreground">
+                  Novos atendimentos deste setor poderão ser distribuídos automaticamente entre os atendentes habilitados no rodízio. A aplicação real da distribuição será ativada em uma etapa posterior.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Os atendimentos entram na fila do setor e precisam ser assumidos manualmente.
+                </p>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button
