@@ -588,6 +588,12 @@ export default function MasterMonitoramento() {
     loadConnHistory(period);
   }, [period, loadHistory, loadInfraHistory, loadConnHistory]);
 
+  // Phase 2.9: carregar histórico de fluxo ao abrir/trocar período do drawer
+  useEffect(() => {
+    const realId = (selected?.raw as any)?.id as string | undefined;
+    loadFlowHistory(realId ?? null, flowHistoryPeriod);
+  }, [selected, flowHistoryPeriod, loadFlowHistory]);
+
   const handleRefresh = async () => {
     await loadLive(true);
     await loadHistory(period);
