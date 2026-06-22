@@ -352,6 +352,45 @@ async function cleanupOldInfraSnapshots(admin: ReturnType<typeof createClient>) 
   }
 }
 
+async function saveConnectionSnapshots(
+  admin: ReturnType<typeof createClient>,
+  data: Awaited<ReturnType<typeof collectEvolutionHealth>>,
+  source: string,
+) {
+  const all = [...data.connections, ...data.otherChannels];
+  if (all.length === 0) return 0;
+  const rows = all.map((c) => ({
+    company_id: c.company_id ?? null,
+    connection_id: c.connection_id ?? null,
+    channel: c.channel,
+    provider: c.provider,
+    instance_name: c.instance_name ?? null,
+    identifier: c.identifier ?? null,
+    status: c.status ?? "unknown",
+    health: c.health ?? "unknown",
+    last_activity_at: c.last_activity_at ?? null,
+    last_error_at: c.error ? new Date().toISOString() : null,
+    error_count: c.error ? 1 : 0,
+    reconnect_count: 0,
+    source,
+    metadata: {
+      live_checked: (c as any).live_checked === true,
+      error: c.error ? String(c.error).slice(0, 200) : null,
+    },
+  }));
+  const { error } = await admin.from("connection_health_snapshots").insert(rows);
+  if (error) throw error;
+  return rows.length;
+}
+
+async function cleanupOldConnectionSnapshots(admin: ReturnType<typeof createClient>) {
+  try {
+    await admin.rpc("connection_health_cleanup" as any);
+  } catch (e) {
+    console.error("[cleanupOldConnectionSnapshots] failed", (e as Error)?.message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -395,8 +434,15 @@ Deno.serve(async (req) => {
         try {
           if (vps.configured) vpsSnapshotId = await saveVpsSnapshot(admin, vps, "cron");
         } catch (_e) { /* ignore */ }
+        let connSnapshotsCount = 0;
+        try {
+          connSnapshotsCount = await saveConnectionSnapshots(admin, data, "cron");
+        } catch (e) {
+          console.error("[saveConnectionSnapshots cron] failed", (e as Error)?.message);
+        }
         await cleanupOldSnapshots(admin);
         await cleanupOldInfraSnapshots(admin);
+        await cleanupOldConnectionSnapshots(admin);
         return json({
           mode: "cron",
           checked_at: new Date().toISOString(),
@@ -464,6 +510,11 @@ Deno.serve(async (req) => {
       try {
         if (vps.configured) await saveVpsSnapshot(admin, vps, snapshotSource);
       } catch (_e) { /* ignore */ }
+      try {
+        await saveConnectionSnapshots(admin, data, snapshotSource);
+      } catch (e) {
+        console.error("[saveConnectionSnapshots manual] failed", (e as Error)?.message);
+      }
     }
 
     return json({

@@ -305,6 +305,71 @@ export type Database = {
           },
         ]
       }
+      connection_health_snapshots: {
+        Row: {
+          channel: string
+          company_id: string | null
+          connection_id: string | null
+          created_at: string
+          error_count: number
+          health: string
+          id: string
+          identifier: string | null
+          instance_name: string | null
+          last_activity_at: string | null
+          last_error_at: string | null
+          metadata: Json
+          provider: string
+          reconnect_count: number
+          source: string
+          status: string
+        }
+        Insert: {
+          channel: string
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error_count?: number
+          health?: string
+          id?: string
+          identifier?: string | null
+          instance_name?: string | null
+          last_activity_at?: string | null
+          last_error_at?: string | null
+          metadata?: Json
+          provider: string
+          reconnect_count?: number
+          source?: string
+          status?: string
+        }
+        Update: {
+          channel?: string
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error_count?: number
+          health?: string
+          id?: string
+          identifier?: string | null
+          instance_name?: string | null
+          last_activity_at?: string | null
+          last_error_at?: string | null
+          metadata?: Json
+          provider?: string
+          reconnect_count?: number
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_health_snapshots_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           avatar_url: string | null
@@ -1439,6 +1504,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      connection_health_cleanup: { Args: never; Returns: undefined }
       evolution_health_cleanup: { Args: never; Returns: undefined }
       generate_ticket_protocol: {
         Args: { _company_id: string }

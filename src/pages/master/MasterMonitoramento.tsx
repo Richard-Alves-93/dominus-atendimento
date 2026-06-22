@@ -43,13 +43,21 @@ import {
   computeConnectionAlerts,
   computeOscillationAlert,
   computeVpsAlerts,
+  computeConnectionStability,
+  computeStabilityAlerts,
+  recommendationForConnection,
+  stabilityLabel,
+  stabilityClasses,
+  statusLabelPt,
+  formatAgo,
   formatUptime,
   severityClasses,
   severityLabel,
   severityRank,
-  recommendationFor,
   type OperationalAlert,
   type VpsLive,
+  type StabilityInfo,
+  type ConnectionSnapshot,
 } from "@/lib/monitoringAlerts";
 import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
 
@@ -251,6 +259,16 @@ export default function MasterMonitoramento() {
   };
   const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
 
+  // Snapshots por conexão (Fase 2.7)
+  type ConnHealthRow = {
+    connection_id: string | null;
+    instance_name: string | null;
+    created_at: string;
+    status: string;
+    health: string;
+  };
+  const [connHistory, setConnHistory] = useState<ConnHealthRow[]>([]);
+
   type ConfigStats = {
     lastCronEvo: string | null;
     lastManualEvo: string | null;
@@ -325,6 +343,23 @@ export default function MasterMonitoramento() {
       setInfraHistory([]);
     }
   }, []);
+
+  const loadConnHistory = useCallback(async (p: HistoryPeriod) => {
+    try {
+      const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+      const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      const { data, error } = await (supabase.from("connection_health_snapshots") as any)
+        .select("connection_id, instance_name, created_at, status, health")
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(5000);
+      if (error) throw error;
+      setConnHistory((data ?? []) as ConnHealthRow[]);
+    } catch {
+      setConnHistory([]);
+    }
+  }, []);
+
 
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
@@ -466,6 +501,7 @@ export default function MasterMonitoramento() {
       loadLive(false);
       loadHistory(period);
       loadInfraHistory(period);
+      loadConnHistory(period);
       loadConfigStats();
     })();
     return () => {
@@ -477,12 +513,14 @@ export default function MasterMonitoramento() {
   useEffect(() => {
     loadHistory(period);
     loadInfraHistory(period);
-  }, [period, loadHistory, loadInfraHistory]);
+    loadConnHistory(period);
+  }, [period, loadHistory, loadInfraHistory, loadConnHistory]);
 
   const handleRefresh = async () => {
     await loadLive(true);
     await loadHistory(period);
     await loadInfraHistory(period);
+    await loadConnHistory(period);
     await loadConfigStats();
   };
 
@@ -542,6 +580,29 @@ export default function MasterMonitoramento() {
           : "healthy";
 
 
+  // Mapa de estabilidade por linha (id), usando connection_id (UUID) ou instance_name como chave
+  const stabilityByRow = useMemo(() => {
+    const byKey = new Map<string, ConnectionSnapshot[]>();
+    for (const s of connHistory) {
+      const key = s.connection_id ?? (s.instance_name ? `name:${s.instance_name}` : null);
+      if (!key) continue;
+      const arr = byKey.get(key) ?? [];
+      arr.push({ created_at: s.created_at, status: s.status, health: s.health });
+      byKey.set(key, arr);
+    }
+    const map = new Map<string, StabilityInfo>();
+    for (const r of mergedRows) {
+      // r.id é "inst:<uuid>" ou "ch:<uuid>"; o uuid real está em raw.id
+      const realId = (r.raw as any)?.id as string | undefined;
+      const snaps =
+        (realId && byKey.get(realId)) ??
+        (r.name ? byKey.get(`name:${r.name}`) : undefined) ??
+        [];
+      map.set(r.id, computeConnectionStability(snaps));
+    }
+    return map;
+  }, [connHistory, mergedRows]);
+
   const alerts: OperationalAlert[] = useMemo(() => {
     const list: OperationalAlert[] = [];
     list.push(...computeEvolutionAlerts(live));
@@ -564,9 +625,33 @@ export default function MasterMonitoramento() {
         })),
       ),
     );
+    // Alertas de oscilação por conexão (Fase 2.7)
+    for (const r of mergedRows) {
+      const info = stabilityByRow.get(r.id);
+      if (!info) continue;
+      list.push(
+        ...computeStabilityAlerts(
+          {
+            id: r.id,
+            companyName: r.companyName,
+            channelType: r.channelType,
+            provider: r.provider,
+            name: r.name,
+            health: r.health,
+            status: r.status,
+            lastActivityAt: r.lastActivityAt,
+            lastError: r.lastError,
+          },
+          info,
+        ),
+      );
+    }
     list.push(...computeVpsAlerts(vps));
-    return list.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows, vps]);
+    // Dedup por id
+    const seen = new Set<string>();
+    const dedup = list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
+    return dedup.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+  }, [live, history, mergedRows, vps, stabilityByRow]);
 
   const filteredRows = useMemo(() => {
     if (healthFilter === "all") return mergedRows;
@@ -1191,6 +1276,7 @@ export default function MasterMonitoramento() {
                   <th className="text-left px-4 py-2 font-medium">Identificador</th>
                   <th className="text-left px-4 py-2 font-medium">Status</th>
                   <th className="text-left px-4 py-2 font-medium">Saúde</th>
+                  <th className="text-left px-4 py-2 font-medium">Estabilidade</th>
                   <th className="text-left px-4 py-2 font-medium">Última atividade</th>
                   <th className="text-right px-4 py-2 font-medium">Ações</th>
                 </tr>
@@ -1198,19 +1284,20 @@ export default function MasterMonitoramento() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                       Carregando...
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                       Nenhuma conexão para o filtro selecionado.
                     </td>
                   </tr>
                 ) : (
                   filteredRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
+                    const info = stabilityByRow.get(r.id);
                     return (
                       <tr key={r.id} className={`border-t hover:bg-muted/30 ${rowHighlight(r.health, r.status)}`}>
                         <td className="px-4 py-2">{r.companyName}</td>
@@ -1233,8 +1320,17 @@ export default function MasterMonitoramento() {
                             {healthLabel(r.health)}
                           </Badge>
                         </td>
+                        <td className="px-4 py-2">
+                          <Badge
+                            variant="outline"
+                            className={stabilityClasses(info?.stability ?? "unknown")}
+                          >
+                            {stabilityLabel(info?.stability ?? "unknown")}
+                          </Badge>
+                        </td>
                         <td className="px-4 py-2 text-muted-foreground">
-                          {fmtDate(r.lastActivityAt)}
+                          <div>{formatAgo(r.lastActivityAt)}</div>
+                          <div className="text-[10px] opacity-70">{fmtDate(r.lastActivityAt)}</div>
                         </td>
                         <td className="px-4 py-2 text-right">
                           <Button variant="ghost" size="sm" onClick={() => setSelected(r)}>
@@ -1278,30 +1374,70 @@ export default function MasterMonitoramento() {
 
               <div className="mt-4 pt-4 border-t">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Saúde operacional
+                  Histórico e estabilidade
                 </h4>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className={healthColor(selected.health)}>
-                    {healthLabel(selected.health)}
-                  </Badge>
-                  <Badge variant="outline">{statusLabel(selected.status)}</Badge>
-                </div>
-                <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
-                  <p className="font-medium mb-1 text-foreground">Recomendação</p>
-                  <p className="text-muted-foreground">
-                    {recommendationFor({
-                      id: selected.id,
-                      companyName: selected.companyName,
-                      channelType: selected.channelType,
-                      provider: selected.provider,
-                      name: selected.name,
-                      health: selected.health,
-                      status: selected.status,
-                      lastActivityAt: selected.lastActivityAt,
-                      lastError: selected.lastError,
-                    })}
-                  </p>
-                </div>
+                {(() => {
+                  const info =
+                    stabilityByRow.get(selected.id) ?? {
+                      stability: "unknown" as const,
+                      transitions: 0,
+                      connectedDisconnectedFlips: 0,
+                      sampleSize: 0,
+                      recentStates: [],
+                    };
+                  const conn = {
+                    id: selected.id,
+                    companyName: selected.companyName,
+                    channelType: selected.channelType,
+                    provider: selected.provider,
+                    name: selected.name,
+                    health: selected.health,
+                    status: selected.status,
+                    lastActivityAt: selected.lastActivityAt,
+                    lastError: selected.lastError,
+                  };
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <Badge variant="outline" className={healthColor(selected.health)}>
+                          {healthLabel(selected.health)}
+                        </Badge>
+                        <Badge variant="outline">{statusLabel(selected.status)}</Badge>
+                        <Badge variant="outline" className={stabilityClasses(info.stability)}>
+                          {stabilityLabel(info.stability)}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                        <div className="text-muted-foreground">Sem atividade há</div>
+                        <div className="text-right">{formatAgo(selected.lastActivityAt)}</div>
+                        <div className="text-muted-foreground">Snapshots recentes</div>
+                        <div className="text-right">{info.sampleSize}</div>
+                        <div className="text-muted-foreground">Mudanças de estado</div>
+                        <div className="text-right">{info.transitions}</div>
+                        <div className="text-muted-foreground">Quedas/reconexões</div>
+                        <div className="text-right">{info.connectedDisconnectedFlips}</div>
+                      </div>
+                      {info.recentStates.length > 0 ? (
+                        <div className="rounded-md border bg-muted/30 p-3 text-xs mb-3">
+                          <p className="font-medium mb-1 text-foreground">Últimos estados</p>
+                          <p className="text-muted-foreground break-words">
+                            {info.recentStates.map(statusLabelPt).join(" → ")}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Dados históricos insuficientes para diagnóstico.
+                        </p>
+                      )}
+                      <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1 text-foreground">Recomendação</p>
+                        <p className="text-muted-foreground">
+                          {recommendationForConnection(conn, info)}
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
