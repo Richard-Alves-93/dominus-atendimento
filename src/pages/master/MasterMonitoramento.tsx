@@ -251,6 +251,65 @@ export default function MasterMonitoramento() {
   };
   const [infraHistory, setInfraHistory] = useState<InfraSnapshot[]>([]);
 
+  type ConfigStats = {
+    lastCronEvo: string | null;
+    lastManualEvo: string | null;
+    lastCronInfra: string | null;
+    evoCount24h: number;
+    infraCount24h: number;
+    evoFails24h: number;
+    infraFails24h: number;
+    vpsConfigured: boolean;
+  };
+  const [configStats, setConfigStats] = useState<ConfigStats | null>(null);
+
+  const loadConfigStats = useCallback(async () => {
+    try {
+      const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const [lastCronEvoRes, lastManualEvoRes, lastCronInfraRes, evo24hRes, infra24hRes] =
+        await Promise.all([
+          (supabase.from("evolution_health_snapshots") as any)
+            .select("created_at")
+            .eq("source", "cron")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          (supabase.from("evolution_health_snapshots") as any)
+            .select("created_at")
+            .neq("source", "cron")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          (supabase.from("infrastructure_health_snapshots") as any)
+            .select("created_at")
+            .eq("source", "cron")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          (supabase.from("evolution_health_snapshots") as any)
+            .select("api_online", { count: "exact" })
+            .gte("created_at", since24h),
+          (supabase.from("infrastructure_health_snapshots") as any)
+            .select("status", { count: "exact" })
+            .gte("created_at", since24h),
+        ]);
+      const evoRows = (evo24hRes.data ?? []) as Array<{ api_online: boolean }>;
+      const infraRows = (infra24hRes.data ?? []) as Array<{ status: string }>;
+      setConfigStats({
+        lastCronEvo: lastCronEvoRes.data?.created_at ?? null,
+        lastManualEvo: lastManualEvoRes.data?.created_at ?? null,
+        lastCronInfra: lastCronInfraRes.data?.created_at ?? null,
+        evoCount24h: evo24hRes.count ?? evoRows.length,
+        infraCount24h: infra24hRes.count ?? infraRows.length,
+        evoFails24h: evoRows.filter((r) => r.api_online === false).length,
+        infraFails24h: infraRows.filter((r) => r.status !== "online").length,
+        vpsConfigured: (lastCronInfraRes.data?.created_at ?? null) !== null,
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const loadInfraHistory = useCallback(async (p: HistoryPeriod) => {
     try {
       const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
@@ -266,6 +325,7 @@ export default function MasterMonitoramento() {
       setInfraHistory([]);
     }
   }, []);
+
 
   const loadHistory = useCallback(async (p: HistoryPeriod) => {
     setHistoryLoading(true);
@@ -406,6 +466,7 @@ export default function MasterMonitoramento() {
       loadLive(false);
       loadHistory(period);
       loadInfraHistory(period);
+      loadConfigStats();
     })();
     return () => {
       cancelled = true;
@@ -422,7 +483,9 @@ export default function MasterMonitoramento() {
     await loadLive(true);
     await loadHistory(period);
     await loadInfraHistory(period);
+    await loadConfigStats();
   };
+
 
   // Apply live state to rows
   const mergedRows = useMemo(() => {
@@ -569,6 +632,130 @@ export default function MasterMonitoramento() {
             Não foi possível consultar o status real da Evolution agora. Exibindo dados persistidos.
           </Card>
         )}
+
+        {/* Configurações do monitoramento */}
+        {(() => {
+          const nowMs = Date.now();
+          const lastCronEvoMs = configStats?.lastCronEvo
+            ? new Date(configStats.lastCronEvo).getTime()
+            : null;
+          const cronAgeMin =
+            lastCronEvoMs != null ? (nowMs - lastCronEvoMs) / 60000 : null;
+          let cronLabel = "Desconhecido";
+          let cronTone = "bg-zinc-500/15 text-zinc-600 border-zinc-500/30";
+          if (cronAgeMin != null) {
+            if (cronAgeMin <= 3) {
+              cronLabel = "Ativo";
+              cronTone = "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
+            } else if (cronAgeMin <= 15) {
+              cronLabel = "Atenção";
+              cronTone = "bg-amber-500/15 text-amber-600 border-amber-500/30";
+            } else {
+              cronLabel = "Inativo";
+              cronTone = "bg-red-500/15 text-red-600 border-red-500/30";
+            }
+          }
+          const evoOnline = live?.online === true;
+          const vpsHealth = vps?.health ?? "unknown";
+          const vpsConfigured = vps?.configured === true || configStats?.vpsConfigured === true;
+          const vpsLabel = !vpsConfigured
+            ? "Não configurada"
+            : vpsHealth === "healthy"
+              ? "Saudável"
+              : vpsHealth === "warning"
+                ? "Atenção"
+                : vpsHealth === "critical"
+                  ? "Crítico"
+                  : vpsHealth === "offline"
+                    ? "Offline"
+                    : "Desconhecido";
+          const vpsTone = !vpsConfigured
+            ? "bg-zinc-500/15 text-zinc-600 border-zinc-500/30"
+            : vpsHealth === "healthy"
+              ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+              : vpsHealth === "warning"
+                ? "bg-amber-500/15 text-amber-600 border-amber-500/30"
+                : vpsHealth === "critical"
+                  ? "bg-red-500/15 text-red-600 border-red-500/30"
+                  : "bg-zinc-500/15 text-zinc-600 border-zinc-500/30";
+          const Item = ({ label, value, tone }: { label: string; value: string; tone?: string }) => (
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+              {tone ? (
+                <Badge variant="outline" className={tone}>{value}</Badge>
+              ) : (
+                <p className="text-sm font-medium">{value}</p>
+              )}
+            </div>
+          );
+          return (
+            <Card className="p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-base font-semibold">Configurações do monitoramento</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Visão geral do estado da coleta automática e dos serviços monitorados.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={liveLoading}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 mr-2 ${liveLoading ? "animate-spin" : ""}`} />
+                  Testar agora
+                </Button>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Item label="Coleta automática" value="Ativa" tone="bg-emerald-500/15 text-emerald-600 border-emerald-500/30" />
+                <Item label="Intervalo de coleta" value="1 minuto" />
+                <Item label="Retenção" value="30 dias" />
+                <Item label="Cron" value={cronLabel} tone={cronTone} />
+                <Item
+                  label="Evolution API"
+                  value={evoOnline ? "Online" : "Offline"}
+                  tone={
+                    evoOnline
+                      ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                      : "bg-red-500/15 text-red-600 border-red-500/30"
+                  }
+                />
+                <Item label="VPS" value={vpsLabel} tone={vpsTone} />
+                <Item
+                  label="Endpoint VPS"
+                  value={vpsConfigured ? "Configurado" : "Não configurado"}
+                  tone={
+                    vpsConfigured
+                      ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                      : "bg-zinc-500/15 text-zinc-600 border-zinc-500/30"
+                  }
+                />
+                <Item
+                  label="Última coleta automática"
+                  value={fmtDate(configStats?.lastCronEvo ?? null)}
+                />
+                <Item
+                  label="Última atualização manual"
+                  value={fmtDate(configStats?.lastManualEvo ?? null)}
+                />
+                <Item
+                  label="Última coleta VPS (cron)"
+                  value={fmtDate(configStats?.lastCronInfra ?? null)}
+                />
+                <Item
+                  label="Snapshots Evolution 24h"
+                  value={`${configStats?.evoCount24h ?? 0} (falhas: ${configStats?.evoFails24h ?? 0})`}
+                />
+                <Item
+                  label="Snapshots VPS 24h"
+                  value={`${configStats?.infraCount24h ?? 0} (falhas: ${configStats?.infraFails24h ?? 0})`}
+                />
+              </div>
+            </Card>
+          );
+        })()}
+
 
         {/* Cards de resumo */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
