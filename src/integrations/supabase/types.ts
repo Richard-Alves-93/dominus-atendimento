@@ -1456,6 +1456,8 @@ export type Database = {
         Returns: boolean
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
+      release_monitoring_cron_lock: { Args: never; Returns: boolean }
+      try_monitoring_cron_lock: { Args: never; Returns: boolean }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
