@@ -366,6 +366,7 @@ Deno.serve(async (req) => {
         return json({ error: "Unauthorized" }, 401);
       }
       const data = await collectEvolutionHealth(admin);
+      const vps = await collectVpsHealth();
       let snapshotId: string | null = null;
       let snapshotError: string | null = null;
       try {
@@ -373,8 +374,13 @@ Deno.serve(async (req) => {
       } catch (e) {
         snapshotError = (e as Error)?.message?.slice(0, 200) ?? "snapshot_failed";
       }
+      let vpsSnapshotId: string | null = null;
+      try {
+        if (vps.configured) vpsSnapshotId = await saveVpsSnapshot(admin, vps, "cron");
+      } catch (_e) { /* ignore */ }
       // retention runs after snapshot, never blocks
       await cleanupOldSnapshots(admin);
+      await cleanupOldInfraSnapshots(admin);
       return json({
         mode: "cron",
         checked_at: new Date().toISOString(),
@@ -384,9 +390,11 @@ Deno.serve(async (req) => {
           health: data.health,
           ...data.evoStats,
         },
+        infrastructure: vps,
         snapshot_saved: snapshotId !== null,
         snapshot_id: snapshotId,
         snapshot_error: snapshotError,
+        infra_snapshot_saved: vpsSnapshotId !== null,
       });
     }
 
