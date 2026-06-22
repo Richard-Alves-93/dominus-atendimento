@@ -170,9 +170,11 @@ const channelTypeLabel = (t: string) => {
   const map: Record<string, string> = {
     whatsapp: "WhatsApp",
     instagram: "Instagram",
-    facebook: "Facebook",
+    facebook: "Facebook Messenger",
+    messenger: "Facebook Messenger",
     email: "E-mail",
     telegram: "Telegram",
+    webchat: "Webchat",
   };
   return map[t] ?? t;
 };
@@ -181,11 +183,37 @@ const providerLabel = (p: string) => {
   const map: Record<string, string> = {
     evolution: "Evolution",
     evogo: "EvoGo",
-    meta: "Meta",
+    meta: "Meta API",
+    meta_cloud: "Meta API",
+    smtp_imap: "IMAP/SMTP",
     imap_smtp: "IMAP/SMTP",
+    gmail: "Gmail",
+    outlook: "Outlook",
     manual: "Manual",
   };
   return map[p] ?? p;
+};
+
+// Mapeamento de estados futuros (Meta API / IMAP/SMTP) para apresentação em português.
+// Mantemos os valores internos do banco intactos; traduzimos apenas na UI.
+const providerStateLabel = (s: string) => {
+  const map: Record<string, string> = {
+    configured: "Configurado",
+    not_configured: "Não configurado",
+    planned: "Planejado",
+    pending_auth: "Autenticação pendente",
+    expired_token: "Token expirado",
+    webhook_inactive: "Webhook inativo",
+    sync_delayed: "Sincronização atrasada",
+    auth_error: "Erro de autenticação",
+    rate_limited: "Limite atingido",
+    healthy: "Saudável",
+    warning: "Atenção",
+    critical: "Crítico",
+    offline: "Offline",
+    unknown: "Desconhecido",
+  };
+  return map[s] ?? s;
 };
 
 const healthColor = (h: Health) => {
