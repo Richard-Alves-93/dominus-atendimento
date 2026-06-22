@@ -580,6 +580,29 @@ export default function MasterMonitoramento() {
           : "healthy";
 
 
+  // Mapa de estabilidade por linha (id), usando connection_id (UUID) ou instance_name como chave
+  const stabilityByRow = useMemo(() => {
+    const byKey = new Map<string, ConnectionSnapshot[]>();
+    for (const s of connHistory) {
+      const key = s.connection_id ?? (s.instance_name ? `name:${s.instance_name}` : null);
+      if (!key) continue;
+      const arr = byKey.get(key) ?? [];
+      arr.push({ created_at: s.created_at, status: s.status, health: s.health });
+      byKey.set(key, arr);
+    }
+    const map = new Map<string, StabilityInfo>();
+    for (const r of mergedRows) {
+      // r.id é "inst:<uuid>" ou "ch:<uuid>"; o uuid real está em raw.id
+      const realId = (r.raw as any)?.id as string | undefined;
+      const snaps =
+        (realId && byKey.get(realId)) ??
+        (r.name ? byKey.get(`name:${r.name}`) : undefined) ??
+        [];
+      map.set(r.id, computeConnectionStability(snaps));
+    }
+    return map;
+  }, [connHistory, mergedRows]);
+
   const alerts: OperationalAlert[] = useMemo(() => {
     const list: OperationalAlert[] = [];
     list.push(...computeEvolutionAlerts(live));
@@ -602,9 +625,33 @@ export default function MasterMonitoramento() {
         })),
       ),
     );
+    // Alertas de oscilação por conexão (Fase 2.7)
+    for (const r of mergedRows) {
+      const info = stabilityByRow.get(r.id);
+      if (!info) continue;
+      list.push(
+        ...computeStabilityAlerts(
+          {
+            id: r.id,
+            companyName: r.companyName,
+            channelType: r.channelType,
+            provider: r.provider,
+            name: r.name,
+            health: r.health,
+            status: r.status,
+            lastActivityAt: r.lastActivityAt,
+            lastError: r.lastError,
+          },
+          info,
+        ),
+      );
+    }
     list.push(...computeVpsAlerts(vps));
-    return list.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
-  }, [live, history, mergedRows, vps]);
+    // Dedup por id
+    const seen = new Set<string>();
+    const dedup = list.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
+    return dedup.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+  }, [live, history, mergedRows, vps, stabilityByRow]);
 
   const filteredRows = useMemo(() => {
     if (healthFilter === "all") return mergedRows;
