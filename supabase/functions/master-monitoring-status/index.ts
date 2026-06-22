@@ -366,50 +366,57 @@ Deno.serve(async (req) => {
         return json({ error: "Unauthorized" }, 401);
       }
       // Prevent overlapping cron executions using a Postgres advisory lock.
-      // Lock key is an arbitrary stable int chosen for this job.
-      const LOCK_KEY = 91823471;
-      const { data: lockRow } = await admin.rpc("pg_try_advisory_lock" as any, { key: LOCK_KEY }).maybeSingle?.() ?? { data: null };
       let gotLock = false;
       try {
-        const r = await admin.rpc("pg_try_advisory_lock" as any, { key: LOCK_KEY });
-        gotLock = r?.data === true;
-      } catch { gotLock = true; /* fallback: proceed if RPC missing */ }
+        const { data: lockData } = await admin.rpc("try_monitoring_cron_lock" as any);
+        gotLock = lockData === true;
+      } catch {
+        gotLock = true; // fail-open: if RPC unavailable, proceed
+      }
       if (!gotLock) {
-        return json({ mode: "cron", skipped: true, reason: "already_running", checked_at: new Date().toISOString() });
+        return json({
+          mode: "cron",
+          skipped: true,
+          reason: "already_running",
+          checked_at: new Date().toISOString(),
+        });
       }
       try {
-      const data = await collectEvolutionHealth(admin);
-      const vps = await collectVpsHealth();
-      let snapshotId: string | null = null;
-      let snapshotError: string | null = null;
-      try {
-        snapshotId = await saveEvolutionSnapshot(admin, data, "cron");
-      } catch (e) {
-        snapshotError = (e as Error)?.message?.slice(0, 200) ?? "snapshot_failed";
+        const data = await collectEvolutionHealth(admin);
+        const vps = await collectVpsHealth();
+        let snapshotId: string | null = null;
+        let snapshotError: string | null = null;
+        try {
+          snapshotId = await saveEvolutionSnapshot(admin, data, "cron");
+        } catch (e) {
+          snapshotError = (e as Error)?.message?.slice(0, 200) ?? "snapshot_failed";
+        }
+        let vpsSnapshotId: string | null = null;
+        try {
+          if (vps.configured) vpsSnapshotId = await saveVpsSnapshot(admin, vps, "cron");
+        } catch (_e) { /* ignore */ }
+        await cleanupOldSnapshots(admin);
+        await cleanupOldInfraSnapshots(admin);
+        return json({
+          mode: "cron",
+          checked_at: new Date().toISOString(),
+          evolution: {
+            online: data.evoOnline,
+            response_time_ms: data.evoResponseMs,
+            health: data.health,
+            ...data.evoStats,
+          },
+          infrastructure: vps,
+          snapshot_saved: snapshotId !== null,
+          snapshot_id: snapshotId,
+          snapshot_error: snapshotError,
+          infra_snapshot_saved: vpsSnapshotId !== null,
+        });
+      } finally {
+        try { await admin.rpc("release_monitoring_cron_lock" as any); } catch { /* ignore */ }
       }
-      let vpsSnapshotId: string | null = null;
-      try {
-        if (vps.configured) vpsSnapshotId = await saveVpsSnapshot(admin, vps, "cron");
-      } catch (_e) { /* ignore */ }
-      // retention runs after snapshot, never blocks
-      await cleanupOldSnapshots(admin);
-      await cleanupOldInfraSnapshots(admin);
-      return json({
-        mode: "cron",
-        checked_at: new Date().toISOString(),
-        evolution: {
-          online: data.evoOnline,
-          response_time_ms: data.evoResponseMs,
-          health: data.health,
-          ...data.evoStats,
-        },
-        infrastructure: vps,
-        snapshot_saved: snapshotId !== null,
-        snapshot_id: snapshotId,
-        snapshot_error: snapshotError,
-        infra_snapshot_saved: vpsSnapshotId !== null,
-      });
     }
+
 
 
     // ---------- MASTER MODE (JWT) ----------
