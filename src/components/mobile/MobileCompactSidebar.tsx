@@ -8,6 +8,9 @@ import {
   Building,
   UsersRound,
   CalendarDays,
+  Tag,
+  Settings,
+  LogOut,
   Zap,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
