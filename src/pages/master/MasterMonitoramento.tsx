@@ -1634,6 +1634,90 @@ export default function MasterMonitoramento() {
                     </>
                   );
                 })()}
+
+                {/* Phase 2.9: histórico do fluxo */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-foreground">Histórico do fluxo</p>
+                    <div className="flex items-center gap-1">
+                      {(["1h", "6h", "24h"] as HistoryPeriod[]).map((p) => (
+                        <Button
+                          key={p}
+                          size="sm"
+                          variant={flowHistoryPeriod === p ? "default" : "outline"}
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => setFlowHistoryPeriod(p)}
+                        >
+                          {p === "1h" ? "1h" : p === "6h" ? "6h" : "24h"}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  {flowHistoryLoading ? (
+                    <p className="text-xs text-muted-foreground">Carregando histórico...</p>
+                  ) : flowHistory.length < 2 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Ainda não há dados históricos suficientes.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          Recebidas x Enviadas (acumulado 24h por snapshot)
+                        </p>
+                        <div className="h-32">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={flowHistory.map((s) => ({
+                                t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }),
+                                Recebidas: s.inbound_count_24h,
+                                Enviadas: s.outbound_count_24h,
+                              }))}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                              <XAxis dataKey="t" fontSize={9} />
+                              <YAxis fontSize={9} allowDecimals={false} />
+                              <Tooltip />
+                              <Legend wrapperStyle={{ fontSize: 10 }} />
+                              <Line type="monotone" dataKey="Recebidas" stroke="#10b981" dot={false} />
+                              <Line type="monotone" dataKey="Enviadas" stroke="#3b82f6" dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          Falhas e Pendentes (acumulado 24h por snapshot)
+                        </p>
+                        <div className="h-32">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={flowHistory.map((s) => ({
+                                t: new Date(s.created_at).toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }),
+                                Falhas: s.failed_count_24h,
+                                Pendentes: s.pending_count_24h,
+                              }))}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                              <XAxis dataKey="t" fontSize={9} />
+                              <YAxis fontSize={9} allowDecimals={false} />
+                              <Tooltip />
+                              <Legend wrapperStyle={{ fontSize: 10 }} />
+                              <Bar dataKey="Falhas" fill="#ef4444" />
+                              <Bar dataKey="Pendentes" fill="#f59e0b" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
