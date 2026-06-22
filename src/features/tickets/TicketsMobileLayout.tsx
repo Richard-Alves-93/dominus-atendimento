@@ -1056,7 +1056,7 @@ export default function TicketsMobileLayout(props: Props) {
                         </div>
                       )}
 
-                      {((m as any).raw?.forwarded === true) && (
+                      {(((m as any).is_forwarded === true) || ((m as any).raw?.forwarded === true)) && (
                         <div className="flex items-center gap-1 text-[11px] italic mb-0.5 text-muted-foreground">
                           <Forward className="w-3 h-3" /> Encaminhada
                         </div>
