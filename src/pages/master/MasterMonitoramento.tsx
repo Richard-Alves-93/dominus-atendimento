@@ -1374,30 +1374,70 @@ export default function MasterMonitoramento() {
 
               <div className="mt-4 pt-4 border-t">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Saúde operacional
+                  Histórico e estabilidade
                 </h4>
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className={healthColor(selected.health)}>
-                    {healthLabel(selected.health)}
-                  </Badge>
-                  <Badge variant="outline">{statusLabel(selected.status)}</Badge>
-                </div>
-                <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
-                  <p className="font-medium mb-1 text-foreground">Recomendação</p>
-                  <p className="text-muted-foreground">
-                    {recommendationFor({
-                      id: selected.id,
-                      companyName: selected.companyName,
-                      channelType: selected.channelType,
-                      provider: selected.provider,
-                      name: selected.name,
-                      health: selected.health,
-                      status: selected.status,
-                      lastActivityAt: selected.lastActivityAt,
-                      lastError: selected.lastError,
-                    })}
-                  </p>
-                </div>
+                {(() => {
+                  const info =
+                    stabilityByRow.get(selected.id) ?? {
+                      stability: "unknown" as const,
+                      transitions: 0,
+                      connectedDisconnectedFlips: 0,
+                      sampleSize: 0,
+                      recentStates: [],
+                    };
+                  const conn = {
+                    id: selected.id,
+                    companyName: selected.companyName,
+                    channelType: selected.channelType,
+                    provider: selected.provider,
+                    name: selected.name,
+                    health: selected.health,
+                    status: selected.status,
+                    lastActivityAt: selected.lastActivityAt,
+                    lastError: selected.lastError,
+                  };
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <Badge variant="outline" className={healthColor(selected.health)}>
+                          {healthLabel(selected.health)}
+                        </Badge>
+                        <Badge variant="outline">{statusLabel(selected.status)}</Badge>
+                        <Badge variant="outline" className={stabilityClasses(info.stability)}>
+                          {stabilityLabel(info.stability)}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                        <div className="text-muted-foreground">Sem atividade há</div>
+                        <div className="text-right">{formatAgo(selected.lastActivityAt)}</div>
+                        <div className="text-muted-foreground">Snapshots recentes</div>
+                        <div className="text-right">{info.sampleSize}</div>
+                        <div className="text-muted-foreground">Mudanças de estado</div>
+                        <div className="text-right">{info.transitions}</div>
+                        <div className="text-muted-foreground">Quedas/reconexões</div>
+                        <div className="text-right">{info.connectedDisconnectedFlips}</div>
+                      </div>
+                      {info.recentStates.length > 0 ? (
+                        <div className="rounded-md border bg-muted/30 p-3 text-xs mb-3">
+                          <p className="font-medium mb-1 text-foreground">Últimos estados</p>
+                          <p className="text-muted-foreground break-words">
+                            {info.recentStates.map(statusLabelPt).join(" → ")}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Dados históricos insuficientes para diagnóstico.
+                        </p>
+                      )}
+                      <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed">
+                        <p className="font-medium mb-1 text-foreground">Recomendação</p>
+                        <p className="text-muted-foreground">
+                          {recommendationForConnection(conn, info)}
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
