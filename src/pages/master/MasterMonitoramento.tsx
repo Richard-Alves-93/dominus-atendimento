@@ -612,6 +612,7 @@ export default function MasterMonitoramento() {
       loadInfraHistory(period);
       loadConnHistory(period);
       loadConfigStats();
+      loadFlowTrendSnaps();
     })();
     return () => {
       cancelled = true;
