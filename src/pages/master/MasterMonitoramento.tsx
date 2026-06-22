@@ -45,6 +45,10 @@ import {
   computeVpsAlerts,
   computeConnectionStability,
   computeStabilityAlerts,
+  computeFlowDiagnosis,
+  computeFlowAlerts,
+  flowHealthLabel,
+  flowHealthClasses,
   recommendationForConnection,
   stabilityLabel,
   stabilityClasses,
@@ -58,8 +62,10 @@ import {
   type VpsLive,
   type StabilityInfo,
   type ConnectionSnapshot,
+  type MessageFlow,
 } from "@/lib/monitoringAlerts";
 import { Cpu, HardDrive, MemoryStick, Timer } from "lucide-react";
+
 
 // Estados padronizados (preparados para multicanal)
 type OpStatus =
