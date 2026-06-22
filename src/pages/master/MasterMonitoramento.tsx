@@ -825,17 +825,17 @@ export default function MasterMonitoramento() {
                       Carregando...
                     </td>
                   </tr>
-                ) : mergedRows.length === 0 ? (
+                ) : filteredRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
-                      Nenhuma conexão registrada.
+                      Nenhuma conexão para o filtro selecionado.
                     </td>
                   </tr>
                 ) : (
-                  mergedRows.map((r) => {
+                  filteredRows.map((r) => {
                     const Icon = channelIcon(r.channelType);
                     return (
-                      <tr key={r.id} className="border-t hover:bg-muted/30">
+                      <tr key={r.id} className={`border-t hover:bg-muted/30 ${rowHighlight(r.health, r.status)}`}>
                         <td className="px-4 py-2">{r.companyName}</td>
                         <td className="px-4 py-2">
                           <span className="inline-flex items-center gap-1.5">
