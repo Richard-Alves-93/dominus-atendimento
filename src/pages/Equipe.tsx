@@ -84,12 +84,12 @@ export default function Equipe() {
         .neq("status", "pending")
         .order("created_at", { ascending: false }),
       (supabase as any).from("departments")
-        .select("id, name, status")
+        .select("id, name, status, assignment_mode")
         .eq("company_id", activeCompanyId)
         .is("deleted_at", null)
         .order("name"),
       (supabase as any).from("department_users")
-        .select("user_id, department_id, status")
+        .select("user_id, department_id, status, participates_in_rotation")
         .eq("company_id", activeCompanyId)
         .eq("status", "active"),
     ]);
