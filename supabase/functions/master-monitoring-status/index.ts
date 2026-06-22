@@ -151,6 +151,7 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
     .filter((c: any) => c.channel_provider !== "evolution" && c.channel_provider !== "evogo")
     .map((c: any) => ({
       connection_id: c.id,
+      channel_id: c.id,
       company_id: c.company_id,
       company_name: companies.get(c.company_id) ?? "—",
       channel: c.channel_type,
@@ -160,6 +161,7 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
       status: c.status ?? "unknown",
       health: "unknown" as Health,
       last_activity_at: c.updated_at ?? null,
+      last_webhook_at: null,
       last_checked_at: new Date().toISOString(),
       error: null,
       live_checked: false,
@@ -167,6 +169,50 @@ async function collectEvolutionHealth(admin: ReturnType<typeof createClient>) {
 
   return { evoOnline, evoResponseMs, evoError, evoStats, health, connections, otherChannels };
 }
+
+type FlowRow = {
+  inbound_24h: number;
+  outbound_24h: number;
+  failed_24h: number;
+  pending_24h: number;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+};
+
+async function collectMessageFlow(
+  admin: ReturnType<typeof createClient>,
+): Promise<Map<string, FlowRow>> {
+  const map = new Map<string, FlowRow>();
+  try {
+    const { data, error } = await admin.rpc("master_message_flow_24h" as any);
+    if (error) throw error;
+    for (const r of (data as any[]) ?? []) {
+      if (!r?.channel_id) continue;
+      map.set(String(r.channel_id), {
+        inbound_24h: Number(r.inbound_24h ?? 0),
+        outbound_24h: Number(r.outbound_24h ?? 0),
+        failed_24h: Number(r.failed_24h ?? 0),
+        pending_24h: Number(r.pending_24h ?? 0),
+        last_inbound_at: r.last_inbound_at ?? null,
+        last_outbound_at: r.last_outbound_at ?? null,
+      });
+    }
+  } catch (e) {
+    console.error("[collectMessageFlow] failed", (e as Error)?.message);
+  }
+  return map;
+}
+
+function attachFlow<T extends { channel_id?: string | null }>(
+  rows: T[],
+  flow: Map<string, FlowRow>,
+): (T & { flow: FlowRow | null })[] {
+  return rows.map((r) => ({
+    ...r,
+    flow: r.channel_id ? flow.get(String(r.channel_id)) ?? null : null,
+  }));
+}
+
 
 async function saveEvolutionSnapshot(
   admin: ReturnType<typeof createClient>,
