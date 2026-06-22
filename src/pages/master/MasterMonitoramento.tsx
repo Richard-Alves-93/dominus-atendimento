@@ -279,6 +279,48 @@ export default function MasterMonitoramento() {
   };
   const [connHistory, setConnHistory] = useState<ConnHealthRow[]>([]);
 
+  // Phase 2.9: histórico de fluxo por conexão (drawer)
+  type FlowSnapshotRow = {
+    created_at: string;
+    inbound_count_24h: number;
+    outbound_count_24h: number;
+    failed_count_24h: number;
+    pending_count_24h: number;
+  };
+  const [flowHistory, setFlowHistory] = useState<FlowSnapshotRow[]>([]);
+  const [flowHistoryPeriod, setFlowHistoryPeriod] = useState<HistoryPeriod>("24h");
+  const [flowHistoryLoading, setFlowHistoryLoading] = useState(false);
+
+  const loadFlowHistory = useCallback(
+    async (connectionId: string | null, p: HistoryPeriod) => {
+      if (!connectionId) {
+        setFlowHistory([]);
+        return;
+      }
+      setFlowHistoryLoading(true);
+      try {
+        const hours = p === "1h" ? 1 : p === "6h" ? 6 : 24;
+        const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+        const { data, error } = await (supabase
+          .from("connection_message_flow_snapshots") as any)
+          .select(
+            "created_at, inbound_count_24h, outbound_count_24h, failed_count_24h, pending_count_24h",
+          )
+          .eq("connection_id", connectionId)
+          .gte("created_at", since)
+          .order("created_at", { ascending: true })
+          .limit(500);
+        if (error) throw error;
+        setFlowHistory((data ?? []) as FlowSnapshotRow[]);
+      } catch {
+        setFlowHistory([]);
+      } finally {
+        setFlowHistoryLoading(false);
+      }
+    },
+    [],
+  );
+
   type ConfigStats = {
     lastCronEvo: string | null;
     lastManualEvo: string | null;
