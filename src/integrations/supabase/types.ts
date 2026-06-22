@@ -497,6 +497,7 @@ export type Database = {
           created_at: string
           department_id: string
           id: string
+          participates_in_rotation: boolean
           role: Database["public"]["Enums"]["department_user_role"]
           status: Database["public"]["Enums"]["department_user_status"]
           updated_at: string
@@ -507,6 +508,7 @@ export type Database = {
           created_at?: string
           department_id: string
           id?: string
+          participates_in_rotation?: boolean
           role?: Database["public"]["Enums"]["department_user_role"]
           status?: Database["public"]["Enums"]["department_user_status"]
           updated_at?: string
@@ -517,6 +519,7 @@ export type Database = {
           created_at?: string
           department_id?: string
           id?: string
+          participates_in_rotation?: boolean
           role?: Database["public"]["Enums"]["department_user_role"]
           status?: Database["public"]["Enums"]["department_user_status"]
           updated_at?: string
@@ -543,6 +546,7 @@ export type Database = {
         Row: {
           allow_general_queue: boolean
           allow_stalled_takeover: boolean
+          assignment_mode: string
           company_id: string
           created_at: string
           deleted_at: string | null
@@ -550,12 +554,14 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          round_robin_last_user_id: string | null
           status: Database["public"]["Enums"]["department_status"]
           updated_at: string
         }
         Insert: {
           allow_general_queue?: boolean
           allow_stalled_takeover?: boolean
+          assignment_mode?: string
           company_id: string
           created_at?: string
           deleted_at?: string | null
@@ -563,12 +569,14 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          round_robin_last_user_id?: string | null
           status?: Database["public"]["Enums"]["department_status"]
           updated_at?: string
         }
         Update: {
           allow_general_queue?: boolean
           allow_stalled_takeover?: boolean
+          assignment_mode?: string
           company_id?: string
           created_at?: string
           deleted_at?: string | null
@@ -576,6 +584,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          round_robin_last_user_id?: string | null
           status?: Database["public"]["Enums"]["department_status"]
           updated_at?: string
         }
@@ -585,6 +594,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "departments_round_robin_last_user_id_fkey"
+            columns: ["round_robin_last_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
