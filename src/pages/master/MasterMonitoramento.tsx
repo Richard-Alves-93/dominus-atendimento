@@ -170,9 +170,11 @@ const channelTypeLabel = (t: string) => {
   const map: Record<string, string> = {
     whatsapp: "WhatsApp",
     instagram: "Instagram",
-    facebook: "Facebook",
+    facebook: "Facebook Messenger",
+    messenger: "Facebook Messenger",
     email: "E-mail",
     telegram: "Telegram",
+    webchat: "Webchat",
   };
   return map[t] ?? t;
 };
@@ -181,11 +183,37 @@ const providerLabel = (p: string) => {
   const map: Record<string, string> = {
     evolution: "Evolution",
     evogo: "EvoGo",
-    meta: "Meta",
+    meta: "Meta API",
+    meta_cloud: "Meta API",
+    smtp_imap: "IMAP/SMTP",
     imap_smtp: "IMAP/SMTP",
+    gmail: "Gmail",
+    outlook: "Outlook",
     manual: "Manual",
   };
   return map[p] ?? p;
+};
+
+// Mapeamento de estados futuros (Meta API / IMAP/SMTP) para apresentação em português.
+// Mantemos os valores internos do banco intactos; traduzimos apenas na UI.
+const providerStateLabel = (s: string) => {
+  const map: Record<string, string> = {
+    configured: "Configurado",
+    not_configured: "Não configurado",
+    planned: "Planejado",
+    pending_auth: "Autenticação pendente",
+    expired_token: "Token expirado",
+    webhook_inactive: "Webhook inativo",
+    sync_delayed: "Sincronização atrasada",
+    auth_error: "Erro de autenticação",
+    rate_limited: "Limite atingido",
+    healthy: "Saudável",
+    warning: "Atenção",
+    critical: "Crítico",
+    offline: "Offline",
+    unknown: "Desconhecido",
+  };
+  return map[s] ?? s;
 };
 
 const healthColor = (h: Health) => {
@@ -1525,30 +1553,81 @@ export default function MasterMonitoramento() {
 
             </Card>
 
-            <Card className="p-5 opacity-80">
+            <Card className="p-5 opacity-90">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <Radio className="w-4 h-4 text-primary" />
                   <h4 className="font-semibold">Meta API</h4>
                 </div>
-                <Badge variant="outline">Em breve</Badge>
+                <Badge variant="outline">{providerStateLabel("planned")}</Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-3">
-                Instagram e Facebook Messenger via Meta Cloud API. Planejado para fase futura.
+                WhatsApp Oficial, Instagram e Facebook Messenger via Meta API.
+                Nenhuma conexão Meta configurada ainda.
               </p>
+              <dl className="grid grid-cols-2 gap-y-1 text-xs mt-4">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="text-right font-medium">{providerStateLabel("not_configured")}</dd>
+                <dt className="text-muted-foreground">Saúde</dt>
+                <dd className="text-right font-medium">{providerStateLabel("not_configured")}</dd>
+                <dt className="text-muted-foreground">Última verificação</dt>
+                <dd className="text-right font-medium">Não disponível</dd>
+                <dt className="text-muted-foreground">Conexões</dt>
+                <dd className="text-right font-medium">0</dd>
+                <dt className="text-muted-foreground">Alertas</dt>
+                <dd className="text-right font-medium">0</dd>
+              </dl>
+              <div className="mt-4 border-t pt-3">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                  Checklist futuro
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+                  <li>Token de acesso</li>
+                  <li>Webhook Meta</li>
+                  <li>Página / conta conectada</li>
+                  <li>WABA / Phone Number ID</li>
+                  <li>Permissões aprovadas</li>
+                </ul>
+              </div>
             </Card>
 
-            <Card className="p-5 opacity-80">
+            <Card className="p-5 opacity-90">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-primary" />
                   <h4 className="font-semibold">E-mail IMAP/SMTP</h4>
                 </div>
-                <Badge variant="outline">Planejado</Badge>
+                <Badge variant="outline">{providerStateLabel("planned")}</Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-3">
-                Monitoramento de caixas IMAP/SMTP por empresa. Estrutura preparada.
+                Monitoramento de caixas de e-mail via IMAP/SMTP.
+                Nenhuma conta de e-mail configurada ainda.
               </p>
+              <dl className="grid grid-cols-2 gap-y-1 text-xs mt-4">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="text-right font-medium">{providerStateLabel("not_configured")}</dd>
+                <dt className="text-muted-foreground">Saúde</dt>
+                <dd className="text-right font-medium">{providerStateLabel("not_configured")}</dd>
+                <dt className="text-muted-foreground">Última sincronização</dt>
+                <dd className="text-right font-medium">Não disponível</dd>
+                <dt className="text-muted-foreground">Contas</dt>
+                <dd className="text-right font-medium">0</dd>
+                <dt className="text-muted-foreground">Alertas</dt>
+                <dd className="text-right font-medium">0</dd>
+              </dl>
+              <div className="mt-4 border-t pt-3">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+                  Checklist futuro
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+                  <li>Servidor IMAP</li>
+                  <li>Servidor SMTP</li>
+                  <li>Autenticação</li>
+                  <li>TLS / SSL</li>
+                  <li>Última sincronização</li>
+                  <li>Fila de envio</li>
+                </ul>
+              </div>
             </Card>
           </div>
         </div>
