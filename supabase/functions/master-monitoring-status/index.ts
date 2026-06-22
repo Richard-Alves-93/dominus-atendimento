@@ -577,7 +577,7 @@ Deno.serve(async (req) => {
         ...data.evoStats,
       },
       infrastructure: vps,
-      connections: [...data.connections, ...data.otherChannels],
+      connections: attachFlow([...data.connections, ...data.otherChannels], await collectMessageFlow(admin)),
       fallback: !data.evoOnline,
       snapshot_saved: snapshotSaved,
       snapshot_id: snapshotId,
