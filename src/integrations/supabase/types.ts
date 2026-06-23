@@ -122,6 +122,7 @@ export type Database = {
           channel_type: Database["public"]["Enums"]["channel_type"]
           company_id: string
           created_at: string
+          default_department_id: string | null
           email_address: string | null
           external_id: string | null
           id: string
@@ -136,6 +137,7 @@ export type Database = {
           channel_type: Database["public"]["Enums"]["channel_type"]
           company_id: string
           created_at?: string
+          default_department_id?: string | null
           email_address?: string | null
           external_id?: string | null
           id?: string
@@ -150,6 +152,7 @@ export type Database = {
           channel_type?: Database["public"]["Enums"]["channel_type"]
           company_id?: string
           created_at?: string
+          default_department_id?: string | null
           email_address?: string | null
           external_id?: string | null
           id?: string
@@ -165,6 +168,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channels_default_department_id_fkey"
+            columns: ["default_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
