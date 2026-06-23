@@ -478,15 +478,41 @@ export default function Equipe() {
                   )}
                   {depts.map((d) => {
                     const selected = form.department_ids.includes(d.id);
+                    const rotates = d.assignment_mode === "round_robin";
+                    const partic = form.dept_rotation[d.id] !== false;
+                    const showRotationToggle = selected && form.role !== "admin" && form.role !== "owner" && form.role !== "financial";
                     return (
-                      <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox checked={selected} onCheckedChange={() => toggleDept(d.id)} />
-                        <span className="truncate">{d.name}</span>
-                      </label>
+                      <div key={d.id} className="rounded-md border-0 hover:bg-muted/40 p-1.5 space-y-1.5">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox checked={selected} onCheckedChange={() => toggleDept(d.id)} />
+                          <span className="truncate flex-1">{d.name}</span>
+                          {rotates && <span className="text-[10px] text-muted-foreground">· Rotativo</span>}
+                        </label>
+                        {showRotationToggle && (
+                          <div className="flex items-start gap-2 pl-6">
+                            <Switch
+                              id={`rot-${d.id}`}
+                              checked={partic}
+                              onCheckedChange={(v) => setDeptRotation(d.id, v)}
+                            />
+                            <div className="flex-1">
+                              <Label htmlFor={`rot-${d.id}`} className="text-xs cursor-pointer">
+                                Participa do rodízio
+                              </Label>
+                              <p className="text-[11px] text-muted-foreground leading-tight">
+                                {rotates
+                                  ? "Receberá atendimentos automaticamente neste setor."
+                                  : "Será usado quando o setor estiver em modo rotativo."}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </div>
+
               <div className="col-span-2 space-y-1.5">
                 <Label>Assinatura</Label>
                 <Textarea
