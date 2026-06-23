@@ -226,15 +226,49 @@ export default function Equipe() {
     await supabase.from("company_users").update({ role: form.role }).eq("id", editing.id);
 
     // Replace departments
+    const prevRotation = Object.fromEntries(editing.departments.map((d) => [d.department_id, d.participates_in_rotation !== false]));
     await (supabase as any).from("department_users").delete()
       .eq("user_id", editing.user_id).eq("company_id", activeCompanyId);
     if (form.department_ids.length) {
       const rows = form.department_ids.map((dep) => ({
         user_id: editing.user_id, company_id: activeCompanyId, department_id: dep,
         role: form.role === "manager" ? "manager" : "agent", status: "active",
+        participates_in_rotation: form.dept_rotation[dep] !== false,
       }));
       await (supabase as any).from("department_users").insert(rows);
     }
+
+    // Audit: rotation participation changes (per department)
+    try {
+      const deptNameMap = Object.fromEntries(depts.map((d) => [d.id, d.name]));
+      const userName = form.full_name.trim() || editing.profile?.full_name || null;
+      const changes: any[] = [];
+      for (const dep of form.department_ids) {
+        const next = form.dept_rotation[dep] !== false;
+        const prev = prevRotation[dep];
+        if (prev === undefined) continue; // brand-new link, no change to audit
+        if (prev !== next) {
+          changes.push({
+            company_id: activeCompanyId,
+            event_type: "department_user.rotation_participation_changed",
+            changed_by: profile?.id ?? null,
+            metadata: {
+              department_id: dep,
+              department_name: deptNameMap[dep] ?? null,
+              user_id: editing.user_id,
+              user_name: userName,
+              old_participates_in_rotation: prev,
+              new_participates_in_rotation: next,
+              source: "team_admin",
+            },
+          });
+        }
+      }
+      if (changes.length) await (supabase as any).from("audit_logs").insert(changes);
+    } catch {
+      // auditoria não bloqueia salvamento
+    }
+
     setBusy(false);
     toast({ title: "Atendente atualizado" });
     setEditing(null);
@@ -247,6 +281,7 @@ export default function Equipe() {
       status: "active", disabled_at: null, disabled_by: null,
       disabled_reason: null, delete_after: null,
     }).eq("id", m.id);
+
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Atendente reativado" });
     await load();
