@@ -129,13 +129,11 @@ export default function OpportunityDialog({ open, onOpenChange, ticket }: Props)
       try {
         await supabase.from("audit_logs").insert({
           company_id: ticket.company_id,
-          actor_id: user.id,
-          action: "opportunity.created",
-          entity: "opportunity",
-          entity_id: opp?.id ?? null,
+          event_type: "opportunity.created",
+          ticket_id: ticket.ticket_id,
+          changed_by: user.id,
           metadata: {
             opportunity_id: opp?.id ?? null,
-            ticket_id: ticket.ticket_id,
             contact_id: ticket.contact_id,
             assigned_user_id: assignedUserId,
             status,
