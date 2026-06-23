@@ -69,9 +69,11 @@ export default function Equipe() {
     full_name: "", email: "", phone: "",
     role: "agent" as Role,
     department_ids: [] as string[],
+    dept_rotation: {} as Record<string, boolean>,
     signature: "", signature_enabled: true,
   };
   const [form, setForm] = useState(empty);
+
 
   const load = async () => {
     if (!activeCompanyId) return;
@@ -123,24 +125,35 @@ export default function Equipe() {
       phone: m.profile?.phone ?? "",
       role: m.role,
       department_ids: m.departments.map((d) => d.department_id),
+      dept_rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation !== false])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
     });
   };
 
+
   const toggleDept = (id: string) => {
     setForm((f) => {
-      if (isSingleDeptRole(f.role)) {
-        return { ...f, department_ids: f.department_ids[0] === id ? [] : [id] };
+      const single = isSingleDeptRole(f.role);
+      const has = f.department_ids.includes(id);
+      let department_ids: string[];
+      const dept_rotation = { ...f.dept_rotation };
+      if (single) {
+        if (f.department_ids[0] === id) { department_ids = []; }
+        else { department_ids = [id]; if (dept_rotation[id] === undefined) dept_rotation[id] = true; }
+      } else if (has) {
+        department_ids = f.department_ids.filter((x) => x !== id);
+      } else {
+        department_ids = [...f.department_ids, id];
+        if (dept_rotation[id] === undefined) dept_rotation[id] = true;
       }
-      return {
-        ...f,
-        department_ids: f.department_ids.includes(id)
-          ? f.department_ids.filter((x) => x !== id)
-          : [...f.department_ids, id],
-      };
+      return { ...f, department_ids, dept_rotation };
     });
   };
+
+  const setDeptRotation = (id: string, v: boolean) =>
+    setForm((f) => ({ ...f, dept_rotation: { ...f.dept_rotation, [id]: v } }));
+
 
   const changeRole = (v: Role) => {
     setForm((f) => ({
@@ -213,15 +226,49 @@ export default function Equipe() {
     await supabase.from("company_users").update({ role: form.role }).eq("id", editing.id);
 
     // Replace departments
+    const prevRotation = Object.fromEntries(editing.departments.map((d) => [d.department_id, d.participates_in_rotation !== false]));
     await (supabase as any).from("department_users").delete()
       .eq("user_id", editing.user_id).eq("company_id", activeCompanyId);
     if (form.department_ids.length) {
       const rows = form.department_ids.map((dep) => ({
         user_id: editing.user_id, company_id: activeCompanyId, department_id: dep,
         role: form.role === "manager" ? "manager" : "agent", status: "active",
+        participates_in_rotation: form.dept_rotation[dep] !== false,
       }));
       await (supabase as any).from("department_users").insert(rows);
     }
+
+    // Audit: rotation participation changes (per department)
+    try {
+      const deptNameMap = Object.fromEntries(depts.map((d) => [d.id, d.name]));
+      const userName = form.full_name.trim() || editing.profile?.full_name || null;
+      const changes: any[] = [];
+      for (const dep of form.department_ids) {
+        const next = form.dept_rotation[dep] !== false;
+        const prev = prevRotation[dep];
+        if (prev === undefined) continue; // brand-new link, no change to audit
+        if (prev !== next) {
+          changes.push({
+            company_id: activeCompanyId,
+            event_type: "department_user.rotation_participation_changed",
+            changed_by: profile?.id ?? null,
+            metadata: {
+              department_id: dep,
+              department_name: deptNameMap[dep] ?? null,
+              user_id: editing.user_id,
+              user_name: userName,
+              old_participates_in_rotation: prev,
+              new_participates_in_rotation: next,
+              source: "team_admin",
+            },
+          });
+        }
+      }
+      if (changes.length) await (supabase as any).from("audit_logs").insert(changes);
+    } catch {
+      // auditoria não bloqueia salvamento
+    }
+
     setBusy(false);
     toast({ title: "Atendente atualizado" });
     setEditing(null);
@@ -234,6 +281,7 @@ export default function Equipe() {
       status: "active", disabled_at: null, disabled_by: null,
       disabled_reason: null, delete_after: null,
     }).eq("id", m.id);
+
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Atendente reativado" });
     await load();
@@ -430,15 +478,41 @@ export default function Equipe() {
                   )}
                   {depts.map((d) => {
                     const selected = form.department_ids.includes(d.id);
+                    const rotates = d.assignment_mode === "round_robin";
+                    const partic = form.dept_rotation[d.id] !== false;
+                    const showRotationToggle = selected && form.role !== "admin" && form.role !== "owner" && form.role !== "financial";
                     return (
-                      <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox checked={selected} onCheckedChange={() => toggleDept(d.id)} />
-                        <span className="truncate">{d.name}</span>
-                      </label>
+                      <div key={d.id} className="rounded-md border-0 hover:bg-muted/40 p-1.5 space-y-1.5">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox checked={selected} onCheckedChange={() => toggleDept(d.id)} />
+                          <span className="truncate flex-1">{d.name}</span>
+                          {rotates && <span className="text-[10px] text-muted-foreground">· Rotativo</span>}
+                        </label>
+                        {showRotationToggle && (
+                          <div className="flex items-start gap-2 pl-6">
+                            <Switch
+                              id={`rot-${d.id}`}
+                              checked={partic}
+                              onCheckedChange={(v) => setDeptRotation(d.id, v)}
+                            />
+                            <div className="flex-1">
+                              <Label htmlFor={`rot-${d.id}`} className="text-xs cursor-pointer">
+                                Participa do rodízio
+                              </Label>
+                              <p className="text-[11px] text-muted-foreground leading-tight">
+                                {rotates
+                                  ? "Receberá atendimentos automaticamente neste setor."
+                                  : "Será usado quando o setor estiver em modo rotativo."}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </div>
+
               <div className="col-span-2 space-y-1.5">
                 <Label>Assinatura</Label>
                 <Textarea
