@@ -1379,6 +1379,47 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
             } catch (e) {
               console.warn("[ROUND_ROBIN] audit_failed", (e as Error)?.message);
             }
+            // R.6 — Internal system message in ticket history (Dominus only, never to WhatsApp).
+            try {
+              let deptName: string | null = null;
+              try {
+                const { data: dep } = await admin
+                  .from("departments")
+                  .select("name")
+                  .eq("id", ticket.department_id)
+                  .eq("company_id", inst.company_id)
+                  .maybeSingle();
+                deptName = dep?.name ?? null;
+              } catch { /* ignore */ }
+              const userName = rr.assigned_user_name ?? "atendente";
+              const sectorPart = deptName ? ` do setor ${deptName}` : "";
+              const text = `Atendimento atribuído automaticamente para ${userName} pelo rodízio${sectorPart}.`;
+              const nowIso = new Date().toISOString();
+              await admin.from("messages").insert({
+                company_id: inst.company_id,
+                ticket_id: ticket.id,
+                contact_id: contactId,
+                channel_id: null,
+                direction: "outbound",
+                msg_type: "system",
+                from_me: false,
+                source: "system",
+                body: text,
+                raw: {
+                  kind: "round_robin_auto_assign",
+                  department_id: ticket.department_id,
+                  department_name: deptName,
+                  assigned_user_id: rr.assigned_user_id,
+                  assigned_user_name: rr.assigned_user_name ?? null,
+                  source: "round_robin",
+                },
+                status: "sent",
+                delivery_status: "sent",
+                sent_at: nowIso,
+              });
+            } catch (e) {
+              console.warn("[ROUND_ROBIN] system_message_failed", (e as Error)?.message);
+            }
           }
         } else if (rr?.reason === "no_eligible_users") {
           console.log("[ROUND_ROBIN] no_eligible_users", { department_id: ticket.department_id });
