@@ -3009,6 +3009,11 @@ const TicketsDesktopLayout = () => {
                     >
                       <UserPlus className="w-4 h-4 mr-2" /> Atribuir atendente
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Comercial</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setOpportunityOpen(true)}>
+                      <Briefcase className="w-4 h-4 mr-2" /> Criar oportunidade
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
