@@ -1298,20 +1298,45 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       .limit(1)
       .maybeSingle();
     if (!ticket) {
+      // R.4.3: resolve default department from channel (same company), tolerant to errors.
+      let defaultDeptId: string | null = null;
+      try {
+        const { data: ch } = await admin
+          .from("channels")
+          .select("default_department_id, company_id")
+          .eq("id", inst.channel_id)
+          .eq("company_id", inst.company_id)
+          .maybeSingle();
+        if (ch?.default_department_id) {
+          const { data: dep } = await admin
+            .from("departments")
+            .select("id")
+            .eq("id", ch.default_department_id)
+            .eq("company_id", inst.company_id)
+            .is("deleted_at", null)
+            .maybeSingle();
+          if (dep?.id) defaultDeptId = dep.id;
+        }
+      } catch (e) {
+        console.warn("[DEFAULT_DEPT] resolve_failed", (e as Error)?.message);
+      }
+      const insertPayload: Record<string, unknown> = {
+        company_id: inst.company_id,
+        contact_id: contactId,
+        channel_id: inst.channel_id,
+        status: "open",
+        last_message_at: new Date().toISOString(),
+      };
+      if (defaultDeptId) insertPayload.department_id = defaultDeptId;
       const { data: created } = await admin
         .from("tickets")
-        .insert({
-          company_id: inst.company_id,
-          contact_id: contactId,
-          channel_id: inst.channel_id,
-          status: "open",
-          last_message_at: new Date().toISOString(),
-        })
+        .insert(insertPayload)
         .select("id, unread_count, department_id, assigned_user_id")
         .single();
       ticket = created;
     }
     if (!ticket) continue;
+
 
     // ── R.4.2: round-robin auto-assignment.
     // Only when ticket has a department and no responsible user yet.
