@@ -1291,7 +1291,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 
     let { data: ticket } = await admin
       .from("tickets")
-      .select("id, unread_count, status")
+      .select("id, unread_count, status, department_id, assigned_user_id")
       .eq("company_id", inst.company_id)
       .eq("contact_id", contactId)
       .order("last_message_at", { ascending: false })
@@ -1307,11 +1307,63 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
           status: "open",
           last_message_at: new Date().toISOString(),
         })
-        .select("id, unread_count")
+        .select("id, unread_count, department_id, assigned_user_id")
         .single();
       ticket = created;
     }
     if (!ticket) continue;
+
+    // ── R.4.2: round-robin auto-assignment.
+    // Only when ticket has a department and no responsible user yet.
+    // Errors must NEVER break inbound persistence.
+    if (ticket.department_id && !ticket.assigned_user_id) {
+      try {
+        const { data: rrRows, error: rrErr } = await admin.rpc("pick_next_round_robin_user", {
+          _company_id: inst.company_id,
+          _department_id: ticket.department_id,
+        });
+        const rr = Array.isArray(rrRows) ? rrRows[0] : rrRows;
+        if (rrErr) {
+          console.warn("[ROUND_ROBIN] rpc_error", rrErr.message);
+        } else if (rr?.reason === "assigned" && rr.assigned_user_id) {
+          const { error: updErr } = await admin
+            .from("tickets")
+            .update({
+              assigned_user_id: rr.assigned_user_id,
+              assigned_at: new Date().toISOString(),
+              assigned_by: null,
+            })
+            .eq("id", ticket.id)
+            .is("assigned_user_id", null);
+          if (!updErr) {
+            ticket.assigned_user_id = rr.assigned_user_id;
+            try {
+              await admin.from("audit_logs").insert({
+                company_id: inst.company_id,
+                changed_by: null,
+                event_type: "ticket.auto_assigned_round_robin",
+                metadata: {
+                  ticket_id: ticket.id,
+                  department_id: ticket.department_id,
+                  assigned_user_id: rr.assigned_user_id,
+                  assigned_user_name: rr.assigned_user_name ?? null,
+                  assignment_mode: "round_robin",
+                  source: "evolution_webhook",
+                },
+              });
+            } catch (e) {
+              console.warn("[ROUND_ROBIN] audit_failed", (e as Error)?.message);
+            }
+          }
+        } else if (rr?.reason === "no_eligible_users") {
+          console.log("[ROUND_ROBIN] no_eligible_users", { department_id: ticket.department_id });
+        }
+        // department_not_round_robin / department_not_found → keep ticket unassigned (manual queue).
+      } catch (e) {
+        console.warn("[ROUND_ROBIN] threw", (e as Error)?.message);
+      }
+    }
+
 
     const msgType = detectMsgType(m);
     if (msgType === "other") {
