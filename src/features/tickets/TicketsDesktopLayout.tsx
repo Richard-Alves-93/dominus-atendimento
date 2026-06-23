@@ -44,8 +44,10 @@ import {
   Star,
   SquareCheck,
   Smile,
+  Briefcase,
   X,
 } from "lucide-react";
+import OpportunityDialog, { type OpportunityTicketContext } from "./OpportunityDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -409,6 +411,7 @@ const TicketsDesktopLayout = () => {
   const [search, setSearch] = useState("");
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
+  const [opportunityOpen, setOpportunityOpen] = useState(false);
   const [takeOverOpen, setTakeOverOpen] = useState(false);
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
@@ -2463,6 +2466,24 @@ const TicketsDesktopLayout = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* C.1 — Criar oportunidade */}
+      <OpportunityDialog
+        open={opportunityOpen}
+        onOpenChange={setOpportunityOpen}
+        ticket={
+          selected
+            ? ({
+                ticket_id: selected.id,
+                company_id: (selected as any).company_id,
+                contact_id: selected.contact_id,
+                contact_name: selected.contact?.name ?? selected.contact?.phone_number ?? null,
+                department_id: selected.department_id ?? null,
+                assigned_user_id: selected.assigned_user_id ?? null,
+                channel_type: selected.channel?.channel_type ?? null,
+              } satisfies OpportunityTicketContext)
+            : null
+        }
+      />
       {/* Confirm: Assumir atendimento */}
       <AlertDialog open={takeOverOpen} onOpenChange={setTakeOverOpen}>
         <AlertDialogContent>
@@ -3005,6 +3026,11 @@ const TicketsDesktopLayout = () => {
                       title={!canAssignUser ? "Você não tem permissão para atribuir atendente." : undefined}
                     >
                       <UserPlus className="w-4 h-4 mr-2" /> Atribuir atendente
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Comercial</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setOpportunityOpen(true)}>
+                      <Briefcase className="w-4 h-4 mr-2" /> Criar oportunidade
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

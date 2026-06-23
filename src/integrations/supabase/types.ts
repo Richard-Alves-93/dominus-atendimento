@@ -1040,6 +1040,95 @@ export type Database = {
           },
         ]
       }
+      opportunities: {
+        Row: {
+          amount: number | null
+          assigned_user_id: string | null
+          closed_at: string | null
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          deleted_at: string | null
+          department_id: string | null
+          id: string
+          notes: string | null
+          source: string | null
+          status: string
+          ticket_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          assigned_user_id?: string | null
+          closed_at?: string | null
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by: string
+          currency?: string
+          deleted_at?: string | null
+          department_id?: string | null
+          id?: string
+          notes?: string | null
+          source?: string | null
+          status?: string
+          ticket_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          assigned_user_id?: string | null
+          closed_at?: string | null
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          deleted_at?: string | null
+          department_id?: string | null
+          id?: string
+          notes?: string | null
+          source?: string | null
+          status?: string
+          ticket_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pinned_messages: {
         Row: {
           company_id: string
