@@ -69,9 +69,11 @@ export default function Equipe() {
     full_name: "", email: "", phone: "",
     role: "agent" as Role,
     department_ids: [] as string[],
+    dept_rotation: {} as Record<string, boolean>,
     signature: "", signature_enabled: true,
   };
   const [form, setForm] = useState(empty);
+
 
   const load = async () => {
     if (!activeCompanyId) return;
