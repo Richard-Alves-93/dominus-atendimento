@@ -44,8 +44,10 @@ import {
   Star,
   SquareCheck,
   Smile,
+  Briefcase,
   X,
 } from "lucide-react";
+import OpportunityDialog, { type OpportunityTicketContext } from "./OpportunityDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
