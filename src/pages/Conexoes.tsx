@@ -15,12 +15,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
+
 
 const CHANNEL_DEFS = [
   { type: "whatsapp", name: "WhatsApp", icon: MessageSquare, desc: "Conecte sua conta com um QR Code. Sem configurações técnicas.", available: true },
@@ -34,7 +42,15 @@ interface ChannelRow {
   channel_type: string;
   status: string;
   name: string;
+  default_department_id: string | null;
 }
+
+interface DepartmentRow {
+  id: string;
+  name: string;
+  assignment_mode: string | null;
+}
+
 
 const statusVariant: Record<string, string> = {
   connected: "bg-success/10 text-success border-success/20",
@@ -56,6 +72,8 @@ export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
   const [channels, setChannels] = useState<ChannelRow[]>([]);
+  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+  const [savingDept, setSavingDept] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
@@ -67,7 +85,7 @@ export default function Conexoes() {
     if (!activeCompanyId) return;
     const { data, error } = await supabase
       .from("channels")
-      .select("id, channel_type, status, name")
+      .select("id, channel_type, status, name, default_department_id")
       .eq("company_id", activeCompanyId);
     if (error) {
       console.error("[Conexoes] loadChannels error", error);
@@ -77,9 +95,62 @@ export default function Conexoes() {
     setChannels((data as ChannelRow[] | null) ?? []);
   };
 
+  const loadDepartments = async () => {
+    if (!activeCompanyId) return;
+    const { data, error } = await supabase
+      .from("departments")
+      .select("id, name, assignment_mode")
+      .eq("company_id", activeCompanyId)
+      .is("deleted_at", null)
+      .eq("status", "active")
+      .order("name", { ascending: true });
+    if (error) {
+      console.error("[Conexoes] loadDepartments error", error);
+      return;
+    }
+    setDepartments((data as DepartmentRow[] | null) ?? []);
+  };
+
   useEffect(() => {
     loadChannels();
+    loadDepartments();
   }, [activeCompanyId]);
+
+  const updateDefaultDepartment = async (channel: ChannelRow, value: string) => {
+    const next = value === "__none__" ? null : value;
+    const prev = channel.default_department_id ?? null;
+    if (prev === next) return;
+    setSavingDept(channel.id);
+    const { error } = await supabase
+      .from("channels")
+      .update({ default_department_id: next })
+      .eq("id", channel.id)
+      .eq("company_id", activeCompanyId!);
+    setSavingDept(null);
+    if (error) {
+      toast.error(`Não foi possível salvar o setor padrão: ${error.message}`);
+      return;
+    }
+    setChannels((prevList) =>
+      prevList.map((c) => (c.id === channel.id ? { ...c, default_department_id: next } : c)),
+    );
+    try {
+      await supabase.from("audit_logs").insert({
+        company_id: activeCompanyId!,
+        event_type: "connection.default_department_changed",
+        metadata: {
+          connection_id: channel.id,
+          connection_name: channel.name,
+          old_department_id: prev,
+          new_department_id: next,
+          source: "admin_panel",
+        },
+      });
+    } catch (e) {
+      console.warn("[Conexoes] audit insert failed", (e as Error)?.message);
+    }
+    toast.success("Setor padrão atualizado.");
+  };
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -259,6 +330,36 @@ export default function Conexoes() {
                 </div>
                 <h3 className="font-semibold">{def.name}</h3>
                 <p className="text-sm text-muted-foreground flex-1 mt-1">{def.desc}</p>
+                {def.available && existing && (
+                  <div className="mt-4 space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">
+                      Setor padrão de entrada
+                    </label>
+                    <Select
+                      value={existing.default_department_id ?? "__none__"}
+                      onValueChange={(v) => updateDefaultDepartment(existing, v)}
+                      disabled={savingDept === existing.id}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Sem setor padrão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sem setor padrão</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                            {d.assignment_mode === "round_robin" ? " · Rotativo" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      {existing.default_department_id
+                        ? "Novos atendimentos recebidos por esta conexão entrarão automaticamente neste setor. Se o setor estiver em modo rotativo, poderão ser distribuídos entre os usuários ativos."
+                        : "Sem setor padrão. Os novos atendimentos entrarão na fila geral conforme regra atual."}
+                    </p>
+                  </div>
+                )}
                 <Button
                   className="mt-4 w-full"
                   variant={def.available ? "default" : "outline"}
@@ -267,6 +368,7 @@ export default function Conexoes() {
                 >
                   {def.available ? (st === "connected" ? "Gerenciar" : "Conectar") : "Preparado para integração"}
                 </Button>
+
               </Card>
             );
           })}
