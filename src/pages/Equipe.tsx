@@ -125,10 +125,12 @@ export default function Equipe() {
       phone: m.profile?.phone ?? "",
       role: m.role,
       department_ids: m.departments.map((d) => d.department_id),
+      dept_rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation !== false])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
     });
   };
+
 
   const toggleDept = (id: string) => {
     setForm((f) => {
