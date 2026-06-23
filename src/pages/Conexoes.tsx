@@ -72,6 +72,8 @@ export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
   const [channels, setChannels] = useState<ChannelRow[]>([]);
+  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+  const [savingDept, setSavingDept] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
@@ -83,7 +85,7 @@ export default function Conexoes() {
     if (!activeCompanyId) return;
     const { data, error } = await supabase
       .from("channels")
-      .select("id, channel_type, status, name")
+      .select("id, channel_type, status, name, default_department_id")
       .eq("company_id", activeCompanyId);
     if (error) {
       console.error("[Conexoes] loadChannels error", error);
@@ -93,9 +95,62 @@ export default function Conexoes() {
     setChannels((data as ChannelRow[] | null) ?? []);
   };
 
+  const loadDepartments = async () => {
+    if (!activeCompanyId) return;
+    const { data, error } = await supabase
+      .from("departments")
+      .select("id, name, assignment_mode")
+      .eq("company_id", activeCompanyId)
+      .is("deleted_at", null)
+      .eq("status", "active")
+      .order("name", { ascending: true });
+    if (error) {
+      console.error("[Conexoes] loadDepartments error", error);
+      return;
+    }
+    setDepartments((data as DepartmentRow[] | null) ?? []);
+  };
+
   useEffect(() => {
     loadChannels();
+    loadDepartments();
   }, [activeCompanyId]);
+
+  const updateDefaultDepartment = async (channel: ChannelRow, value: string) => {
+    const next = value === "__none__" ? null : value;
+    const prev = channel.default_department_id ?? null;
+    if (prev === next) return;
+    setSavingDept(channel.id);
+    const { error } = await supabase
+      .from("channels")
+      .update({ default_department_id: next })
+      .eq("id", channel.id)
+      .eq("company_id", activeCompanyId!);
+    setSavingDept(null);
+    if (error) {
+      toast.error(`Não foi possível salvar o setor padrão: ${error.message}`);
+      return;
+    }
+    setChannels((prevList) =>
+      prevList.map((c) => (c.id === channel.id ? { ...c, default_department_id: next } : c)),
+    );
+    try {
+      await supabase.from("audit_logs").insert({
+        company_id: activeCompanyId!,
+        event_type: "connection.default_department_changed",
+        metadata: {
+          connection_id: channel.id,
+          connection_name: channel.name,
+          old_department_id: prev,
+          new_department_id: next,
+          source: "admin_panel",
+        },
+      });
+    } catch (e) {
+      console.warn("[Conexoes] audit insert failed", (e as Error)?.message);
+    }
+    toast.success("Setor padrão atualizado.");
+  };
 
   const stopPolling = () => {
     if (pollRef.current) {
