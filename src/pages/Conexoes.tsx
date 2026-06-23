@@ -42,7 +42,15 @@ interface ChannelRow {
   channel_type: string;
   status: string;
   name: string;
+  default_department_id: string | null;
 }
+
+interface DepartmentRow {
+  id: string;
+  name: string;
+  assignment_mode: string | null;
+}
+
 
 const statusVariant: Record<string, string> = {
   connected: "bg-success/10 text-success border-success/20",
