@@ -1751,6 +1751,16 @@ export type Database = {
         }
         Returns: string
       }
+      pick_next_round_robin_user: {
+        Args: { _company_id: string; _department_id: string }
+        Returns: {
+          assigned_user_id: string
+          assigned_user_name: string
+          assignment_mode: string
+          department_id: string
+          reason: string
+        }[]
+      }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
       try_monitoring_cron_lock: { Args: never; Returns: boolean }
       user_belongs_to_company: {
