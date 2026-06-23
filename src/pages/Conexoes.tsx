@@ -330,6 +330,36 @@ export default function Conexoes() {
                 </div>
                 <h3 className="font-semibold">{def.name}</h3>
                 <p className="text-sm text-muted-foreground flex-1 mt-1">{def.desc}</p>
+                {def.available && existing && (
+                  <div className="mt-4 space-y-1.5">
+                    <label className="text-xs font-medium text-foreground">
+                      Setor padrão de entrada
+                    </label>
+                    <Select
+                      value={existing.default_department_id ?? "__none__"}
+                      onValueChange={(v) => updateDefaultDepartment(existing, v)}
+                      disabled={savingDept === existing.id}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Sem setor padrão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sem setor padrão</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                            {d.assignment_mode === "round_robin" ? " · Rotativo" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      {existing.default_department_id
+                        ? "Novos atendimentos recebidos por esta conexão entrarão automaticamente neste setor. Se o setor estiver em modo rotativo, poderão ser distribuídos entre os usuários ativos."
+                        : "Sem setor padrão. Os novos atendimentos entrarão na fila geral conforme regra atual."}
+                    </p>
+                  </div>
+                )}
                 <Button
                   className="mt-4 w-full"
                   variant={def.available ? "default" : "outline"}
@@ -338,6 +368,7 @@ export default function Conexoes() {
                 >
                   {def.available ? (st === "connected" ? "Gerenciar" : "Conectar") : "Preparado para integração"}
                 </Button>
+
               </Card>
             );
           })}
