@@ -1948,6 +1948,32 @@ export type Database = {
       }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
       try_monitoring_cron_lock: { Args: never; Returns: boolean }
+      update_commission_status: {
+        Args: { _action: string; _commission_id: string }
+        Returns: {
+          commission_amount: number
+          commission_percentage: number
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          deleted_at: string | null
+          generated_at: string
+          id: string
+          opportunity_amount: number
+          opportunity_id: string
+          paid_at: string | null
+          seller_user_id: string
+          status: string
+          ticket_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sales_commissions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
