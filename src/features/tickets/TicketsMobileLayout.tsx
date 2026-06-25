@@ -1384,6 +1384,24 @@ export default function TicketsMobileLayout(props: Props) {
           })()}
         </SheetContent>
       </Sheet>
+      {/* C.1.1 — Criar oportunidade (mobile) */}
+      <OpportunityDialog
+        open={opportunityOpen}
+        onOpenChange={setOpportunityOpen}
+        ticket={
+          selected
+            ? ({
+                ticket_id: selected.id,
+                company_id: (selected as any).company_id,
+                contact_id: selected.contact_id,
+                contact_name: selected.contact?.name ?? selected.contact?.phone_number ?? null,
+                department_id: selected.department_id ?? null,
+                assigned_user_id: selected.assigned_user_id ?? null,
+                channel_type: (selected as any).channel?.channel_type ?? null,
+              } satisfies OpportunityTicketContext)
+            : null
+        }
+      />
     </AppLayout>
   );
 }
