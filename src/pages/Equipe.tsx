@@ -226,8 +226,15 @@ export default function Equipe() {
       signature_enabled: form.signature_enabled,
     }).eq("id", editing.user_id);
 
-    // Update role (block lowering own owner role)
-    await supabase.from("company_users").update({ role: form.role }).eq("id", editing.id);
+    // Update role + commission (somente Admin/Master)
+    {
+      const upd: Record<string, unknown> = { role: form.role };
+      if (canManage) {
+        const pct = Math.max(0, Math.min(100, Number(form.commission_percentage) || 0));
+        upd.commission_percentage = pct;
+      }
+      await (supabase as any).from("company_users").update(upd).eq("id", editing.id);
+    }
 
     // Replace departments
     const prevRotation = Object.fromEntries(editing.departments.map((d) => [d.department_id, d.participates_in_rotation !== false]));
