@@ -382,6 +382,30 @@ export default function Comissoes() {
                               <ExternalLink className="w-4 h-4" />
                             </Button>
                           )}
+                          {canManage && (c.status === "pending" || c.status === "approved") && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost" title="Ações">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {c.status === "pending" && (
+                                  <DropdownMenuItem onClick={() => setPendingAction({ c, action: "approve" })}>
+                                    <Check className="w-4 h-4 mr-2" /> Aprovar
+                                  </DropdownMenuItem>
+                                )}
+                                {c.status === "approved" && (
+                                  <DropdownMenuItem onClick={() => setPendingAction({ c, action: "pay" })}>
+                                    <DollarSign className="w-4 h-4 mr-2" /> Marcar como paga
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => setPendingAction({ c, action: "cancel" })} className="text-destructive">
+                                  <Ban className="w-4 h-4 mr-2" /> Cancelar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
