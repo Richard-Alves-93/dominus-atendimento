@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Wallet, Search, ExternalLink, Loader2, Eye, Check, DollarSign, Ban, MoreVertical } from "lucide-react";
+import { Wallet, Search, ExternalLink, Loader2, Eye, Check, DollarSign, Ban, MoreVertical, Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
@@ -240,6 +240,51 @@ export default function Comissoes() {
     return { counts, values };
   }, [commissions]);
 
+  const sellerSummary = useMemo(() => {
+    const m = new Map<string, { count: number; pending: number; approved: number; paid: number; canceled: number; total: number }>();
+    for (const c of filtered) {
+      const cur = m.get(c.seller_user_id) ?? { count: 0, pending: 0, approved: 0, paid: 0, canceled: 0, total: 0 };
+      const v = Number(c.commission_amount ?? 0);
+      cur.count += 1;
+      cur[c.status] += v;
+      cur.total += v;
+      m.set(c.seller_user_id, cur);
+    }
+    return Array.from(m.entries()).map(([id, v]) => ({ id, ...v }));
+  }, [filtered]);
+
+  const exportCSV = () => {
+    const headers = [
+      "Vendedor","Oportunidade","Contato","Valor da venda","Percentual","Valor da comissão","Status","Gerada em","Paga em",
+    ];
+    const escape = (s: unknown) => {
+      const str = s == null ? "" : String(s);
+      return /[",;\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const rows = filtered.map((c) => [
+      sellerName(c.seller_user_id),
+      oppTitle(c.opportunity_id),
+      contactLabel(c.contact_id),
+      c.opportunity_amount ?? "",
+      Number(c.commission_percentage).toFixed(2),
+      c.commission_amount ?? "",
+      STATUS_LABEL[c.status],
+      c.generated_at ? new Date(c.generated_at).toISOString() : "",
+      c.paid_at ? new Date(c.paid_at).toISOString() : "",
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map(escape).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `comissoes_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("CSV exportado");
+  };
+
   const openTicket = (ticketId: string | null) => {
     if (!ticketId || !activeCompanyId || !profile?.id) return;
     try {
@@ -318,6 +363,48 @@ export default function Comissoes() {
             </Select>
           </div>
         </Card>
+
+        {/* Ações de exportação + Resumo por vendedor */}
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">Resumo por vendedor</h2>
+          <Button size="sm" variant="outline" onClick={exportCSV} disabled={filtered.length === 0}>
+            <Download className="w-4 h-4 mr-1" /> Exportar CSV
+          </Button>
+        </div>
+        {sellerSummary.length > 0 && (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vendedor</TableHead>
+                    <TableHead className="text-right">Qtd.</TableHead>
+                    <TableHead className="text-right">Pendente</TableHead>
+                    <TableHead className="text-right">Aprovada</TableHead>
+                    <TableHead className="text-right">Paga</TableHead>
+                    <TableHead className="text-right">Cancelada</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sellerSummary.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{sellerName(s.id)}</TableCell>
+                      <TableCell className="text-right">{s.count}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.pending)}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.approved)}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.paid)}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.canceled)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatBRL(s.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        )}
+
+
 
         {/* Lista */}
         {commissionsQuery.isLoading ? (
