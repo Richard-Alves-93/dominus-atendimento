@@ -33,6 +33,7 @@ import {
   SquareCheck,
   ChevronDown,
   Download,
+  Briefcase,
 } from "lucide-react";
 import {
   Sheet,
