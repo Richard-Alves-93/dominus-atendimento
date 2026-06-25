@@ -705,6 +705,226 @@ export type Database = {
         }
         Relationships: []
       }
+      kanban_cards: {
+        Row: {
+          assigned_user_id: string | null
+          card_type: Database["public"]["Enums"]["kanban_card_type"]
+          column_id: string
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          lane_id: string
+          opportunity_id: string | null
+          position: number
+          task_id: string | null
+          ticket_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          card_type?: Database["public"]["Enums"]["kanban_card_type"]
+          column_id: string
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          lane_id: string
+          opportunity_id?: string | null
+          position?: number
+          task_id?: string | null
+          ticket_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string | null
+          card_type?: Database["public"]["Enums"]["kanban_card_type"]
+          column_id?: string
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          lane_id?: string
+          opportunity_id?: string | null
+          position?: number
+          task_id?: string | null
+          ticket_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_cards_column_id_fkey"
+            columns: ["column_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_cards_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_cards_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_cards_lane_id_fkey"
+            columns: ["lane_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_lanes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_cards_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_cards_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kanban_columns: {
+        Row: {
+          color: string | null
+          column_type: string | null
+          company_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          lane_id: string
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          column_type?: string | null
+          company_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          lane_id: string
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          column_type?: string | null
+          company_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          lane_id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_columns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_columns_lane_id_fkey"
+            columns: ["lane_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_lanes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kanban_lanes: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          department_id: string | null
+          id: string
+          is_active: boolean
+          is_personal: boolean
+          lane_type: Database["public"]["Enums"]["kanban_lane_type"]
+          name: string
+          owner_user_id: string | null
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          department_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_personal?: boolean
+          lane_type?: Database["public"]["Enums"]["kanban_lane_type"]
+          name: string
+          owner_user_id?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          department_id?: string | null
+          id?: string
+          is_active?: boolean
+          is_personal?: boolean
+          lane_type?: Database["public"]["Enums"]["kanban_lane_type"]
+          name?: string
+          owner_user_id?: string | null
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kanban_lanes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_lanes_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_favorites: {
         Row: {
           company_id: string
@@ -1999,6 +2219,8 @@ export type Database = {
       department_user_role: "manager" | "agent" | "viewer"
       department_user_status: "active" | "inactive"
       global_role: "master" | "user"
+      kanban_card_type: "manual" | "ticket" | "contact" | "opportunity" | "task"
+      kanban_lane_type: "department" | "commercial" | "personal" | "custom"
       message_direction: "inbound" | "outbound"
       message_type:
         | "text"
@@ -2155,6 +2377,8 @@ export const Constants = {
       department_user_role: ["manager", "agent", "viewer"],
       department_user_status: ["active", "inactive"],
       global_role: ["master", "user"],
+      kanban_card_type: ["manual", "ticket", "contact", "opportunity", "task"],
+      kanban_lane_type: ["department", "commercial", "personal", "custom"],
       message_direction: ["inbound", "outbound"],
       message_type: [
         "text",
