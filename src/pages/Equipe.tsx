@@ -81,8 +81,8 @@ export default function Equipe() {
     if (!activeCompanyId) return;
     setLoading(true);
     const [{ data: cu }, { data: d }, { data: du }] = await Promise.all([
-      supabase.from("company_users")
-        .select("id, user_id, role, status, disabled_reason")
+      (supabase as any).from("company_users")
+        .select("id, user_id, role, status, disabled_reason, commission_percentage")
         .eq("company_id", activeCompanyId)
         .neq("status", "pending")
         .order("created_at", { ascending: false }),
