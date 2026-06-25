@@ -107,6 +107,7 @@ export default function Equipe() {
     const list: Member[] = (cu ?? []).map((r: any) => ({
       id: r.id, user_id: r.user_id, role: r.role, status: r.status,
       disabled_reason: r.disabled_reason,
+      commission_percentage: Number(r.commission_percentage ?? 0),
       profile: profs?.find((p: any) => p.id === r.user_id) ?? null,
       departments: (du ?? []).filter((x: any) => x.user_id === r.user_id).map((x: any) => ({ department_id: x.department_id, participates_in_rotation: x.participates_in_rotation !== false })),
     }));
