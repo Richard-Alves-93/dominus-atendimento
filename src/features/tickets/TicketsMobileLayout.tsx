@@ -33,6 +33,7 @@ import {
   SquareCheck,
   ChevronDown,
   Download,
+  Briefcase,
 } from "lucide-react";
 import {
   Sheet,
@@ -52,6 +53,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -59,6 +61,7 @@ import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
+import OpportunityDialog, { type OpportunityTicketContext } from "@/features/tickets/OpportunityDialog";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -339,6 +342,8 @@ export default function TicketsMobileLayout(props: Props) {
   useEffect(() => { clearSelection(); }, [selectedId]);
   // G.6 — encaminhamento (mobile)
   const [forwardOpen, setForwardOpen] = useState(false);
+  // C.1.1 — Criar oportunidade (mobile)
+  const [opportunityOpen, setOpportunityOpen] = useState(false);
   const qcMobile = useQueryClient();
 
 
@@ -816,6 +821,15 @@ export default function TicketsMobileLayout(props: Props) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => onCopyProtocol?.()}>
                     <Copy className="w-4 h-4 mr-2" /> Copiar protocolo
+                  </DropdownMenuItem>
+                </>
+              )}
+              {selected && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Comercial</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setOpportunityOpen(true)}>
+                    <Briefcase className="w-4 h-4 mr-2" /> Criar oportunidade
                   </DropdownMenuItem>
                 </>
               )}
@@ -1370,6 +1384,24 @@ export default function TicketsMobileLayout(props: Props) {
           })()}
         </SheetContent>
       </Sheet>
+      {/* C.1.1 — Criar oportunidade (mobile) */}
+      <OpportunityDialog
+        open={opportunityOpen}
+        onOpenChange={setOpportunityOpen}
+        ticket={
+          selected
+            ? ({
+                ticket_id: selected.id,
+                company_id: (selected as any).company_id,
+                contact_id: (selected as any).contact_id ?? selected.contact?.id ?? null,
+                contact_name: selected.contact?.name ?? selected.contact?.phone_number ?? null,
+                department_id: selected.department_id ?? null,
+                assigned_user_id: (selected as any).assigned_user_id ?? null,
+                channel_type: (selected as any).channel?.channel_type ?? null,
+              } satisfies OpportunityTicketContext)
+            : null
+        }
+      />
     </AppLayout>
   );
 }
