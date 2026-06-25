@@ -37,6 +37,7 @@ const mainItems = [
   { title: "Atendimentos", url: "/app/tickets", icon: MessageSquare },
   { title: "Contatos", url: "/app/contatos", icon: Users },
   { title: "Mensagens Rápidas", url: "/app/mensagens-rapidas", icon: MessageSquareText },
+  { title: "Oportunidades", url: "/app/oportunidades", icon: Briefcase },
   { title: "Campanhas", url: "/app/campanhas", icon: Send, adminOnly: true },
   { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays, adminOnly: true },
 ];
