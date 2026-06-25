@@ -342,6 +342,8 @@ export default function TicketsMobileLayout(props: Props) {
   useEffect(() => { clearSelection(); }, [selectedId]);
   // G.6 — encaminhamento (mobile)
   const [forwardOpen, setForwardOpen] = useState(false);
+  // C.1.1 — Criar oportunidade (mobile)
+  const [opportunityOpen, setOpportunityOpen] = useState(false);
   const qcMobile = useQueryClient();
 
 
