@@ -541,6 +541,30 @@ export default function Equipe() {
                 />
                 <Label htmlFor="sig-en" className="cursor-pointer">Usar assinatura nas mensagens</Label>
               </div>
+
+              {canManage && editing && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="commission-pct">Comissão sobre vendas (%)</Label>
+                  <Input
+                    id="commission-pct"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={form.commission_percentage}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        commission_percentage: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Percentual usado para calcular a comissão quando uma oportunidade atribuída a este usuário for marcada como Ganha. Use 0 para sem comissão.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
