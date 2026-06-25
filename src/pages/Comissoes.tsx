@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Wallet, Search, ExternalLink, Loader2, Eye } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Wallet, Search, ExternalLink, Loader2, Eye, Check, DollarSign, Ban, MoreVertical } from "lucide-react";
+import { toast } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -76,12 +84,39 @@ export default function Comissoes() {
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
   const role = activeMembership?.role;
   const canSeeAllSellers = isMaster || role === "owner" || role === "admin" || role === "manager" || role === "financial";
+  const canManage = isMaster || role === "owner" || role === "admin" || role === "financial";
 
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<"all" | CommissionStatus>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [viewing, setViewing] = useState<Commission | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ c: Commission; action: "approve" | "pay" | "cancel" } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const runAction = async () => {
+    if (!pendingAction) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.rpc("update_commission_status", {
+        _commission_id: pendingAction.c.id,
+        _action: pendingAction.action,
+      });
+      if (error) throw error;
+      toast.success(
+        pendingAction.action === "approve" ? "Comissão aprovada" :
+        pendingAction.action === "pay" ? "Comissão marcada como paga" :
+        "Comissão cancelada"
+      );
+      setPendingAction(null);
+      await queryClient.invalidateQueries({ queryKey: ["commissions", activeCompanyId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao atualizar comissão");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const commissionsQuery = useQuery({
     queryKey: ["commissions", activeCompanyId, statusFilter, sellerFilter, periodFilter],
@@ -347,6 +382,30 @@ export default function Comissoes() {
                               <ExternalLink className="w-4 h-4" />
                             </Button>
                           )}
+                          {canManage && (c.status === "pending" || c.status === "approved") && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost" title="Ações">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {c.status === "pending" && (
+                                  <DropdownMenuItem onClick={() => setPendingAction({ c, action: "approve" })}>
+                                    <Check className="w-4 h-4 mr-2" /> Aprovar
+                                  </DropdownMenuItem>
+                                )}
+                                {c.status === "approved" && (
+                                  <DropdownMenuItem onClick={() => setPendingAction({ c, action: "pay" })}>
+                                    <DollarSign className="w-4 h-4 mr-2" /> Marcar como paga
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => setPendingAction({ c, action: "cancel" })} className="text-destructive">
+                                  <Ban className="w-4 h-4 mr-2" /> Cancelar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -396,6 +455,23 @@ export default function Comissoes() {
                       </Button>
                     )}
                   </div>
+                  {canManage && (c.status === "pending" || c.status === "approved") && (
+                    <div className="flex flex-wrap gap-2">
+                      {c.status === "pending" && (
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => setPendingAction({ c, action: "approve" })}>
+                          <Check className="w-4 h-4 mr-1" /> Aprovar
+                        </Button>
+                      )}
+                      {c.status === "approved" && (
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => setPendingAction({ c, action: "pay" })}>
+                          <DollarSign className="w-4 h-4 mr-1" /> Pagar
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" className="flex-1 text-destructive" onClick={() => setPendingAction({ c, action: "cancel" })}>
+                        <Ban className="w-4 h-4 mr-1" /> Cancelar
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -464,6 +540,30 @@ export default function Comissoes() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingAction} onOpenChange={(o) => !o && !submitting && setPendingAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction?.action === "approve" && "Aprovar comissão?"}
+              {pendingAction?.action === "pay" && "Marcar comissão como paga?"}
+              {pendingAction?.action === "cancel" && "Cancelar comissão?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.action === "pay"
+                ? "Esta ação marcará a comissão como paga manualmente. Nenhum pagamento externo será realizado."
+                : "Esta ação atualiza o status da comissão e fica registrada na auditoria."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); runAction(); }} disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
