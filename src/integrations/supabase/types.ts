@@ -267,6 +267,7 @@ export type Database = {
       }
       company_users: {
         Row: {
+          commission_percentage: number
           company_id: string
           created_at: string
           delete_after: string | null
@@ -280,6 +281,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          commission_percentage?: number
           company_id: string
           created_at?: string
           delete_after?: string | null
@@ -293,6 +295,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          commission_percentage?: number
           company_id?: string
           created_at?: string
           delete_after?: string | null
@@ -1338,6 +1341,89 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_commissions: {
+        Row: {
+          commission_amount: number
+          commission_percentage: number
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          deleted_at: string | null
+          generated_at: string
+          id: string
+          opportunity_amount: number
+          opportunity_id: string
+          paid_at: string | null
+          seller_user_id: string
+          status: string
+          ticket_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          commission_amount: number
+          commission_percentage: number
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          generated_at?: string
+          id?: string
+          opportunity_amount: number
+          opportunity_id: string
+          paid_at?: string | null
+          seller_user_id: string
+          status?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          commission_amount?: number
+          commission_percentage?: number
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          generated_at?: string
+          id?: string
+          opportunity_amount?: number
+          opportunity_id?: string
+          paid_at?: string | null
+          seller_user_id?: string
+          status?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_commissions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_commissions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_commissions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_commissions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
         ]

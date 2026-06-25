@@ -38,6 +38,7 @@ interface Member {
   role: Role;
   status: "active" | "pending" | "disabled";
   disabled_reason: string | null;
+  commission_percentage: number;
   profile: {
     id: string; full_name: string | null; email: string | null; phone: string | null;
     signature: string | null; signature_enabled: boolean;
@@ -71,6 +72,7 @@ export default function Equipe() {
     department_ids: [] as string[],
     dept_rotation: {} as Record<string, boolean>,
     signature: "", signature_enabled: true,
+    commission_percentage: 0,
   };
   const [form, setForm] = useState(empty);
 
@@ -79,8 +81,8 @@ export default function Equipe() {
     if (!activeCompanyId) return;
     setLoading(true);
     const [{ data: cu }, { data: d }, { data: du }] = await Promise.all([
-      supabase.from("company_users")
-        .select("id, user_id, role, status, disabled_reason")
+      (supabase as any).from("company_users")
+        .select("id, user_id, role, status, disabled_reason, commission_percentage")
         .eq("company_id", activeCompanyId)
         .neq("status", "pending")
         .order("created_at", { ascending: false }),
@@ -105,6 +107,7 @@ export default function Equipe() {
     const list: Member[] = (cu ?? []).map((r: any) => ({
       id: r.id, user_id: r.user_id, role: r.role, status: r.status,
       disabled_reason: r.disabled_reason,
+      commission_percentage: Number(r.commission_percentage ?? 0),
       profile: profs?.find((p: any) => p.id === r.user_id) ?? null,
       departments: (du ?? []).filter((x: any) => x.user_id === r.user_id).map((x: any) => ({ department_id: x.department_id, participates_in_rotation: x.participates_in_rotation !== false })),
     }));
@@ -128,6 +131,7 @@ export default function Equipe() {
       dept_rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation !== false])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
+      commission_percentage: m.commission_percentage ?? 0,
     });
   };
 
@@ -222,8 +226,15 @@ export default function Equipe() {
       signature_enabled: form.signature_enabled,
     }).eq("id", editing.user_id);
 
-    // Update role (block lowering own owner role)
-    await supabase.from("company_users").update({ role: form.role }).eq("id", editing.id);
+    // Update role + commission (somente Admin/Master)
+    {
+      const upd: Record<string, unknown> = { role: form.role };
+      if (canManage) {
+        const pct = Math.max(0, Math.min(100, Number(form.commission_percentage) || 0));
+        upd.commission_percentage = pct;
+      }
+      await (supabase as any).from("company_users").update(upd).eq("id", editing.id);
+    }
 
     // Replace departments
     const prevRotation = Object.fromEntries(editing.departments.map((d) => [d.department_id, d.participates_in_rotation !== false]));
@@ -530,6 +541,30 @@ export default function Equipe() {
                 />
                 <Label htmlFor="sig-en" className="cursor-pointer">Usar assinatura nas mensagens</Label>
               </div>
+
+              {canManage && editing && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="commission-pct">Comissão sobre vendas (%)</Label>
+                  <Input
+                    id="commission-pct"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={form.commission_percentage}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        commission_percentage: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Percentual usado para calcular a comissão quando uma oportunidade atribuída a este usuário for marcada como Ganha. Use 0 para sem comissão.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
