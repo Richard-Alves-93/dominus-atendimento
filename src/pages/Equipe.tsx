@@ -72,6 +72,7 @@ export default function Equipe() {
     department_ids: [] as string[],
     dept_rotation: {} as Record<string, boolean>,
     signature: "", signature_enabled: true,
+    commission_percentage: 0,
   };
   const [form, setForm] = useState(empty);
 
