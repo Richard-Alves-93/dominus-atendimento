@@ -364,6 +364,48 @@ export default function Comissoes() {
           </div>
         </Card>
 
+        {/* Ações de exportação + Resumo por vendedor */}
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">Resumo por vendedor</h2>
+          <Button size="sm" variant="outline" onClick={exportCSV} disabled={filtered.length === 0}>
+            <Download className="w-4 h-4 mr-1" /> Exportar CSV
+          </Button>
+        </div>
+        {sellerSummary.length > 0 && (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vendedor</TableHead>
+                    <TableHead className="text-right">Qtd.</TableHead>
+                    <TableHead className="text-right">Pendente</TableHead>
+                    <TableHead className="text-right">Aprovada</TableHead>
+                    <TableHead className="text-right">Paga</TableHead>
+                    <TableHead className="text-right">Cancelada</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sellerSummary.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{sellerName(s.id)}</TableCell>
+                      <TableCell className="text-right">{s.count}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.pending)}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.approved)}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.paid)}</TableCell>
+                      <TableCell className="text-right">{formatBRL(s.canceled)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatBRL(s.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        )}
+
+
+
         {/* Lista */}
         {commissionsQuery.isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
