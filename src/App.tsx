@@ -24,6 +24,7 @@ import Perfil from "./pages/Perfil";
 import Agendamentos from "./pages/Agendamentos";
 import MensagensRapidas from "./pages/MensagensRapidas";
 import Oportunidades from "./pages/Oportunidades";
+import Comissoes from "./pages/Comissoes";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
