@@ -453,8 +453,24 @@ export default function Comissoes() {
                       <Button size="sm" variant="outline" className="flex-1" onClick={() => openTicket(c.ticket_id)}>
                         <ExternalLink className="w-4 h-4 mr-1" /> Atendimento
                       </Button>
-                    )}
                   </div>
+                  {canManage && (c.status === "pending" || c.status === "approved") && (
+                    <div className="flex flex-wrap gap-2">
+                      {c.status === "pending" && (
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => setPendingAction({ c, action: "approve" })}>
+                          <Check className="w-4 h-4 mr-1" /> Aprovar
+                        </Button>
+                      )}
+                      {c.status === "approved" && (
+                        <Button size="sm" variant="outline" className="flex-1" onClick={() => setPendingAction({ c, action: "pay" })}>
+                          <DollarSign className="w-4 h-4 mr-1" /> Pagar
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" className="flex-1 text-destructive" onClick={() => setPendingAction({ c, action: "cancel" })}>
+                        <Ban className="w-4 h-4 mr-1" /> Cancelar
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
