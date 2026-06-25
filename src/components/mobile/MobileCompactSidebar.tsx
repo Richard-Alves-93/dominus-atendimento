@@ -14,6 +14,7 @@ import {
   LogOut,
   Zap,
   Briefcase,
+  Wallet,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
