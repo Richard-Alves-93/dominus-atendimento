@@ -37,6 +37,7 @@ const items: Item[] = [
   { title: "Contatos", url: "/app/contatos", icon: Users },
   { title: "Mensagens Rápidas", url: "/app/mensagens-rapidas", icon: MessageSquareText },
   { title: "Oportunidades", url: "/app/oportunidades", icon: Briefcase },
+  { title: "Comissões", url: "/app/comissoes", icon: Wallet },
   { title: "Campanhas", url: "/app/campanhas", icon: Send, adminOnly: true },
   { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays, adminOnly: true },
   { title: "Conexões", url: "/app/conexoes", icon: Phone, adminOnly: true },
