@@ -25,6 +25,7 @@ import Agendamentos from "./pages/Agendamentos";
 import MensagensRapidas from "./pages/MensagensRapidas";
 import Oportunidades from "./pages/Oportunidades";
 import Comissoes from "./pages/Comissoes";
+import Kanban from "./pages/Kanban";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="/app/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
               <Route path="/app/oportunidades" element={<ProtectedRoute><Oportunidades /></ProtectedRoute>} />
               <Route path="/app/comissoes" element={<ProtectedRoute><Comissoes /></ProtectedRoute>} />
+              <Route path="/app/kanban" element={<ProtectedRoute><Kanban /></ProtectedRoute>} />
               <Route path="/app/mensagens-rapidas" element={<ProtectedRoute><MensagensRapidas /></ProtectedRoute>} />
               <Route path="/app/conexoes" element={<ProtectedRoute><Conexoes /></ProtectedRoute>} />
               <Route path="/app/setores" element={<ProtectedRoute><Setores /></ProtectedRoute>} />
