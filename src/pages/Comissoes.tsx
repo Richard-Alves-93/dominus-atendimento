@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Wallet, Search, ExternalLink, Loader2, Eye, Check, DollarSign, Ban, MoreVertical } from "lucide-react";
+import { Wallet, Search, ExternalLink, Loader2, Eye, Check, DollarSign, Ban, MoreVertical, Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
