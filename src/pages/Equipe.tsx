@@ -131,6 +131,7 @@ export default function Equipe() {
       dept_rotation: Object.fromEntries(m.departments.map((d) => [d.department_id, d.participates_in_rotation !== false])),
       signature: m.profile?.signature ?? "",
       signature_enabled: m.profile?.signature_enabled ?? true,
+      commission_percentage: m.commission_percentage ?? 0,
     });
   };
 
