@@ -1393,10 +1393,10 @@ export default function TicketsMobileLayout(props: Props) {
             ? ({
                 ticket_id: selected.id,
                 company_id: (selected as any).company_id,
-                contact_id: selected.contact_id,
+                contact_id: (selected as any).contact_id ?? selected.contact?.id ?? null,
                 contact_name: selected.contact?.name ?? selected.contact?.phone_number ?? null,
                 department_id: selected.department_id ?? null,
-                assigned_user_id: selected.assigned_user_id ?? null,
+                assigned_user_id: (selected as any).assigned_user_id ?? null,
                 channel_type: (selected as any).channel?.channel_type ?? null,
               } satisfies OpportunityTicketContext)
             : null
