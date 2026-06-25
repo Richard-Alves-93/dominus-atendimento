@@ -453,6 +453,7 @@ export default function Comissoes() {
                       <Button size="sm" variant="outline" className="flex-1" onClick={() => openTicket(c.ticket_id)}>
                         <ExternalLink className="w-4 h-4 mr-1" /> Atendimento
                       </Button>
+                    )}
                   </div>
                   {canManage && (c.status === "pending" || c.status === "approved") && (
                     <div className="flex flex-wrap gap-2">
