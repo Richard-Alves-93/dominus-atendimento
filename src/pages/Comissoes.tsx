@@ -84,12 +84,39 @@ export default function Comissoes() {
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
   const role = activeMembership?.role;
   const canSeeAllSellers = isMaster || role === "owner" || role === "admin" || role === "manager" || role === "financial";
+  const canManage = isMaster || role === "owner" || role === "admin" || role === "financial";
 
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<"all" | CommissionStatus>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [viewing, setViewing] = useState<Commission | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ c: Commission; action: "approve" | "pay" | "cancel" } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const runAction = async () => {
+    if (!pendingAction) return;
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.rpc("update_commission_status", {
+        _commission_id: pendingAction.c.id,
+        _action: pendingAction.action,
+      });
+      if (error) throw error;
+      toast.success(
+        pendingAction.action === "approve" ? "Comissão aprovada" :
+        pendingAction.action === "pay" ? "Comissão marcada como paga" :
+        "Comissão cancelada"
+      );
+      setPendingAction(null);
+      await queryClient.invalidateQueries({ queryKey: ["commissions", activeCompanyId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao atualizar comissão");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const commissionsQuery = useQuery({
     queryKey: ["commissions", activeCompanyId, statusFilter, sellerFilter, periodFilter],
