@@ -240,6 +240,51 @@ export default function Comissoes() {
     return { counts, values };
   }, [commissions]);
 
+  const sellerSummary = useMemo(() => {
+    const m = new Map<string, { count: number; pending: number; approved: number; paid: number; canceled: number; total: number }>();
+    for (const c of filtered) {
+      const cur = m.get(c.seller_user_id) ?? { count: 0, pending: 0, approved: 0, paid: 0, canceled: 0, total: 0 };
+      const v = Number(c.commission_amount ?? 0);
+      cur.count += 1;
+      cur[c.status] += v;
+      cur.total += v;
+      m.set(c.seller_user_id, cur);
+    }
+    return Array.from(m.entries()).map(([id, v]) => ({ id, ...v }));
+  }, [filtered]);
+
+  const exportCSV = () => {
+    const headers = [
+      "Vendedor","Oportunidade","Contato","Valor da venda","Percentual","Valor da comissão","Status","Gerada em","Paga em",
+    ];
+    const escape = (s: unknown) => {
+      const str = s == null ? "" : String(s);
+      return /[",;\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const rows = filtered.map((c) => [
+      sellerName(c.seller_user_id),
+      oppTitle(c.opportunity_id),
+      contactLabel(c.contact_id),
+      c.opportunity_amount ?? "",
+      Number(c.commission_percentage).toFixed(2),
+      c.commission_amount ?? "",
+      STATUS_LABEL[c.status],
+      c.generated_at ? new Date(c.generated_at).toISOString() : "",
+      c.paid_at ? new Date(c.paid_at).toISOString() : "",
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map(escape).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `comissoes_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("CSV exportado");
+  };
+
   const openTicket = (ticketId: string | null) => {
     if (!ticketId || !activeCompanyId || !profile?.id) return;
     try {
