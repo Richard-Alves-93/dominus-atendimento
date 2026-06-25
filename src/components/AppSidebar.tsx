@@ -14,6 +14,7 @@ import {
   UsersRound,
   UserCircle,
   Briefcase,
+  Wallet,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -38,6 +39,7 @@ const mainItems = [
   { title: "Contatos", url: "/app/contatos", icon: Users },
   { title: "Mensagens Rápidas", url: "/app/mensagens-rapidas", icon: MessageSquareText },
   { title: "Oportunidades", url: "/app/oportunidades", icon: Briefcase },
+  { title: "Comissões", url: "/app/comissoes", icon: Wallet },
   { title: "Campanhas", url: "/app/campanhas", icon: Send, adminOnly: true },
   { title: "Agendamentos", url: "/app/agendamentos", icon: CalendarDays, adminOnly: true },
 ];
