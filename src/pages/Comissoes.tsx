@@ -540,6 +540,30 @@ export default function Comissoes() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingAction} onOpenChange={(o) => !o && !submitting && setPendingAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction?.action === "approve" && "Aprovar comissão?"}
+              {pendingAction?.action === "pay" && "Marcar comissão como paga?"}
+              {pendingAction?.action === "cancel" && "Cancelar comissão?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.action === "pay"
+                ? "Esta ação marcará a comissão como paga manualmente. Nenhum pagamento externo será realizado."
+                : "Esta ação atualiza o status da comissão e fica registrada na auditoria."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); runAction(); }} disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
