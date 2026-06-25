@@ -53,6 +53,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -60,6 +61,7 @@ import { MobileFilterChips } from "@/components/mobile/MobileFilterChips";
 import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
+import OpportunityDialog, { type OpportunityTicketContext } from "@/features/tickets/OpportunityDialog";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
