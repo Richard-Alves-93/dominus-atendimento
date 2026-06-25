@@ -38,6 +38,7 @@ interface Member {
   role: Role;
   status: "active" | "pending" | "disabled";
   disabled_reason: string | null;
+  commission_percentage: number;
   profile: {
     id: string; full_name: string | null; email: string | null; phone: string | null;
     signature: string | null; signature_enabled: boolean;
