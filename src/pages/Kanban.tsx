@@ -774,6 +774,14 @@ function LaneRow({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                {(card.ticket_id || card.opportunity_id || card.contact_id) && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => onOpenLinked(card)}>
+                                      Abrir vinculado
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
                                 {columns.filter((c) => c.id !== col.id).length > 0 && (
                                   <>
                                     <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground flex items-center gap-1">
@@ -799,10 +807,37 @@ function LaneRow({
                             {card.description}
                           </p>
                         )}
-                        <div className="mt-1.5 flex items-center gap-1">
+                        <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                           <Badge variant="outline" className="text-[9px] px-1 py-0">
-                            {card.card_type === "manual" ? "Manual" : card.card_type}
+                            {card.card_type === "manual" ? "Manual"
+                              : card.card_type === "ticket" ? "Atendimento"
+                              : card.card_type === "contact" ? "Contato"
+                              : card.card_type === "opportunity" ? "Oportunidade"
+                              : card.card_type}
                           </Badge>
+                          {card.ticket_id && linkEnrich.tickets[card.ticket_id] && (
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {linkEnrich.tickets[card.ticket_id].contact_name || "—"}
+                              {linkEnrich.tickets[card.ticket_id].department_name
+                                ? ` · ${linkEnrich.tickets[card.ticket_id].department_name}`
+                                : ""}
+                            </span>
+                          )}
+                          {card.contact_id && linkEnrich.contacts[card.contact_id] && (
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {linkEnrich.contacts[card.contact_id].phone || ""}
+                            </span>
+                          )}
+                          {card.opportunity_id && linkEnrich.opportunities[card.opportunity_id] && (
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {linkEnrich.opportunities[card.opportunity_id].amount != null
+                                ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+                                    .format(Number(linkEnrich.opportunities[card.opportunity_id].amount))
+                                : ""}
+                              {" · "}
+                              {linkEnrich.opportunities[card.opportunity_id].status}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))
