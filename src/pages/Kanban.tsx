@@ -722,6 +722,43 @@ export default function Kanban() {
                         }
                       }
 
+                      // K.7: commercial action when applicable
+                      const shouldRunCommercial =
+                        card.card_type === "opportunity"
+                        && !!card.opportunity_id
+                        && destLane
+                        && (destLane as any).lane_type === "commercial"
+                        && (destCol as any)?.commercial_action_enabled === true
+                        && !!(destCol as any)?.commercial_action
+                        && (destCol as any)?.commercial_action !== "none";
+
+                      if (shouldRunCommercial && companyId) {
+                        const { error: oppErr } = await (supabase as any).rpc(
+                          "update_opportunity_status_from_kanban",
+                          {
+                            _company_id: companyId,
+                            _opportunity_id: card.opportunity_id,
+                            _kanban_card_id: cardId,
+                            _kanban_lane_id: (destLane as any).id,
+                            _kanban_column_id: newColumnId,
+                          },
+                        );
+                        if (oppErr) {
+                          await (supabase as any)
+                            .from("kanban_cards")
+                            .update({ column_id: oldColumnId, lane_id: oldLaneId })
+                            .eq("id", cardId);
+                          toast({
+                            title: "Não foi possível atualizar a oportunidade",
+                            description: oppErr.message,
+                            variant: "destructive",
+                          });
+                          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                          return;
+                        }
+                        qc.invalidateQueries({ queryKey: ["opportunities"] });
+                      }
+
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
                     onDeleteCard={async (cardId) => {
