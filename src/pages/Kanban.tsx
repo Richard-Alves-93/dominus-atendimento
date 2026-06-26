@@ -858,7 +858,31 @@ function LaneRow({
             columns.map((col) => (
               <div
                 key={col.id}
-                className="w-64 shrink-0 rounded-md border bg-card/50 flex flex-col max-h-[60vh]"
+                className={`w-64 shrink-0 rounded-md border bg-card/50 flex flex-col max-h-[60vh] transition-colors ${
+                  dragOverCol === col.id ? "ring-2 ring-primary border-primary bg-primary/5" : ""
+                }`}
+                onDragOver={(e) => {
+                  if (!onDropItem) return;
+                  if (e.dataTransfer.types.includes(DRAG_MIME)) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                    if (dragOverCol !== col.id) setDragOverCol(col.id);
+                  }
+                }}
+                onDragLeave={() => {
+                  if (dragOverCol === col.id) setDragOverCol(null);
+                }}
+                onDrop={(e) => {
+                  if (!onDropItem) return;
+                  const raw = e.dataTransfer.getData(DRAG_MIME);
+                  setDragOverCol(null);
+                  if (!raw) return;
+                  e.preventDefault();
+                  try {
+                    const parsed = JSON.parse(raw) as SideItem;
+                    if (parsed && parsed.id && parsed.kind) onDropItem(col.id, parsed);
+                  } catch { /* ignore */ }
+                }}
               >
                 <div
                   className="flex items-center justify-between px-2 py-1.5 border-b rounded-t-md"
