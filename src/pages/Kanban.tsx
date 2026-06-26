@@ -1224,6 +1224,28 @@ function LaneRow({
                           {card.ticket_id && latestTransfers[card.ticket_id] && (
                             <TransferStatusBadge transfer={latestTransfers[card.ticket_id]} />
                           )}
+                          {/* Oportunidade: status colorido + valor */}
+                          {card.opportunity_id && linkEnrich.opportunities[card.opportunity_id] && (() => {
+                            const o = linkEnrich.opportunities[card.opportunity_id];
+                            const map: Record<string, { label: string; cls: string }> = {
+                              open:     { label: "Aberta",    cls: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+                              won:      { label: "Ganha",     cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+                              lost:     { label: "Perdida",   cls: "bg-rose-500/10 text-rose-600 border-rose-500/20" },
+                              canceled: { label: "Cancelada", cls: "bg-muted text-muted-foreground border-border" },
+                            };
+                            const m = map[o.status] ?? { label: o.status, cls: "" };
+                            return (
+                              <>
+                                <Badge variant="outline" className={`text-[9px] px-1 py-0 ${m.cls}`}>{m.label}</Badge>
+                                {typeof o.amount === "number" && (
+                                  <span className="text-[10px] font-medium text-emerald-600">
+                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(o.amount))}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
+                          {/* Atendimento: contato · setor */}
                           {card.ticket_id && linkEnrich.tickets[card.ticket_id] && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               {linkEnrich.tickets[card.ticket_id].contact_name || "—"}
@@ -1232,20 +1254,21 @@ function LaneRow({
                                 : ""}
                             </span>
                           )}
+                          {/* Contato: telefone */}
                           {card.contact_id && linkEnrich.contacts[card.contact_id] && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               {linkEnrich.contacts[card.contact_id].phone || ""}
                             </span>
                           )}
-                          {card.opportunity_id && linkEnrich.opportunities[card.opportunity_id] && (
-                            <span className="text-[10px] text-muted-foreground truncate">
-                              {linkEnrich.opportunities[card.opportunity_id].amount != null
-                                ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-                                    .format(Number(linkEnrich.opportunities[card.opportunity_id].amount))
-                                : ""}
-                              {" · "}
-                              {linkEnrich.opportunities[card.opportunity_id].status}
-                            </span>
+                          {/* K.9: vínculo indisponível (somente após carregar enriquecimento) */}
+                          {linkEnrichLoaded && (
+                            (card.ticket_id && !linkEnrich.tickets[card.ticket_id]) ||
+                            (card.contact_id && !linkEnrich.contacts[card.contact_id]) ||
+                            (card.opportunity_id && !linkEnrich.opportunities[card.opportunity_id])
+                          ) && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-600 border-amber-500/20">
+                              Item indisponível
+                            </Badge>
                           )}
                         </div>
                       </div>
