@@ -32,6 +32,7 @@ import {
   TransferStatusBadge,
   useLatestTransfers,
 } from "@/features/kanban/TicketTransferHistoryDialog";
+import CreateOpportunityFromCardDialog from "@/features/kanban/CreateOpportunityFromCardDialog";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
@@ -362,6 +363,7 @@ export default function Kanban() {
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
+  const [createOppDialog, setCreateOppDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
@@ -635,6 +637,7 @@ export default function Kanban() {
                     linkEnrich={linkEnrich}
                     latestTransfers={latestTransfers}
                     onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
+                    onCreateOpportunity={(card) => setCreateOppDialog({ open: true, card })}
                     onOpenLinked={(card) => {
                       if (card.ticket_id) {
                         try { sessionStorage.setItem("dominus.openTicketId", card.ticket_id); } catch { /* ignore */ }
@@ -885,6 +888,21 @@ export default function Kanban() {
         companyId={companyId}
         onClose={() => setTransferHistory({ open: false, ticketId: null })}
       />
+
+      <CreateOpportunityFromCardDialog
+        open={createOppDialog.open}
+        onOpenChange={(v) => setCreateOppDialog((s) => ({ ...s, open: v }))}
+        card={createOppDialog.card}
+        companyId={companyId}
+        currentUserId={user?.id ?? null}
+        lanes={(lanesQ.data ?? []) as any}
+        columns={(columnsQ.data ?? []) as any}
+        onCreated={() => {
+          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+          qc.invalidateQueries({ queryKey: ["kanban-sidebar-opportunities", companyId] });
+          qc.invalidateQueries({ queryKey: ["opportunities"] });
+        }}
+      />
     </AppLayout>
   );
 }
@@ -905,7 +923,7 @@ function laneTypeIcon(t: LaneType) {
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
-  onDropItem, latestTransfers, onOpenTransferHistory,
+  onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
 }: {
   lane: Lane;
   columns: Column[];
@@ -927,6 +945,7 @@ function LaneRow({
   onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
   latestTransfers: Record<string, any>;
   onOpenTransferHistory: (ticketId: string) => void;
+  onCreateOpportunity?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   return (
@@ -1056,6 +1075,11 @@ function LaneRow({
                                     {card.card_type === "ticket" && card.ticket_id && (
                                       <DropdownMenuItem onClick={() => onOpenTransferHistory(card.ticket_id!)}>
                                         <ArrowRightLeft className="h-3 w-3 mr-2" /> Histórico de transferências
+                                      </DropdownMenuItem>
+                                    )}
+                                    {(card.card_type === "ticket" || card.card_type === "contact") && onCreateOpportunity && (
+                                      <DropdownMenuItem onClick={() => onCreateOpportunity(card)}>
+                                        <Briefcase className="h-3 w-3 mr-2" /> Criar oportunidade
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuSeparator />
