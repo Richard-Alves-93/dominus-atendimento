@@ -637,6 +637,7 @@ export default function Kanban() {
                     linkEnrich={linkEnrich}
                     latestTransfers={latestTransfers}
                     onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
+                    onCreateOpportunity={(card) => setCreateOppDialog({ open: true, card })}
                     onOpenLinked={(card) => {
                       if (card.ticket_id) {
                         try { sessionStorage.setItem("dominus.openTicketId", card.ticket_id); } catch { /* ignore */ }
