@@ -1907,6 +1907,128 @@ export type Database = {
           },
         ]
       }
+      ticket_transfers: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          company_id: string
+          created_at: string
+          from_department_id: string | null
+          from_user_id: string | null
+          id: string
+          kanban_card_id: string | null
+          kanban_column_id: string | null
+          kanban_lane_id: string | null
+          return_deadline_at: string | null
+          return_if_unassigned: boolean
+          return_target: string | null
+          return_timeout_minutes: number | null
+          returned_at: string | null
+          source: string
+          status: string
+          ticket_id: string
+          to_department_id: string
+          transferred_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          company_id: string
+          created_at?: string
+          from_department_id?: string | null
+          from_user_id?: string | null
+          id?: string
+          kanban_card_id?: string | null
+          kanban_column_id?: string | null
+          kanban_lane_id?: string | null
+          return_deadline_at?: string | null
+          return_if_unassigned?: boolean
+          return_target?: string | null
+          return_timeout_minutes?: number | null
+          returned_at?: string | null
+          source?: string
+          status?: string
+          ticket_id: string
+          to_department_id: string
+          transferred_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          company_id?: string
+          created_at?: string
+          from_department_id?: string | null
+          from_user_id?: string | null
+          id?: string
+          kanban_card_id?: string | null
+          kanban_column_id?: string | null
+          kanban_lane_id?: string | null
+          return_deadline_at?: string | null
+          return_if_unassigned?: boolean
+          return_target?: string | null
+          return_timeout_minutes?: number | null
+          returned_at?: string | null
+          source?: string
+          status?: string
+          ticket_id?: string
+          to_department_id?: string
+          transferred_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_transfers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_transfers_from_department_id_fkey"
+            columns: ["from_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_transfers_kanban_card_id_fkey"
+            columns: ["kanban_card_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_transfers_kanban_column_id_fkey"
+            columns: ["kanban_column_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_transfers_kanban_lane_id_fkey"
+            columns: ["kanban_lane_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_lanes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_transfers_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_transfers_to_department_id_fkey"
+            columns: ["to_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tickets: {
         Row: {
           assigned_at: string | null
@@ -2182,6 +2304,20 @@ export type Database = {
         }[]
       }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
+      transfer_ticket_to_department_from_kanban: {
+        Args: {
+          _company_id: string
+          _kanban_card_id: string
+          _kanban_column_id: string
+          _kanban_lane_id: string
+          _target_department_id: string
+          _ticket_id: string
+        }
+        Returns: {
+          status: string
+          transfer_id: string
+        }[]
+      }
       try_monitoring_cron_lock: { Args: never; Returns: boolean }
       update_commission_status: {
         Args: { _action: string; _commission_id: string }
