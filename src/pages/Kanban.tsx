@@ -888,6 +888,21 @@ export default function Kanban() {
         companyId={companyId}
         onClose={() => setTransferHistory({ open: false, ticketId: null })}
       />
+
+      <CreateOpportunityFromCardDialog
+        open={createOppDialog.open}
+        onOpenChange={(v) => setCreateOppDialog((s) => ({ ...s, open: v }))}
+        card={createOppDialog.card}
+        companyId={companyId}
+        currentUserId={user?.id ?? null}
+        lanes={(lanesQ.data ?? []) as any}
+        columns={(columnsQ.data ?? []) as any}
+        onCreated={() => {
+          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+          qc.invalidateQueries({ queryKey: ["kanban-sidebar-opportunities", companyId] });
+          qc.invalidateQueries({ queryKey: ["opportunities"] });
+        }}
+      />
     </AppLayout>
   );
 }
