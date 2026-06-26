@@ -709,6 +709,7 @@ export default function Kanban() {
                     columns={(columnsByLane[lane.id] ?? []).sort((a, b) => a.position - b.position)}
                     cardsByColumn={cardsByColumn}
                     linkEnrich={linkEnrich}
+                    linkEnrichLoaded={linkEnrichQ.isSuccess}
                     latestTransfers={latestTransfers}
                     onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
                     onCreateOpportunity={(card) => setCreateOppDialog({ open: true, card })}
