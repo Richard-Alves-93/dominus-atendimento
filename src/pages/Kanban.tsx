@@ -1007,9 +1007,14 @@ function LaneRow({
                     </span>
                   </div>
                   {canManage && (
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onAddCard(col.id)}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onAddCard(col.id)} title="Novo card">
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onEditColumn?.(col)} title="Editar coluna">
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   )}
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-2">
