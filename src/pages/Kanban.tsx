@@ -357,6 +357,10 @@ export default function Kanban() {
   const [sideTab, setSideTab] = useState<SideKind>("contact");
   const [sideSearch, setSideSearch] = useState("");
   const [laneFilter, setLaneFilter] = useState<"all" | LaneType>("all");
+  // K.9: filtros globais
+  const [cardTypeFilter, setCardTypeFilter] = useState<"all" | "ticket" | "contact" | "opportunity" | "manual">("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "me" | userId
+  const [globalSearch, setGlobalSearch] = useState("");
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
@@ -364,6 +368,23 @@ export default function Kanban() {
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
   const [createOppDialog, setCreateOppDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
+
+  // K.9: lista leve de membros para filtro de responsável (Master/Admin/Manager)
+  const membersQ = useQuery({
+    queryKey: ["kanban-members", companyId],
+    enabled: !!companyId && canManage,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("company_users")
+        .select("user_id, profiles:profiles!company_users_user_id_fkey(full_name,email)")
+        .eq("company_id", companyId)
+        .eq("status", "active");
+      return ((data ?? []) as any[]).map((r) => ({
+        user_id: r.user_id as string,
+        name: (r.profiles?.full_name || r.profiles?.email || "Usuário") as string,
+      }));
+    },
+  });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
@@ -373,11 +394,30 @@ export default function Kanban() {
     return map;
   }, [columnsQ.data]);
 
-  const cardsByColumn = useMemo(() => {
+  const allCardsByColumn = useMemo(() => {
     const map: Record<string, CardRow[]> = {};
     for (const c of cardsQ.data ?? []) (map[c.column_id] ||= []).push(c);
     return map;
   }, [cardsQ.data]);
+
+  // K.9: aplicação dos filtros visuais
+  const cardsByColumn = useMemo(() => {
+    const q = globalSearch.trim().toLowerCase();
+    const result: Record<string, CardRow[]> = {};
+    for (const [colId, list] of Object.entries(allCardsByColumn)) {
+      result[colId] = list.filter((card) => {
+        if (cardTypeFilter !== "all" && card.card_type !== cardTypeFilter) return false;
+        if (assigneeFilter === "me" && card.assigned_user_id !== user?.id) return false;
+        if (assigneeFilter !== "all" && assigneeFilter !== "me" && card.assigned_user_id !== assigneeFilter) return false;
+        if (q) {
+          const hay = (card.title || "").toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+    }
+    return result;
+  }, [allCardsByColumn, cardTypeFilter, assigneeFilter, globalSearch, user?.id]);
 
   /* ---------------- Card link enrichment ---------------- */
   const linkIds = useMemo(() => {
