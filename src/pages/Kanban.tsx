@@ -994,6 +994,11 @@ function LaneRow({
                                     <DropdownMenuItem onClick={() => onOpenLinked(card)}>
                                       Abrir vinculado
                                     </DropdownMenuItem>
+                                    {card.card_type === "ticket" && card.ticket_id && (
+                                      <DropdownMenuItem onClick={() => onOpenTransferHistory(card.ticket_id!)}>
+                                        <ArrowRightLeft className="h-3 w-3 mr-2" /> Histórico de transferências
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
