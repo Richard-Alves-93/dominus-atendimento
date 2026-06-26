@@ -1062,6 +1062,11 @@ function LaneRow({
                                         <ArrowRightLeft className="h-3 w-3 mr-2" /> Histórico de transferências
                                       </DropdownMenuItem>
                                     )}
+                                    {(card.card_type === "ticket" || card.card_type === "contact") && onCreateOpportunity && (
+                                      <DropdownMenuItem onClick={() => onCreateOpportunity(card)}>
+                                        <Briefcase className="h-3 w-3 mr-2" /> Criar oportunidade
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
