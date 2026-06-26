@@ -1051,6 +1051,9 @@ function LaneRow({
           {lane.is_personal && (
             <Badge variant="outline" className="text-[10px]">Pessoal</Badge>
           )}
+          <Badge variant="secondary" className="text-[10px]" title="Total de cards visíveis">
+            {laneTotal} {laneTotal === 1 ? "card" : "cards"}
+          </Badge>
         </div>
         {canManage && (
           <div className="flex items-center gap-1">
