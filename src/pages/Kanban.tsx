@@ -357,6 +357,10 @@ export default function Kanban() {
   const [sideTab, setSideTab] = useState<SideKind>("contact");
   const [sideSearch, setSideSearch] = useState("");
   const [laneFilter, setLaneFilter] = useState<"all" | LaneType>("all");
+  // K.9: filtros globais
+  const [cardTypeFilter, setCardTypeFilter] = useState<"all" | "ticket" | "contact" | "opportunity" | "manual">("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "me" | userId
+  const [globalSearch, setGlobalSearch] = useState("");
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
@@ -364,6 +368,23 @@ export default function Kanban() {
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
   const [createOppDialog, setCreateOppDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
+
+  // K.9: lista leve de membros para filtro de responsável (Master/Admin/Manager)
+  const membersQ = useQuery({
+    queryKey: ["kanban-members", companyId],
+    enabled: !!companyId && canManage,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("company_users")
+        .select("user_id, profiles:profiles!company_users_user_id_fkey(full_name,email)")
+        .eq("company_id", companyId)
+        .eq("status", "active");
+      return ((data ?? []) as any[]).map((r) => ({
+        user_id: r.user_id as string,
+        name: (r.profiles?.full_name || r.profiles?.email || "Usuário") as string,
+      }));
+    },
+  });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
@@ -373,11 +394,30 @@ export default function Kanban() {
     return map;
   }, [columnsQ.data]);
 
-  const cardsByColumn = useMemo(() => {
+  const allCardsByColumn = useMemo(() => {
     const map: Record<string, CardRow[]> = {};
     for (const c of cardsQ.data ?? []) (map[c.column_id] ||= []).push(c);
     return map;
   }, [cardsQ.data]);
+
+  // K.9: aplicação dos filtros visuais
+  const cardsByColumn = useMemo(() => {
+    const q = globalSearch.trim().toLowerCase();
+    const result: Record<string, CardRow[]> = {};
+    for (const [colId, list] of Object.entries(allCardsByColumn)) {
+      result[colId] = list.filter((card) => {
+        if (cardTypeFilter !== "all" && card.card_type !== cardTypeFilter) return false;
+        if (assigneeFilter === "me" && card.assigned_user_id !== user?.id) return false;
+        if (assigneeFilter !== "all" && assigneeFilter !== "me" && card.assigned_user_id !== assigneeFilter) return false;
+        if (q) {
+          const hay = (card.title || "").toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+    }
+    return result;
+  }, [allCardsByColumn, cardTypeFilter, assigneeFilter, globalSearch, user?.id]);
 
   /* ---------------- Card link enrichment ---------------- */
   const linkIds = useMemo(() => {
@@ -506,7 +546,7 @@ export default function Kanban() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={laneFilter} onValueChange={(v) => setLaneFilter(v as any)}>
-              <SelectTrigger className="h-9 w-[160px]">
+              <SelectTrigger className="h-9 w-[150px]">
                 <ListFilter className="h-4 w-4 mr-1" />
                 <SelectValue />
               </SelectTrigger>
@@ -518,11 +558,45 @@ export default function Kanban() {
                 <SelectItem value="custom">Personalizada</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={cardTypeFilter} onValueChange={(v) => setCardTypeFilter(v as any)}>
+              <SelectTrigger className="h-9 w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os cards</SelectItem>
+                <SelectItem value="ticket">Atendimento</SelectItem>
+                <SelectItem value="contact">Contato</SelectItem>
+                <SelectItem value="opportunity">Oportunidade</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+              <SelectTrigger className="h-9 w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos responsáveis</SelectItem>
+                <SelectItem value="me">Eu</SelectItem>
+                {(membersQ.data ?? []).filter((m) => m.user_id !== user?.id).map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                placeholder="Buscar nos cards..."
+                className="pl-7 h-9 w-[180px] text-sm"
+              />
+            </div>
             <Button size="sm" onClick={() => setLaneDialog({ open: true, lane: null })}>
               <Plus className="h-4 w-4 mr-1" /> Nova linha
             </Button>
           </div>
         </div>
+
 
         {/* Body: sidebar + board */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -635,6 +709,7 @@ export default function Kanban() {
                     columns={(columnsByLane[lane.id] ?? []).sort((a, b) => a.position - b.position)}
                     cardsByColumn={cardsByColumn}
                     linkEnrich={linkEnrich}
+                    linkEnrichLoaded={linkEnrichQ.isSuccess}
                     latestTransfers={latestTransfers}
                     onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
                     onCreateOpportunity={(card) => setCreateOppDialog({ open: true, card })}
@@ -921,7 +996,7 @@ function laneTypeIcon(t: LaneType) {
 }
 
 function LaneRow({
-  lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
+  lane, columns, cardsByColumn, canManage, linkEnrich, linkEnrichLoaded, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
 }: {
@@ -934,6 +1009,7 @@ function LaneRow({
     tickets: Record<string, { contact_name: string | null; department_name: string | null; status: string }>;
     opportunities: Record<string, { title: string; amount: number | null; status: string }>;
   };
+  linkEnrichLoaded: boolean;
   onOpenLinked: (card: CardRow) => void;
   onAddColumn: () => void;
   onAddCard: (columnId: string) => void;
@@ -948,6 +1024,22 @@ function LaneRow({
   onCreateOpportunity?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
+  const laneTotal = columns.reduce((acc, c) => acc + (cardsByColumn[c.id]?.length ?? 0), 0);
+  const fmtBRL = (n: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+  const columnAmount = (colId: string): number | null => {
+    const list = cardsByColumn[colId] ?? [];
+    let sum = 0;
+    let has = false;
+    for (const c of list) {
+      if (c.card_type === "opportunity" && c.opportunity_id) {
+        const o = linkEnrich.opportunities[c.opportunity_id];
+        if (o && typeof o.amount === "number") { sum += Number(o.amount); has = true; }
+      }
+    }
+    return has ? sum : null;
+  };
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b bg-muted/30">
@@ -959,6 +1051,9 @@ function LaneRow({
           {lane.is_personal && (
             <Badge variant="outline" className="text-[10px]">Pessoal</Badge>
           )}
+          <Badge variant="secondary" className="text-[10px]" title="Total de cards visíveis">
+            {laneTotal} {laneTotal === 1 ? "card" : "cards"}
+          </Badge>
         </div>
         {canManage && (
           <div className="flex items-center gap-1">
@@ -1023,7 +1118,7 @@ function LaneRow({
                   className="flex items-center justify-between px-2 py-1.5 border-b rounded-t-md"
                   style={{ borderTopColor: colorHex(col.color), borderTopWidth: 3 }}
                 >
-                  <div className="min-w-0 flex items-center gap-1.5">
+                  <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
                     <span
                       className="inline-block h-2 w-2 rounded-full"
                       style={{ backgroundColor: colorHex(col.color) }}
@@ -1032,6 +1127,14 @@ function LaneRow({
                     <span className="text-[10px] text-muted-foreground">
                       ({(cardsByColumn[col.id] ?? []).length})
                     </span>
+                    {(() => {
+                      const amt = columnAmount(col.id);
+                      return amt != null ? (
+                        <span className="text-[10px] font-medium text-emerald-600" title="Soma das oportunidades">
+                          {fmtBRL(amt)}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   {canManage && (
                     <div className="flex items-center gap-0.5">
@@ -1121,6 +1224,28 @@ function LaneRow({
                           {card.ticket_id && latestTransfers[card.ticket_id] && (
                             <TransferStatusBadge transfer={latestTransfers[card.ticket_id]} />
                           )}
+                          {/* Oportunidade: status colorido + valor */}
+                          {card.opportunity_id && linkEnrich.opportunities[card.opportunity_id] && (() => {
+                            const o = linkEnrich.opportunities[card.opportunity_id];
+                            const map: Record<string, { label: string; cls: string }> = {
+                              open:     { label: "Aberta",    cls: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+                              won:      { label: "Ganha",     cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+                              lost:     { label: "Perdida",   cls: "bg-rose-500/10 text-rose-600 border-rose-500/20" },
+                              canceled: { label: "Cancelada", cls: "bg-muted text-muted-foreground border-border" },
+                            };
+                            const m = map[o.status] ?? { label: o.status, cls: "" };
+                            return (
+                              <>
+                                <Badge variant="outline" className={`text-[9px] px-1 py-0 ${m.cls}`}>{m.label}</Badge>
+                                {typeof o.amount === "number" && (
+                                  <span className="text-[10px] font-medium text-emerald-600">
+                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(o.amount))}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
+                          {/* Atendimento: contato · setor */}
                           {card.ticket_id && linkEnrich.tickets[card.ticket_id] && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               {linkEnrich.tickets[card.ticket_id].contact_name || "—"}
@@ -1129,20 +1254,21 @@ function LaneRow({
                                 : ""}
                             </span>
                           )}
+                          {/* Contato: telefone */}
                           {card.contact_id && linkEnrich.contacts[card.contact_id] && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               {linkEnrich.contacts[card.contact_id].phone || ""}
                             </span>
                           )}
-                          {card.opportunity_id && linkEnrich.opportunities[card.opportunity_id] && (
-                            <span className="text-[10px] text-muted-foreground truncate">
-                              {linkEnrich.opportunities[card.opportunity_id].amount != null
-                                ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-                                    .format(Number(linkEnrich.opportunities[card.opportunity_id].amount))
-                                : ""}
-                              {" · "}
-                              {linkEnrich.opportunities[card.opportunity_id].status}
-                            </span>
+                          {/* K.9: vínculo indisponível (somente após carregar enriquecimento) */}
+                          {linkEnrichLoaded && (
+                            (card.ticket_id && !linkEnrich.tickets[card.ticket_id]) ||
+                            (card.contact_id && !linkEnrich.contacts[card.contact_id]) ||
+                            (card.opportunity_id && !linkEnrich.opportunities[card.opportunity_id])
+                          ) && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-600 border-amber-500/20">
+                              Item indisponível
+                            </Badge>
                           )}
                         </div>
                       </div>
