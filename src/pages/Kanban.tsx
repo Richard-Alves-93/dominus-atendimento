@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Columns3, Plus, Search, Loader2, MoreVertical, Trash2, ArrowRightLeft,
-  User as UserIcon, Building, Briefcase, ListFilter,
+  User as UserIcon, Building, Briefcase, ListFilter, LinkIcon, ExternalLink,
 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
@@ -74,6 +75,18 @@ type CardRow = {
   card_type: string;
   assigned_user_id: string | null;
   position: number;
+  contact_id: string | null;
+  ticket_id: string | null;
+  opportunity_id: string | null;
+};
+
+type SideKind = "contact" | "ticket" | "opportunity";
+type SideItem = {
+  kind: SideKind;
+  id: string;
+  label: string;
+  sub?: string;
+  extra?: string;
 };
 
 const COLOR_PRESETS = [
@@ -113,6 +126,7 @@ export default function Kanban() {
   const { activeMembership } = useCompany();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const companyId = activeMembership?.company_id ?? null;
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
@@ -157,7 +171,7 @@ export default function Kanban() {
     queryFn: async (): Promise<CardRow[]> => {
       const { data, error } = await (supabase as any)
         .from("kanban_cards")
-        .select("id,company_id,lane_id,column_id,title,description,card_type,assigned_user_id,position")
+        .select("id,company_id,lane_id,column_id,title,description,card_type,assigned_user_id,position,contact_id,ticket_id,opportunity_id")
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("position", { ascending: true });
@@ -202,9 +216,36 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tickets")
-        .select("id,contact_id,status,updated_at,contact:contacts(name,phone)")
+        .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name),assignee:profiles!tickets_assigned_user_id_fkey(full_name)")
         .eq("company_id", companyId)
         .in("status", ["open", "pending"])
+        .order("updated_at", { ascending: false })
+        .limit(40);
+      if (error) {
+        // Fallback simples se o alias de FK não casar
+        const r = await (supabase as any)
+          .from("tickets")
+          .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name)")
+          .eq("company_id", companyId)
+          .in("status", ["open", "pending"])
+          .order("updated_at", { ascending: false })
+          .limit(40);
+        if (r.error) throw r.error;
+        return (r.data ?? []) as any[];
+      }
+      return (data ?? []) as any[];
+    },
+  });
+
+  const opportunitiesQ = useQuery({
+    queryKey: ["kanban-sidebar-opportunities", companyId],
+    enabled: !!companyId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("opportunities")
+        .select("id,title,amount,status,assigned_user_id,contact_id,ticket_id,contact:contacts(name,phone)")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(40);
       if (error) throw error;
@@ -213,13 +254,14 @@ export default function Kanban() {
   });
 
   /* ---------------- UI state ---------------- */
-  const [sideTab, setSideTab] = useState<"contacts" | "tickets">("contacts");
+  const [sideTab, setSideTab] = useState<SideKind>("contact");
   const [sideSearch, setSideSearch] = useState("");
   const [laneFilter, setLaneFilter] = useState<"all" | LaneType>("all");
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
@@ -235,22 +277,104 @@ export default function Kanban() {
     return map;
   }, [cardsQ.data]);
 
-  /* ---------------- Sidebar items ---------------- */
-  const sideItems = useMemo(() => {
-    const q = sideSearch.trim().toLowerCase();
-    if (sideTab === "contacts") {
-      const items = (contactsQ.data ?? []).map((c) => ({
-        id: c.id, label: c.name || c.phone || "Sem nome", sub: c.phone || "",
-      }));
-      return q ? items.filter((i) => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : items;
+  /* ---------------- Card link enrichment ---------------- */
+  const linkIds = useMemo(() => {
+    const t = new Set<string>(), c = new Set<string>(), o = new Set<string>();
+    for (const card of cardsQ.data ?? []) {
+      if (card.ticket_id) t.add(card.ticket_id);
+      if (card.contact_id) c.add(card.contact_id);
+      if (card.opportunity_id) o.add(card.opportunity_id);
     }
-    const items = (ticketsQ.data ?? []).map((t) => ({
-      id: t.id,
-      label: t.contact?.name || t.contact?.phone || "Atendimento",
-      sub: `Status: ${t.status === "open" ? "Aberto" : "Pendente"}`,
-    }));
-    return q ? items.filter((i) => i.label.toLowerCase().includes(q)) : items;
-  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data]);
+    return { tickets: [...t], contacts: [...c], opportunities: [...o] };
+  }, [cardsQ.data]);
+
+  const linkEnrichQ = useQuery({
+    queryKey: [
+      "kanban-link-enrich",
+      companyId,
+      linkIds.tickets.join(","),
+      linkIds.contacts.join(","),
+      linkIds.opportunities.join(","),
+    ],
+    enabled: !!companyId,
+    queryFn: async () => {
+      const out: {
+        contacts: Record<string, { name: string | null; phone: string | null }>;
+        tickets: Record<string, { contact_name: string | null; department_name: string | null; status: string }>;
+        opportunities: Record<string, { title: string; amount: number | null; status: string }>;
+      } = { contacts: {}, tickets: {}, opportunities: {} };
+      if (linkIds.contacts.length) {
+        const { data } = await (supabase as any)
+          .from("contacts")
+          .select("id,name,phone")
+          .eq("company_id", companyId)
+          .in("id", linkIds.contacts);
+        for (const r of data ?? []) out.contacts[r.id] = { name: r.name, phone: r.phone };
+      }
+      if (linkIds.tickets.length) {
+        const { data } = await (supabase as any)
+          .from("tickets")
+          .select("id,status,contact:contacts(name,phone),department:departments(name)")
+          .eq("company_id", companyId)
+          .in("id", linkIds.tickets);
+        for (const r of data ?? []) out.tickets[r.id] = {
+          contact_name: r.contact?.name || r.contact?.phone || null,
+          department_name: r.department?.name || null,
+          status: r.status,
+        };
+      }
+      if (linkIds.opportunities.length) {
+        const { data } = await (supabase as any)
+          .from("opportunities")
+          .select("id,title,amount,status")
+          .eq("company_id", companyId)
+          .in("id", linkIds.opportunities);
+        for (const r of data ?? []) out.opportunities[r.id] = {
+          title: r.title, amount: r.amount, status: r.status,
+        };
+      }
+      return out;
+    },
+  });
+  const linkEnrich = linkEnrichQ.data ?? { contacts: {}, tickets: {}, opportunities: {} };
+
+  /* ---------------- Sidebar items ---------------- */
+  const sideItems: SideItem[] = useMemo(() => {
+    const q = sideSearch.trim().toLowerCase();
+    let items: SideItem[] = [];
+    if (sideTab === "contact") {
+      items = (contactsQ.data ?? []).map((c) => ({
+        kind: "contact" as const,
+        id: c.id,
+        label: c.name || c.phone || "Sem nome",
+        sub: c.phone || "",
+      }));
+    } else if (sideTab === "ticket") {
+      items = (ticketsQ.data ?? []).map((t: any) => ({
+        kind: "ticket" as const,
+        id: t.id,
+        label: t.contact?.name || t.contact?.phone || "Atendimento",
+        sub: [t.department?.name, t.status === "open" ? "Aberto" : "Pendente"].filter(Boolean).join(" • "),
+        extra: t.assignee?.full_name || undefined,
+      }));
+    } else {
+      items = (opportunitiesQ.data ?? []).map((o: any) => ({
+        kind: "opportunity" as const,
+        id: o.id,
+        label: o.title || "Oportunidade",
+        sub: o.contact?.name || o.contact?.phone || "",
+        extra: typeof o.amount === "number"
+          ? `R$ ${Number(o.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+          : undefined,
+      }));
+    }
+    if (!q) return items;
+    return items.filter((i) =>
+      i.label.toLowerCase().includes(q) ||
+      (i.sub ?? "").toLowerCase().includes(q) ||
+      (i.extra ?? "").toLowerCase().includes(q),
+    );
+  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data, opportunitiesQ.data]);
 
   /* ---------------- Loading ---------------- */
   if (!companyId) {
@@ -302,23 +426,31 @@ export default function Kanban() {
           {/* Sidebar */}
           <aside className="hidden md:flex w-72 shrink-0 border-r flex-col bg-card/30">
             <div className="p-3 border-b">
-              <h2 className="text-sm font-semibold mb-2">Contatos e atendimentos</h2>
+              <h2 className="text-sm font-semibold mb-2">Itens do quadro</h2>
               <div className="flex gap-1 mb-2">
                 <Button
                   size="sm"
-                  variant={sideTab === "contacts" ? "default" : "outline"}
-                  className="h-7 flex-1"
-                  onClick={() => setSideTab("contacts")}
+                  variant={sideTab === "contact" ? "default" : "outline"}
+                  className="h-7 flex-1 px-1 text-[11px]"
+                  onClick={() => setSideTab("contact")}
                 >
                   Contatos
                 </Button>
                 <Button
                   size="sm"
-                  variant={sideTab === "tickets" ? "default" : "outline"}
-                  className="h-7 flex-1"
-                  onClick={() => setSideTab("tickets")}
+                  variant={sideTab === "ticket" ? "default" : "outline"}
+                  className="h-7 flex-1 px-1 text-[11px]"
+                  onClick={() => setSideTab("ticket")}
                 >
                   Atendimentos
+                </Button>
+                <Button
+                  size="sm"
+                  variant={sideTab === "opportunity" ? "default" : "outline"}
+                  className="h-7 flex-1 px-1 text-[11px]"
+                  onClick={() => setSideTab("opportunity")}
+                >
+                  Oportun.
                 </Button>
               </div>
               <div className="relative">
@@ -339,18 +471,29 @@ export default function Kanban() {
               ) : (
                 sideItems.map((it) => (
                   <div
-                    key={it.id}
-                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent cursor-default"
-                    title="Arraste para o Kanban (em breve)"
+                    key={`${it.kind}-${it.id}`}
+                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1"
                   >
-                    <div className="font-medium truncate">{it.label}</div>
-                    {it.sub && <div className="text-muted-foreground truncate">{it.sub}</div>}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{it.label}</div>
+                      {it.sub && <div className="text-muted-foreground truncate">{it.sub}</div>}
+                      {it.extra && <div className="text-[10px] text-muted-foreground truncate">{it.extra}</div>}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0 opacity-60 group-hover:opacity-100"
+                      title="Adicionar ao Kanban"
+                      onClick={() => setLinkDialog({ open: true, item: it })}
+                    >
+                      <LinkIcon className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 ))
               )}
             </div>
             <div className="p-2 border-t text-[10px] text-muted-foreground">
-              Arrastar para o quadro será habilitado nas próximas fases.
+              Vínculo apenas organizacional — não altera o item original.
             </div>
           </aside>
 
@@ -378,6 +521,17 @@ export default function Kanban() {
                     lane={lane}
                     columns={(columnsByLane[lane.id] ?? []).sort((a, b) => a.position - b.position)}
                     cardsByColumn={cardsByColumn}
+                    linkEnrich={linkEnrich}
+                    onOpenLinked={(card) => {
+                      if (card.ticket_id) {
+                        try { sessionStorage.setItem("dominus.openTicketId", card.ticket_id); } catch { /* ignore */ }
+                        navigate("/app/tickets");
+                      } else if (card.opportunity_id) {
+                        navigate("/app/oportunidades");
+                      } else if (card.contact_id) {
+                        navigate("/app/contatos");
+                      }
+                    }}
                     canManage={canManage || (lane.is_personal && lane.owner_user_id === user?.id)}
                     onAddColumn={() => setColDialog({ open: true, laneId: lane.id })}
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
@@ -475,6 +629,23 @@ export default function Kanban() {
           setCardDialog({ open: false });
         }}
       />
+
+      <LinkToKanbanDialog
+        open={linkDialog.open}
+        item={linkDialog.item ?? null}
+        companyId={companyId}
+        userId={user?.id ?? null}
+        lanes={lanesQ.data ?? []}
+        columns={columnsQ.data ?? []}
+        existingCards={cardsQ.data ?? []}
+        canManageCompany={canManage}
+        currentUserId={user?.id ?? null}
+        onClose={() => setLinkDialog({ open: false })}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+          setLinkDialog({ open: false });
+        }}
+      />
     </AppLayout>
   );
 }
@@ -493,13 +664,19 @@ function laneTypeIcon(t: LaneType) {
 }
 
 function LaneRow({
-  lane, columns, cardsByColumn, canManage,
+  lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
 }: {
   lane: Lane;
   columns: Column[];
   cardsByColumn: Record<string, CardRow[]>;
   canManage: boolean;
+  linkEnrich: {
+    contacts: Record<string, { name: string | null; phone: string | null }>;
+    tickets: Record<string, { contact_name: string | null; department_name: string | null; status: string }>;
+    opportunities: Record<string, { title: string; amount: number | null; status: string }>;
+  };
+  onOpenLinked: (card: CardRow) => void;
   onAddColumn: () => void;
   onAddCard: (columnId: string) => void;
   onEditLane: () => void;
@@ -597,6 +774,14 @@ function LaneRow({
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                {(card.ticket_id || card.opportunity_id || card.contact_id) && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => onOpenLinked(card)}>
+                                      Abrir vinculado
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
                                 {columns.filter((c) => c.id !== col.id).length > 0 && (
                                   <>
                                     <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground flex items-center gap-1">
@@ -622,10 +807,37 @@ function LaneRow({
                             {card.description}
                           </p>
                         )}
-                        <div className="mt-1.5 flex items-center gap-1">
+                        <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                           <Badge variant="outline" className="text-[9px] px-1 py-0">
-                            {card.card_type === "manual" ? "Manual" : card.card_type}
+                            {card.card_type === "manual" ? "Manual"
+                              : card.card_type === "ticket" ? "Atendimento"
+                              : card.card_type === "contact" ? "Contato"
+                              : card.card_type === "opportunity" ? "Oportunidade"
+                              : card.card_type}
                           </Badge>
+                          {card.ticket_id && linkEnrich.tickets[card.ticket_id] && (
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {linkEnrich.tickets[card.ticket_id].contact_name || "—"}
+                              {linkEnrich.tickets[card.ticket_id].department_name
+                                ? ` · ${linkEnrich.tickets[card.ticket_id].department_name}`
+                                : ""}
+                            </span>
+                          )}
+                          {card.contact_id && linkEnrich.contacts[card.contact_id] && (
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {linkEnrich.contacts[card.contact_id].phone || ""}
+                            </span>
+                          )}
+                          {card.opportunity_id && linkEnrich.opportunities[card.opportunity_id] && (
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {linkEnrich.opportunities[card.opportunity_id].amount != null
+                                ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+                                    .format(Number(linkEnrich.opportunities[card.opportunity_id].amount))
+                                : ""}
+                              {" · "}
+                              {linkEnrich.opportunities[card.opportunity_id].status}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))
@@ -955,6 +1167,190 @@ function CardDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
           <Button onClick={save} disabled={saving}>
             {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* =================================================================== */
+/* Link to Kanban (sidebar action)                                     */
+/* =================================================================== */
+
+function LinkToKanbanDialog({
+  open, item, companyId, userId, lanes, columns, existingCards,
+  canManageCompany, currentUserId, onClose, onSaved,
+}: {
+  open: boolean;
+  item: SideItem | null;
+  companyId: string | null;
+  userId: string | null;
+  lanes: Lane[];
+  columns: Column[];
+  existingCards: CardRow[];
+  canManageCompany: boolean;
+  currentUserId: string | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [laneId, setLaneId] = useState<string>("");
+  const [columnId, setColumnId] = useState<string>("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const visibleLanes = useMemo(
+    () => lanes.filter((l) =>
+      l.is_active && (canManageCompany || !l.is_personal || l.owner_user_id === currentUserId)
+    ),
+    [lanes, canManageCompany, currentUserId],
+  );
+  const laneColumns = useMemo(
+    () => columns.filter((c) => c.lane_id === laneId).sort((a, b) => a.position - b.position),
+    [columns, laneId],
+  );
+
+  useEffect(() => {
+    if (!open || !item) return;
+    setTitle(item.label || "");
+    setDescription("");
+    setLaneId("");
+    setColumnId("");
+  }, [open, item]);
+
+  useEffect(() => {
+    if (laneColumns.length && !laneColumns.find((c) => c.id === columnId)) {
+      setColumnId(laneColumns[0].id);
+    }
+  }, [laneColumns, columnId]);
+
+  if (!item) return null;
+
+  const cardTypeLabel =
+    item.kind === "ticket" ? "Atendimento"
+    : item.kind === "opportunity" ? "Oportunidade"
+    : "Contato";
+
+  async function save() {
+    if (!companyId || !userId || !item) return;
+    if (!laneId || !columnId) {
+      toast({ title: "Selecione linha e coluna", variant: "destructive" });
+      return;
+    }
+    const lane = lanes.find((l) => l.id === laneId);
+    const col = columns.find((c) => c.id === columnId);
+    if (!lane || !col || lane.company_id !== companyId || col.lane_id !== laneId) {
+      toast({ title: "Seleção inválida", variant: "destructive" });
+      return;
+    }
+    // duplicate check
+    const dup = existingCards.find((c) =>
+      c.column_id === columnId &&
+      ((item.kind === "ticket" && c.ticket_id === item.id) ||
+       (item.kind === "contact" && c.contact_id === item.id) ||
+       (item.kind === "opportunity" && c.opportunity_id === item.id))
+    );
+    if (dup) {
+      toast({ title: "Este item já está nesta coluna do Kanban." });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const position = existingCards.filter((c) => c.column_id === columnId).length;
+      const payload: Record<string, unknown> = {
+        company_id: companyId,
+        lane_id: laneId,
+        column_id: columnId,
+        title: title.trim() || item.label,
+        description: description.trim() || null,
+        card_type: item.kind,
+        position,
+        created_by: userId,
+      };
+      if (item.kind === "ticket") payload.ticket_id = item.id;
+      if (item.kind === "contact") payload.contact_id = item.id;
+      if (item.kind === "opportunity") payload.opportunity_id = item.id;
+
+      const { data, error } = await (supabase as any)
+        .from("kanban_cards")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await writeAudit(companyId, userId, "kanban.card_linked", {
+        card_id: data?.id,
+        card_type: item.kind,
+        ticket_id: item.kind === "ticket" ? item.id : null,
+        contact_id: item.kind === "contact" ? item.id : null,
+        opportunity_id: item.kind === "opportunity" ? item.id : null,
+        lane_id: laneId,
+        column_id: columnId,
+        source: "kanban_sidebar",
+      });
+
+      toast({ title: `${cardTypeLabel} adicionado ao Kanban` });
+      onSaved();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao adicionar";
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Adicionar ao Kanban</DialogTitle>
+          <DialogDescription>
+            Vínculo apenas organizacional — não altera o {cardTypeLabel.toLowerCase()} original.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Tipo</Label>
+            <Input value={cardTypeLabel} disabled />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Linha</Label>
+            <Select value={laneId} onValueChange={setLaneId}>
+              <SelectTrigger><SelectValue placeholder="Selecione a linha" /></SelectTrigger>
+              <SelectContent>
+                {visibleLanes.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Coluna</Label>
+            <Select value={columnId} onValueChange={setColumnId} disabled={!laneId}>
+              <SelectTrigger><SelectValue placeholder="Selecione a coluna" /></SelectTrigger>
+              <SelectContent>
+                {laneColumns.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Título do card</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Descrição (opcional)</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving || !laneId || !columnId}>
+            {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Adicionar
           </Button>
         </DialogFooter>
       </DialogContent>
