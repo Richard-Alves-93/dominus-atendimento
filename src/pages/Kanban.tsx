@@ -75,6 +75,18 @@ type CardRow = {
   card_type: string;
   assigned_user_id: string | null;
   position: number;
+  contact_id: string | null;
+  ticket_id: string | null;
+  opportunity_id: string | null;
+};
+
+type SideKind = "contact" | "ticket" | "opportunity";
+type SideItem = {
+  kind: SideKind;
+  id: string;
+  label: string;
+  sub?: string;
+  extra?: string;
 };
 
 const COLOR_PRESETS = [
