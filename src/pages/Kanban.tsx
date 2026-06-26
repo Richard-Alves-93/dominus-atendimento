@@ -359,6 +359,7 @@ export default function Kanban() {
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
+  const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
