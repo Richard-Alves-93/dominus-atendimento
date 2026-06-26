@@ -897,7 +897,7 @@ function laneTypeIcon(t: LaneType) {
 
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
-  onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
+  onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory,
 }: {
   lane: Lane;
