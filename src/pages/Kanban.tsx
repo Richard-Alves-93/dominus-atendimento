@@ -1031,6 +1031,11 @@ function LaneDialog({
   const [laneType, setLaneType] = useState<LaneType>("custom");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [isActive, setIsActive] = useState(true);
+  const [opEnabled, setOpEnabled] = useState(false);
+  const [opTransfer, setOpTransfer] = useState(false);
+  const [opReturn, setOpReturn] = useState(false);
+  const [opReturnMin, setOpReturnMin] = useState<string>("15");
+  const [opReturnTarget, setOpReturnTarget] = useState<string>("previous_user");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1039,6 +1044,11 @@ function LaneDialog({
       setLaneType((lane?.lane_type as LaneType) ?? "custom");
       setDepartmentId(lane?.department_id ?? "");
       setIsActive(lane?.is_active ?? true);
+      setOpEnabled(lane?.operational_enabled ?? false);
+      setOpTransfer(lane?.transfer_ticket_on_drop ?? false);
+      setOpReturn(lane?.return_if_unassigned ?? false);
+      setOpReturnMin(lane?.return_timeout_minutes != null ? String(lane.return_timeout_minutes) : "15");
+      setOpReturnTarget(lane?.return_target ?? "previous_user");
     }
   }, [open, lane]);
 
@@ -1046,6 +1056,17 @@ function LaneDialog({
   useEffect(() => {
     if (open && !lane && !canManageCompany) setLaneType("personal");
   }, [open, lane, canManageCompany]);
+
+  // Reset regras operacionais quando o tipo deixar de ser "department"
+  useEffect(() => {
+    if (laneType !== "department") {
+      setOpEnabled(false);
+      setOpTransfer(false);
+      setOpReturn(false);
+    }
+  }, [laneType]);
+
+  const canEditOperational = canManageCompany; // Master/Admin/Owner/Manager (RLS já restringe insert/update)
 
   const save = async () => {
     if (!name.trim()) {
@@ -1056,8 +1077,20 @@ function LaneDialog({
       toast({ title: "Selecione o setor vinculado", variant: "destructive" });
       return;
     }
+    if (laneType === "department" && opEnabled && opReturn) {
+      const n = parseInt(opReturnMin, 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        toast({ title: "Tempo de retorno inválido", description: "Informe minutos maiores que zero.", variant: "destructive" });
+        return;
+      }
+      if (!opReturnTarget) {
+        toast({ title: "Selecione o destino do retorno", variant: "destructive" });
+        return;
+      }
+    }
     setSaving(true);
     try {
+      const opActive = laneType === "department" && canEditOperational && opEnabled;
       const payload: Record<string, unknown> = {
         name: name.trim(),
         lane_type: laneType,
@@ -1065,6 +1098,11 @@ function LaneDialog({
         is_personal: laneType === "personal",
         owner_user_id: laneType === "personal" ? userId : null,
         is_active: isActive,
+        operational_enabled: opActive,
+        transfer_ticket_on_drop: opActive ? opTransfer : false,
+        return_if_unassigned: opActive ? opReturn : false,
+        return_timeout_minutes: opActive && opReturn ? parseInt(opReturnMin, 10) : null,
+        return_target: opActive && opReturn ? opReturnTarget : null,
       };
       if (lane) {
         const { error } = await (supabase as any)
