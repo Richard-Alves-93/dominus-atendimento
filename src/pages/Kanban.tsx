@@ -664,13 +664,19 @@ function laneTypeIcon(t: LaneType) {
 }
 
 function LaneRow({
-  lane, columns, cardsByColumn, canManage,
+  lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
 }: {
   lane: Lane;
   columns: Column[];
   cardsByColumn: Record<string, CardRow[]>;
   canManage: boolean;
+  linkEnrich: {
+    contacts: Record<string, { name: string | null; phone: string | null }>;
+    tickets: Record<string, { contact_name: string | null; department_name: string | null; status: string }>;
+    opportunities: Record<string, { title: string; amount: number | null; status: string }>;
+  };
+  onOpenLinked: (card: CardRow) => void;
   onAddColumn: () => void;
   onAddCard: (columnId: string) => void;
   onEditLane: () => void;
