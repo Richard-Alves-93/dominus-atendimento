@@ -215,9 +215,36 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tickets")
-        .select("id,contact_id,status,updated_at,contact:contacts(name,phone)")
+        .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name),assignee:profiles!tickets_assigned_user_id_fkey(full_name)")
         .eq("company_id", companyId)
         .in("status", ["open", "pending"])
+        .order("updated_at", { ascending: false })
+        .limit(40);
+      if (error) {
+        // Fallback simples se o alias de FK não casar
+        const r = await (supabase as any)
+          .from("tickets")
+          .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name)")
+          .eq("company_id", companyId)
+          .in("status", ["open", "pending"])
+          .order("updated_at", { ascending: false })
+          .limit(40);
+        if (r.error) throw r.error;
+        return (r.data ?? []) as any[];
+      }
+      return (data ?? []) as any[];
+    },
+  });
+
+  const opportunitiesQ = useQuery({
+    queryKey: ["kanban-sidebar-opportunities", companyId],
+    enabled: !!companyId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("opportunities")
+        .select("id,title,amount,status,assigned_user_id,contact_id,ticket_id,contact:contacts(name,phone)")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(40);
       if (error) throw error;
@@ -226,13 +253,14 @@ export default function Kanban() {
   });
 
   /* ---------------- UI state ---------------- */
-  const [sideTab, setSideTab] = useState<"contacts" | "tickets">("contacts");
+  const [sideTab, setSideTab] = useState<SideKind>("contact");
   const [sideSearch, setSideSearch] = useState("");
   const [laneFilter, setLaneFilter] = useState<"all" | LaneType>("all");
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
@@ -249,21 +277,42 @@ export default function Kanban() {
   }, [cardsQ.data]);
 
   /* ---------------- Sidebar items ---------------- */
-  const sideItems = useMemo(() => {
+  const sideItems: SideItem[] = useMemo(() => {
     const q = sideSearch.trim().toLowerCase();
-    if (sideTab === "contacts") {
-      const items = (contactsQ.data ?? []).map((c) => ({
-        id: c.id, label: c.name || c.phone || "Sem nome", sub: c.phone || "",
+    let items: SideItem[] = [];
+    if (sideTab === "contact") {
+      items = (contactsQ.data ?? []).map((c) => ({
+        kind: "contact" as const,
+        id: c.id,
+        label: c.name || c.phone || "Sem nome",
+        sub: c.phone || "",
       }));
-      return q ? items.filter((i) => i.label.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : items;
+    } else if (sideTab === "ticket") {
+      items = (ticketsQ.data ?? []).map((t: any) => ({
+        kind: "ticket" as const,
+        id: t.id,
+        label: t.contact?.name || t.contact?.phone || "Atendimento",
+        sub: [t.department?.name, t.status === "open" ? "Aberto" : "Pendente"].filter(Boolean).join(" • "),
+        extra: t.assignee?.full_name || undefined,
+      }));
+    } else {
+      items = (opportunitiesQ.data ?? []).map((o: any) => ({
+        kind: "opportunity" as const,
+        id: o.id,
+        label: o.title || "Oportunidade",
+        sub: o.contact?.name || o.contact?.phone || "",
+        extra: typeof o.amount === "number"
+          ? `R$ ${Number(o.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+          : undefined,
+      }));
     }
-    const items = (ticketsQ.data ?? []).map((t) => ({
-      id: t.id,
-      label: t.contact?.name || t.contact?.phone || "Atendimento",
-      sub: `Status: ${t.status === "open" ? "Aberto" : "Pendente"}`,
-    }));
-    return q ? items.filter((i) => i.label.toLowerCase().includes(q)) : items;
-  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data]);
+    if (!q) return items;
+    return items.filter((i) =>
+      i.label.toLowerCase().includes(q) ||
+      (i.sub ?? "").toLowerCase().includes(q) ||
+      (i.extra ?? "").toLowerCase().includes(q),
+    );
+  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data, opportunitiesQ.data]);
 
   /* ---------------- Loading ---------------- */
   if (!companyId) {
