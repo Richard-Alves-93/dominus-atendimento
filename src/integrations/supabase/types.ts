@@ -874,8 +874,13 @@ export type Database = {
           is_personal: boolean
           lane_type: Database["public"]["Enums"]["kanban_lane_type"]
           name: string
+          operational_enabled: boolean
           owner_user_id: string | null
           position: number
+          return_if_unassigned: boolean
+          return_target: string | null
+          return_timeout_minutes: number | null
+          transfer_ticket_on_drop: boolean
           updated_at: string
         }
         Insert: {
@@ -889,8 +894,13 @@ export type Database = {
           is_personal?: boolean
           lane_type?: Database["public"]["Enums"]["kanban_lane_type"]
           name: string
+          operational_enabled?: boolean
           owner_user_id?: string | null
           position?: number
+          return_if_unassigned?: boolean
+          return_target?: string | null
+          return_timeout_minutes?: number | null
+          transfer_ticket_on_drop?: boolean
           updated_at?: string
         }
         Update: {
@@ -904,8 +914,13 @@ export type Database = {
           is_personal?: boolean
           lane_type?: Database["public"]["Enums"]["kanban_lane_type"]
           name?: string
+          operational_enabled?: boolean
           owner_user_id?: string | null
           position?: number
+          return_if_unassigned?: boolean
+          return_target?: string | null
+          return_timeout_minutes?: number | null
+          transfer_ticket_on_drop?: boolean
           updated_at?: string
         }
         Relationships: [

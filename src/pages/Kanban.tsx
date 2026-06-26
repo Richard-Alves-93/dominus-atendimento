@@ -54,6 +54,11 @@ type Lane = {
   is_personal: boolean;
   position: number;
   is_active: boolean;
+  operational_enabled?: boolean;
+  transfer_ticket_on_drop?: boolean;
+  return_if_unassigned?: boolean;
+  return_timeout_minutes?: number | null;
+  return_target?: string | null;
 };
 
 type Column = {
@@ -1026,6 +1031,11 @@ function LaneDialog({
   const [laneType, setLaneType] = useState<LaneType>("custom");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [isActive, setIsActive] = useState(true);
+  const [opEnabled, setOpEnabled] = useState(false);
+  const [opTransfer, setOpTransfer] = useState(false);
+  const [opReturn, setOpReturn] = useState(false);
+  const [opReturnMin, setOpReturnMin] = useState<string>("15");
+  const [opReturnTarget, setOpReturnTarget] = useState<string>("previous_user");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1034,6 +1044,11 @@ function LaneDialog({
       setLaneType((lane?.lane_type as LaneType) ?? "custom");
       setDepartmentId(lane?.department_id ?? "");
       setIsActive(lane?.is_active ?? true);
+      setOpEnabled(lane?.operational_enabled ?? false);
+      setOpTransfer(lane?.transfer_ticket_on_drop ?? false);
+      setOpReturn(lane?.return_if_unassigned ?? false);
+      setOpReturnMin(lane?.return_timeout_minutes != null ? String(lane.return_timeout_minutes) : "15");
+      setOpReturnTarget(lane?.return_target ?? "previous_user");
     }
   }, [open, lane]);
 
@@ -1041,6 +1056,17 @@ function LaneDialog({
   useEffect(() => {
     if (open && !lane && !canManageCompany) setLaneType("personal");
   }, [open, lane, canManageCompany]);
+
+  // Reset regras operacionais quando o tipo deixar de ser "department"
+  useEffect(() => {
+    if (laneType !== "department") {
+      setOpEnabled(false);
+      setOpTransfer(false);
+      setOpReturn(false);
+    }
+  }, [laneType]);
+
+  const canEditOperational = canManageCompany; // Master/Admin/Owner/Manager (RLS já restringe insert/update)
 
   const save = async () => {
     if (!name.trim()) {
@@ -1051,8 +1077,20 @@ function LaneDialog({
       toast({ title: "Selecione o setor vinculado", variant: "destructive" });
       return;
     }
+    if (laneType === "department" && opEnabled && opReturn) {
+      const n = parseInt(opReturnMin, 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        toast({ title: "Tempo de retorno inválido", description: "Informe minutos maiores que zero.", variant: "destructive" });
+        return;
+      }
+      if (!opReturnTarget) {
+        toast({ title: "Selecione o destino do retorno", variant: "destructive" });
+        return;
+      }
+    }
     setSaving(true);
     try {
+      const opActive = laneType === "department" && canEditOperational && opEnabled;
       const payload: Record<string, unknown> = {
         name: name.trim(),
         lane_type: laneType,
@@ -1060,6 +1098,11 @@ function LaneDialog({
         is_personal: laneType === "personal",
         owner_user_id: laneType === "personal" ? userId : null,
         is_active: isActive,
+        operational_enabled: opActive,
+        transfer_ticket_on_drop: opActive ? opTransfer : false,
+        return_if_unassigned: opActive ? opReturn : false,
+        return_timeout_minutes: opActive && opReturn ? parseInt(opReturnMin, 10) : null,
+        return_target: opActive && opReturn ? opReturnTarget : null,
       };
       if (lane) {
         const { error } = await (supabase as any)
@@ -1124,6 +1167,50 @@ function LaneDialog({
               <p className="text-[11px] text-muted-foreground">
                 Vinculo informativo. Automações de transferência serão habilitadas em fases futuras.
               </p>
+            </div>
+          )}
+          {laneType === "department" && canEditOperational && (
+            <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+              <div>
+                <Label className="text-sm font-semibold">Regras operacionais do setor</Label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Quando ativado futuramente, cards de atendimento movidos para esta linha poderão transferir o atendimento para o setor vinculado. Nesta etapa, as regras serão apenas configuradas. A transferência real será ativada em uma fase posterior.
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Ativar regras operacionais nesta linha</Label>
+                <Switch checked={opEnabled} onCheckedChange={setOpEnabled} disabled={!departmentId} />
+              </div>
+              {opEnabled && (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm">Transferir atendimento ao mover para esta linha</Label>
+                    <Switch checked={opTransfer} onCheckedChange={setOpTransfer} />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm">Retornar automaticamente se ninguém assumir</Label>
+                    <Switch checked={opReturn} onCheckedChange={setOpReturn} />
+                  </div>
+                  {opReturn && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Tempo para retorno (minutos)</Label>
+                        <Input type="number" min={1} value={opReturnMin} onChange={(e) => setOpReturnMin(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Destino do retorno</Label>
+                        <Select value={opReturnTarget} onValueChange={setOpReturnTarget}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="previous_user">Atendente anterior</SelectItem>
+                            <SelectItem value="origin_department">Setor de origem</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
           {laneType === "personal" && (
