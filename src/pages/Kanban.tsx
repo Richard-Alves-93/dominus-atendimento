@@ -1035,6 +1035,9 @@ function LaneRow({
                               : card.card_type === "opportunity" ? "Oportunidade"
                               : card.card_type}
                           </Badge>
+                          {card.ticket_id && latestTransfers[card.ticket_id] && (
+                            <TransferStatusBadge transfer={latestTransfers[card.ticket_id]} />
+                          )}
                           {card.ticket_id && linkEnrich.tickets[card.ticket_id] && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               {linkEnrich.tickets[card.ticket_id].contact_name || "—"}
