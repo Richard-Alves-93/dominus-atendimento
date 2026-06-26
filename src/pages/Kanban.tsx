@@ -277,6 +277,67 @@ export default function Kanban() {
     return map;
   }, [cardsQ.data]);
 
+  /* ---------------- Card link enrichment ---------------- */
+  const linkIds = useMemo(() => {
+    const t = new Set<string>(), c = new Set<string>(), o = new Set<string>();
+    for (const card of cardsQ.data ?? []) {
+      if (card.ticket_id) t.add(card.ticket_id);
+      if (card.contact_id) c.add(card.contact_id);
+      if (card.opportunity_id) o.add(card.opportunity_id);
+    }
+    return { tickets: [...t], contacts: [...c], opportunities: [...o] };
+  }, [cardsQ.data]);
+
+  const linkEnrichQ = useQuery({
+    queryKey: [
+      "kanban-link-enrich",
+      companyId,
+      linkIds.tickets.join(","),
+      linkIds.contacts.join(","),
+      linkIds.opportunities.join(","),
+    ],
+    enabled: !!companyId,
+    queryFn: async () => {
+      const out: {
+        contacts: Record<string, { name: string | null; phone: string | null }>;
+        tickets: Record<string, { contact_name: string | null; department_name: string | null; status: string }>;
+        opportunities: Record<string, { title: string; amount: number | null; status: string }>;
+      } = { contacts: {}, tickets: {}, opportunities: {} };
+      if (linkIds.contacts.length) {
+        const { data } = await (supabase as any)
+          .from("contacts")
+          .select("id,name,phone")
+          .eq("company_id", companyId)
+          .in("id", linkIds.contacts);
+        for (const r of data ?? []) out.contacts[r.id] = { name: r.name, phone: r.phone };
+      }
+      if (linkIds.tickets.length) {
+        const { data } = await (supabase as any)
+          .from("tickets")
+          .select("id,status,contact:contacts(name,phone),department:departments(name)")
+          .eq("company_id", companyId)
+          .in("id", linkIds.tickets);
+        for (const r of data ?? []) out.tickets[r.id] = {
+          contact_name: r.contact?.name || r.contact?.phone || null,
+          department_name: r.department?.name || null,
+          status: r.status,
+        };
+      }
+      if (linkIds.opportunities.length) {
+        const { data } = await (supabase as any)
+          .from("opportunities")
+          .select("id,title,amount,status")
+          .eq("company_id", companyId)
+          .in("id", linkIds.opportunities);
+        for (const r of data ?? []) out.opportunities[r.id] = {
+          title: r.title, amount: r.amount, status: r.status,
+        };
+      }
+      return out;
+    },
+  });
+  const linkEnrich = linkEnrichQ.data ?? { contacts: {}, tickets: {}, opportunities: {} };
+
   /* ---------------- Sidebar items ---------------- */
   const sideItems: SideItem[] = useMemo(() => {
     const q = sideSearch.trim().toLowerCase();
