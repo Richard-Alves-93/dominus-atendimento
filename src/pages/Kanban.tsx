@@ -557,6 +557,23 @@ export default function Kanban() {
           setCardDialog({ open: false });
         }}
       />
+
+      <LinkToKanbanDialog
+        open={linkDialog.open}
+        item={linkDialog.item ?? null}
+        companyId={companyId}
+        userId={user?.id ?? null}
+        lanes={lanesQ.data ?? []}
+        columns={columnsQ.data ?? []}
+        existingCards={cardsQ.data ?? []}
+        canManageCompany={canManage}
+        currentUserId={user?.id ?? null}
+        onClose={() => setLinkDialog({ open: false })}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+          setLinkDialog({ open: false });
+        }}
+      />
     </AppLayout>
   );
 }
