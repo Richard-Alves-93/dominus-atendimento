@@ -812,6 +812,8 @@ export type Database = {
         Row: {
           color: string | null
           column_type: string | null
+          commercial_action: string | null
+          commercial_action_enabled: boolean
           company_id: string
           created_at: string
           deleted_at: string | null
@@ -824,6 +826,8 @@ export type Database = {
         Insert: {
           color?: string | null
           column_type?: string | null
+          commercial_action?: string | null
+          commercial_action_enabled?: boolean
           company_id: string
           created_at?: string
           deleted_at?: string | null
@@ -836,6 +840,8 @@ export type Database = {
         Update: {
           color?: string | null
           column_type?: string | null
+          commercial_action?: string | null
+          commercial_action_enabled?: boolean
           company_id?: string
           created_at?: string
           deleted_at?: string | null
@@ -2358,6 +2364,21 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_opportunity_status_from_kanban: {
+        Args: {
+          _company_id: string
+          _kanban_card_id: string
+          _kanban_column_id: string
+          _kanban_lane_id: string
+          _opportunity_id: string
+        }
+        Returns: {
+          new_status: string
+          old_status: string
+          opportunity_id: string
+          status: string
+        }[]
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
