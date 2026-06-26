@@ -73,6 +73,8 @@ type Column = {
   name: string;
   position: number;
   color: string | null;
+  commercial_action_enabled?: boolean;
+  commercial_action?: string | null;
 };
 
 type CardRow = {
