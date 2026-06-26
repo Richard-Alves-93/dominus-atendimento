@@ -1924,6 +1924,7 @@ export type Database = {
           return_target: string | null
           return_timeout_minutes: number | null
           returned_at: string | null
+          returned_to_user_id: string | null
           source: string
           status: string
           ticket_id: string
@@ -1947,6 +1948,7 @@ export type Database = {
           return_target?: string | null
           return_timeout_minutes?: number | null
           returned_at?: string | null
+          returned_to_user_id?: string | null
           source?: string
           status?: string
           ticket_id: string
@@ -1970,6 +1972,7 @@ export type Database = {
           return_target?: string | null
           return_timeout_minutes?: number | null
           returned_at?: string | null
+          returned_to_user_id?: string | null
           source?: string
           status?: string
           ticket_id?: string
@@ -2303,6 +2306,16 @@ export type Database = {
           reason: string
         }[]
       }
+      process_due_ticket_transfer_returns: {
+        Args: { _limit?: number }
+        Returns: {
+          accepted: number
+          processed: number
+          returned: number
+          skipped: number
+        }[]
+      }
+      release_kanban_returns_cron_lock: { Args: never; Returns: boolean }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
       transfer_ticket_to_department_from_kanban: {
         Args: {
@@ -2318,6 +2331,7 @@ export type Database = {
           transfer_id: string
         }[]
       }
+      try_kanban_returns_cron_lock: { Args: never; Returns: boolean }
       try_monitoring_cron_lock: { Args: never; Returns: boolean }
       update_commission_status: {
         Args: { _action: string; _commission_id: string }
