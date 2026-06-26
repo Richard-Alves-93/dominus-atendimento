@@ -521,6 +521,17 @@ export default function Kanban() {
                     lane={lane}
                     columns={(columnsByLane[lane.id] ?? []).sort((a, b) => a.position - b.position)}
                     cardsByColumn={cardsByColumn}
+                    linkEnrich={linkEnrich}
+                    onOpenLinked={(card) => {
+                      if (card.ticket_id) {
+                        try { sessionStorage.setItem("dominus.openTicketId", card.ticket_id); } catch { /* ignore */ }
+                        navigate("/app/tickets");
+                      } else if (card.opportunity_id) {
+                        navigate("/app/oportunidades");
+                      } else if (card.contact_id) {
+                        navigate("/app/contatos");
+                      }
+                    }}
                     canManage={canManage || (lane.is_personal && lane.owner_user_id === user?.id)}
                     onAddColumn={() => setColDialog({ open: true, laneId: lane.id })}
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
