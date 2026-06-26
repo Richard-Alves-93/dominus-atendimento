@@ -631,6 +631,8 @@ export default function Kanban() {
                     columns={(columnsByLane[lane.id] ?? []).sort((a, b) => a.position - b.position)}
                     cardsByColumn={cardsByColumn}
                     linkEnrich={linkEnrich}
+                    latestTransfers={latestTransfers}
+                    onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
                     onOpenLinked={(card) => {
                       if (card.ticket_id) {
                         try { sessionStorage.setItem("dominus.openTicketId", card.ticket_id); } catch { /* ignore */ }
