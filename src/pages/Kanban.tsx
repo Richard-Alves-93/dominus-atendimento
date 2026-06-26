@@ -828,6 +828,12 @@ export default function Kanban() {
       <ColumnDialog
         open={colDialog.open}
         laneId={colDialog.laneId ?? null}
+        column={colDialog.column ?? null}
+        laneType={
+          colDialog.laneId
+            ? ((lanesQ.data ?? []).find((l: any) => l.id === colDialog.laneId)?.lane_type ?? null)
+            : null
+        }
         companyId={companyId}
         userId={user?.id ?? null}
         existingCount={
