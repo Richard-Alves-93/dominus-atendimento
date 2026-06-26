@@ -121,6 +121,93 @@ async function writeAudit(
   }
 }
 
+/**
+ * Helper unificado para criar card vinculado (usado pelo botão "Adicionar ao Kanban"
+ * e pelo drag-and-drop nativo). Aplica as mesmas validações de empresa, linha,
+ * coluna, visibilidade de linha pessoal e duplicidade. Não executa nenhuma
+ * automação operacional (não move setor, não muda responsável, não altera status,
+ * não envia mensagem, não gera comissão).
+ */
+async function linkItemToColumn(args: {
+  item: SideItem;
+  companyId: string;
+  userId: string;
+  laneId: string;
+  columnId: string;
+  lanes: Lane[];
+  columns: Column[];
+  existingCards: CardRow[];
+  canManageCompany: boolean;
+  currentUserId: string | null;
+  source: "kanban_sidebar" | "kanban_drag_drop";
+  title?: string;
+  description?: string | null;
+}): Promise<
+  | { status: "ok"; cardId: string }
+  | { status: "duplicate" }
+  | { status: "forbidden" }
+  | { status: "invalid" }
+  | { status: "error"; message: string }
+> {
+  const { item, companyId, userId, laneId, columnId, lanes, columns,
+    existingCards, canManageCompany, currentUserId, source } = args;
+
+  const lane = lanes.find((l) => l.id === laneId);
+  const col = columns.find((c) => c.id === columnId);
+  if (!lane || !col) return { status: "invalid" };
+  if (lane.company_id !== companyId || col.company_id !== companyId) return { status: "invalid" };
+  if (col.lane_id !== laneId) return { status: "invalid" };
+  // Linha pessoal de outro usuário: não pode receber drop por usuário comum
+  if (lane.is_personal && !canManageCompany && lane.owner_user_id !== currentUserId) {
+    return { status: "forbidden" };
+  }
+
+  const dup = existingCards.find((c) =>
+    c.column_id === columnId &&
+    ((item.kind === "ticket" && c.ticket_id === item.id) ||
+     (item.kind === "contact" && c.contact_id === item.id) ||
+     (item.kind === "opportunity" && c.opportunity_id === item.id))
+  );
+  if (dup) return { status: "duplicate" };
+
+  const position = existingCards.filter((c) => c.column_id === columnId).length;
+  const payload: Record<string, unknown> = {
+    company_id: companyId,
+    lane_id: laneId,
+    column_id: columnId,
+    title: (args.title?.trim() || item.label || "Item").slice(0, 200),
+    description: args.description?.trim() || null,
+    card_type: item.kind,
+    position,
+    created_by: userId,
+  };
+  if (item.kind === "ticket") payload.ticket_id = item.id;
+  if (item.kind === "contact") payload.contact_id = item.id;
+  if (item.kind === "opportunity") payload.opportunity_id = item.id;
+
+  const { data, error } = await (supabase as any)
+    .from("kanban_cards")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (error) return { status: "error", message: error.message };
+
+  await writeAudit(companyId, userId, "kanban.card_linked", {
+    card_id: data?.id,
+    card_type: item.kind,
+    ticket_id: item.kind === "ticket" ? item.id : null,
+    contact_id: item.kind === "contact" ? item.id : null,
+    opportunity_id: item.kind === "opportunity" ? item.id : null,
+    lane_id: laneId,
+    column_id: columnId,
+    source,
+  });
+
+  return { status: "ok", cardId: data?.id };
+}
+
+const DRAG_MIME = "application/x-dominus-kanban-item";
+
 export default function Kanban() {
   const { profile, user } = useAuth();
   const { activeMembership } = useCompany();
