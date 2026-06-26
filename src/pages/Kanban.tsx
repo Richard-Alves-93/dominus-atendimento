@@ -27,6 +27,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  TicketTransferHistoryDialog,
+  TransferStatusBadge,
+  useLatestTransfers,
+} from "@/features/kanban/TicketTransferHistoryDialog";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
@@ -354,6 +359,7 @@ export default function Kanban() {
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
+  const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
 
   /* ---------------- Derived ---------------- */
   const lanes = (lanesQ.data ?? []).filter((l) => (laneFilter === "all" ? true : l.lane_type === laneFilter));
@@ -429,6 +435,7 @@ export default function Kanban() {
     },
   });
   const linkEnrich = linkEnrichQ.data ?? { contacts: {}, tickets: {}, opportunities: {} };
+  const latestTransfers = useLatestTransfers(companyId, linkIds.tickets);
 
   /* ---------------- Sidebar items ---------------- */
   const sideItems: SideItem[] = useMemo(() => {
@@ -624,6 +631,8 @@ export default function Kanban() {
                     columns={(columnsByLane[lane.id] ?? []).sort((a, b) => a.position - b.position)}
                     cardsByColumn={cardsByColumn}
                     linkEnrich={linkEnrich}
+                    latestTransfers={latestTransfers}
+                    onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
                     onOpenLinked={(card) => {
                       if (card.ticket_id) {
                         try { sessionStorage.setItem("dominus.openTicketId", card.ticket_id); } catch { /* ignore */ }
@@ -823,6 +832,13 @@ export default function Kanban() {
           setLinkDialog({ open: false });
         }}
       />
+
+      <TicketTransferHistoryDialog
+        open={transferHistory.open}
+        ticketId={transferHistory.ticketId}
+        companyId={companyId}
+        onClose={() => setTransferHistory({ open: false, ticketId: null })}
+      />
     </AppLayout>
   );
 }
@@ -843,7 +859,7 @@ function laneTypeIcon(t: LaneType) {
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
-  onDropItem,
+  onDropItem, latestTransfers, onOpenTransferHistory,
 }: {
   lane: Lane;
   columns: Column[];
@@ -862,6 +878,8 @@ function LaneRow({
   onMoveCard: (cardId: string, newColumnId: string) => void;
   onDeleteCard: (cardId: string) => void;
   onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
+  latestTransfers: Record<string, any>;
+  onOpenTransferHistory: (ticketId: string) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   return (
@@ -983,6 +1001,11 @@ function LaneRow({
                                     <DropdownMenuItem onClick={() => onOpenLinked(card)}>
                                       Abrir vinculado
                                     </DropdownMenuItem>
+                                    {card.card_type === "ticket" && card.ticket_id && (
+                                      <DropdownMenuItem onClick={() => onOpenTransferHistory(card.ticket_id!)}>
+                                        <ArrowRightLeft className="h-3 w-3 mr-2" /> Histórico de transferências
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
@@ -1019,6 +1042,9 @@ function LaneRow({
                               : card.card_type === "opportunity" ? "Oportunidade"
                               : card.card_type}
                           </Badge>
+                          {card.ticket_id && latestTransfers[card.ticket_id] && (
+                            <TransferStatusBadge transfer={latestTransfers[card.ticket_id]} />
+                          )}
                           {card.ticket_id && linkEnrich.tickets[card.ticket_id] && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               {linkEnrich.tickets[card.ticket_id].contact_name || "—"}
