@@ -653,18 +653,64 @@ export default function Kanban() {
                     onMoveCard={async (cardId, newColumnId) => {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
                       if (!card) return;
+                      const oldColumnId = card.column_id;
+                      const oldLaneId = card.lane_id;
+                      const destCol = (columnsQ.data ?? []).find((c: any) => c.id === newColumnId);
+                      const destLane = destCol ? (lanesQ.data ?? []).find((l: any) => l.id === destCol.lane_id) : null;
                       const { error } = await (supabase as any)
                         .from("kanban_cards")
-                        .update({ column_id: newColumnId })
+                        .update({ column_id: newColumnId, lane_id: destLane?.id ?? oldLaneId })
                         .eq("id", cardId);
                       if (error) {
                         toast({ title: "Erro ao mover", description: error.message, variant: "destructive" });
                         return;
                       }
                       await writeAudit(companyId, user?.id ?? null, "kanban.card_moved", {
-                        card_id: cardId, old_column_id: card.column_id, new_column_id: newColumnId,
+                        card_id: cardId, old_column_id: oldColumnId, new_column_id: newColumnId,
                         card_type: card.card_type,
                       });
+
+                      // K.4.2: operational transfer when applicable
+                      const shouldTransfer =
+                        card.card_type === "ticket"
+                        && !!card.ticket_id
+                        && destLane
+                        && (destLane as any).lane_type === "department"
+                        && (destLane as any).operational_enabled === true
+                        && (destLane as any).transfer_ticket_on_drop === true
+                        && !!(destLane as any).department_id;
+
+                      if (shouldTransfer && companyId) {
+                        const { data: rpcRes, error: rpcErr } = await (supabase as any).rpc(
+                          "transfer_ticket_to_department_from_kanban",
+                          {
+                            _company_id: companyId,
+                            _ticket_id: card.ticket_id,
+                            _target_department_id: (destLane as any).department_id,
+                            _kanban_card_id: cardId,
+                            _kanban_lane_id: (destLane as any).id,
+                            _kanban_column_id: newColumnId,
+                          },
+                        );
+                        if (rpcErr) {
+                          await (supabase as any)
+                            .from("kanban_cards")
+                            .update({ column_id: oldColumnId, lane_id: oldLaneId })
+                            .eq("id", cardId);
+                          toast({
+                            title: "Não foi possível transferir o atendimento",
+                            description: rpcErr.message,
+                            variant: "destructive",
+                          });
+                          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                          return;
+                        }
+                        const status = Array.isArray(rpcRes) ? (rpcRes[0] as any)?.status : (rpcRes as any)?.status;
+                        if (status === "transferred") {
+                          toast({ title: "Atendimento transferido para o setor" });
+                        }
+                      }
+
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
                     onDeleteCard={async (cardId) => {
