@@ -2203,6 +2203,24 @@ export type Database = {
     Functions: {
       connection_health_cleanup: { Args: never; Returns: undefined }
       connection_message_flow_cleanup: { Args: never; Returns: undefined }
+      create_opportunity_from_kanban: {
+        Args: {
+          _amount: number
+          _assigned_user_id: string
+          _company_id: string
+          _kanban_card_id: string
+          _notes: string
+          _status: string
+          _target_column_id: string
+          _target_lane_id: string
+          _title: string
+        }
+        Returns: {
+          new_card_id: string
+          opportunity_id: string
+          status: string
+        }[]
+      }
       evolution_health_cleanup: { Args: never; Returns: undefined }
       generate_ticket_protocol: {
         Args: { _company_id: string }
