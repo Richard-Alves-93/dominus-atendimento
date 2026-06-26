@@ -364,23 +364,31 @@ export default function Kanban() {
           {/* Sidebar */}
           <aside className="hidden md:flex w-72 shrink-0 border-r flex-col bg-card/30">
             <div className="p-3 border-b">
-              <h2 className="text-sm font-semibold mb-2">Contatos e atendimentos</h2>
+              <h2 className="text-sm font-semibold mb-2">Itens do quadro</h2>
               <div className="flex gap-1 mb-2">
                 <Button
                   size="sm"
-                  variant={sideTab === "contacts" ? "default" : "outline"}
-                  className="h-7 flex-1"
-                  onClick={() => setSideTab("contacts")}
+                  variant={sideTab === "contact" ? "default" : "outline"}
+                  className="h-7 flex-1 px-1 text-[11px]"
+                  onClick={() => setSideTab("contact")}
                 >
                   Contatos
                 </Button>
                 <Button
                   size="sm"
-                  variant={sideTab === "tickets" ? "default" : "outline"}
-                  className="h-7 flex-1"
-                  onClick={() => setSideTab("tickets")}
+                  variant={sideTab === "ticket" ? "default" : "outline"}
+                  className="h-7 flex-1 px-1 text-[11px]"
+                  onClick={() => setSideTab("ticket")}
                 >
                   Atendimentos
+                </Button>
+                <Button
+                  size="sm"
+                  variant={sideTab === "opportunity" ? "default" : "outline"}
+                  className="h-7 flex-1 px-1 text-[11px]"
+                  onClick={() => setSideTab("opportunity")}
+                >
+                  Oportun.
                 </Button>
               </div>
               <div className="relative">
@@ -401,18 +409,29 @@ export default function Kanban() {
               ) : (
                 sideItems.map((it) => (
                   <div
-                    key={it.id}
-                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent cursor-default"
-                    title="Arraste para o Kanban (em breve)"
+                    key={`${it.kind}-${it.id}`}
+                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1"
                   >
-                    <div className="font-medium truncate">{it.label}</div>
-                    {it.sub && <div className="text-muted-foreground truncate">{it.sub}</div>}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{it.label}</div>
+                      {it.sub && <div className="text-muted-foreground truncate">{it.sub}</div>}
+                      {it.extra && <div className="text-[10px] text-muted-foreground truncate">{it.extra}</div>}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0 opacity-60 group-hover:opacity-100"
+                      title="Adicionar ao Kanban"
+                      onClick={() => setLinkDialog({ open: true, item: it })}
+                    >
+                      <LinkIcon className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 ))
               )}
             </div>
             <div className="p-2 border-t text-[10px] text-muted-foreground">
-              Arrastar para o quadro será habilitado nas próximas fases.
+              Vínculo apenas organizacional — não altera o item original.
             </div>
           </aside>
 
