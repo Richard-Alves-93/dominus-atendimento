@@ -996,7 +996,7 @@ function laneTypeIcon(t: LaneType) {
 }
 
 function LaneRow({
-  lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
+  lane, columns, cardsByColumn, canManage, linkEnrich, linkEnrichLoaded, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
 }: {
@@ -1009,6 +1009,7 @@ function LaneRow({
     tickets: Record<string, { contact_name: string | null; department_name: string | null; status: string }>;
     opportunities: Record<string, { title: string; amount: number | null; status: string }>;
   };
+  linkEnrichLoaded: boolean;
   onOpenLinked: (card: CardRow) => void;
   onAddColumn: () => void;
   onAddCard: (columnId: string) => void;
@@ -1023,6 +1024,22 @@ function LaneRow({
   onCreateOpportunity?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
+  const laneTotal = columns.reduce((acc, c) => acc + (cardsByColumn[c.id]?.length ?? 0), 0);
+  const fmtBRL = (n: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+  const columnAmount = (colId: string): number | null => {
+    const list = cardsByColumn[colId] ?? [];
+    let sum = 0;
+    let has = false;
+    for (const c of list) {
+      if (c.card_type === "opportunity" && c.opportunity_id) {
+        const o = linkEnrich.opportunities[c.opportunity_id];
+        if (o && typeof o.amount === "number") { sum += Number(o.amount); has = true; }
+      }
+    }
+    return has ? sum : null;
+  };
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b bg-muted/30">
