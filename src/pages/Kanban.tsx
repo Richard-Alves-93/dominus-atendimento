@@ -1118,7 +1118,7 @@ function LaneRow({
                   className="flex items-center justify-between px-2 py-1.5 border-b rounded-t-md"
                   style={{ borderTopColor: colorHex(col.color), borderTopWidth: 3 }}
                 >
-                  <div className="min-w-0 flex items-center gap-1.5">
+                  <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
                     <span
                       className="inline-block h-2 w-2 rounded-full"
                       style={{ backgroundColor: colorHex(col.color) }}
@@ -1127,6 +1127,14 @@ function LaneRow({
                     <span className="text-[10px] text-muted-foreground">
                       ({(cardsByColumn[col.id] ?? []).length})
                     </span>
+                    {(() => {
+                      const amt = columnAmount(col.id);
+                      return amt != null ? (
+                        <span className="text-[10px] font-medium text-emerald-600" title="Soma das oportunidades">
+                          {fmtBRL(amt)}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   {canManage && (
                     <div className="flex items-center gap-0.5">
