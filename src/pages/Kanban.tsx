@@ -916,6 +916,7 @@ function LaneRow({
   onDeleteLane: () => void;
   onMoveCard: (cardId: string, newColumnId: string) => void;
   onDeleteCard: (cardId: string) => void;
+  onEditColumn?: (column: Column) => void;
   onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
   latestTransfers: Record<string, any>;
   onOpenTransferHistory: (ticketId: string) => void;
