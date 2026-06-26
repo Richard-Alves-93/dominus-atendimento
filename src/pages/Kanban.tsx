@@ -32,6 +32,7 @@ import {
   TransferStatusBadge,
   useLatestTransfers,
 } from "@/features/kanban/TicketTransferHistoryDialog";
+import CreateOpportunityFromCardDialog from "@/features/kanban/CreateOpportunityFromCardDialog";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
