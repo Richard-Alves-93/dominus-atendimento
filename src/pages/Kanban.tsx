@@ -121,6 +121,93 @@ async function writeAudit(
   }
 }
 
+/**
+ * Helper unificado para criar card vinculado (usado pelo botão "Adicionar ao Kanban"
+ * e pelo drag-and-drop nativo). Aplica as mesmas validações de empresa, linha,
+ * coluna, visibilidade de linha pessoal e duplicidade. Não executa nenhuma
+ * automação operacional (não move setor, não muda responsável, não altera status,
+ * não envia mensagem, não gera comissão).
+ */
+async function linkItemToColumn(args: {
+  item: SideItem;
+  companyId: string;
+  userId: string;
+  laneId: string;
+  columnId: string;
+  lanes: Lane[];
+  columns: Column[];
+  existingCards: CardRow[];
+  canManageCompany: boolean;
+  currentUserId: string | null;
+  source: "kanban_sidebar" | "kanban_drag_drop";
+  title?: string;
+  description?: string | null;
+}): Promise<
+  | { status: "ok"; cardId: string }
+  | { status: "duplicate" }
+  | { status: "forbidden" }
+  | { status: "invalid" }
+  | { status: "error"; message: string }
+> {
+  const { item, companyId, userId, laneId, columnId, lanes, columns,
+    existingCards, canManageCompany, currentUserId, source } = args;
+
+  const lane = lanes.find((l) => l.id === laneId);
+  const col = columns.find((c) => c.id === columnId);
+  if (!lane || !col) return { status: "invalid" };
+  if (lane.company_id !== companyId || col.company_id !== companyId) return { status: "invalid" };
+  if (col.lane_id !== laneId) return { status: "invalid" };
+  // Linha pessoal de outro usuário: não pode receber drop por usuário comum
+  if (lane.is_personal && !canManageCompany && lane.owner_user_id !== currentUserId) {
+    return { status: "forbidden" };
+  }
+
+  const dup = existingCards.find((c) =>
+    c.column_id === columnId &&
+    ((item.kind === "ticket" && c.ticket_id === item.id) ||
+     (item.kind === "contact" && c.contact_id === item.id) ||
+     (item.kind === "opportunity" && c.opportunity_id === item.id))
+  );
+  if (dup) return { status: "duplicate" };
+
+  const position = existingCards.filter((c) => c.column_id === columnId).length;
+  const payload: Record<string, unknown> = {
+    company_id: companyId,
+    lane_id: laneId,
+    column_id: columnId,
+    title: (args.title?.trim() || item.label || "Item").slice(0, 200),
+    description: args.description?.trim() || null,
+    card_type: item.kind,
+    position,
+    created_by: userId,
+  };
+  if (item.kind === "ticket") payload.ticket_id = item.id;
+  if (item.kind === "contact") payload.contact_id = item.id;
+  if (item.kind === "opportunity") payload.opportunity_id = item.id;
+
+  const { data, error } = await (supabase as any)
+    .from("kanban_cards")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (error) return { status: "error", message: error.message };
+
+  await writeAudit(companyId, userId, "kanban.card_linked", {
+    card_id: data?.id,
+    card_type: item.kind,
+    ticket_id: item.kind === "ticket" ? item.id : null,
+    contact_id: item.kind === "contact" ? item.id : null,
+    opportunity_id: item.kind === "opportunity" ? item.id : null,
+    lane_id: laneId,
+    column_id: columnId,
+    source,
+  });
+
+  return { status: "ok", cardId: data?.id };
+}
+
+const DRAG_MIME = "application/x-dominus-kanban-item";
+
 export default function Kanban() {
   const { profile, user } = useAuth();
   const { activeMembership } = useCompany();
@@ -472,7 +559,17 @@ export default function Kanban() {
                 sideItems.map((it) => (
                   <div
                     key={`${it.kind}-${it.id}`}
-                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1"
+                    draggable
+                    onDragStart={(e) => {
+                      try {
+                        const payload = JSON.stringify({ kind: it.kind, id: it.id, label: it.label });
+                        e.dataTransfer.setData(DRAG_MIME, payload);
+                        e.dataTransfer.setData("text/plain", it.label);
+                        e.dataTransfer.effectAllowed = "copy";
+                      } catch { /* ignore */ }
+                    }}
+                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1 cursor-grab active:cursor-grabbing"
+                    title="Arraste para uma coluna do Kanban ou use o botão"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{it.label}</div>
@@ -577,7 +674,36 @@ export default function Kanban() {
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
+                    onDropItem={async (columnId, item) => {
+                      if (!companyId || !user?.id) return;
+                      const res = await linkItemToColumn({
+                        item,
+                        companyId,
+                        userId: user.id,
+                        laneId: lane.id,
+                        columnId,
+                        lanes: lanesQ.data ?? [],
+                        columns: columnsQ.data ?? [],
+                        existingCards: cardsQ.data ?? [],
+                        canManageCompany: canManage,
+                        currentUserId: user.id,
+                        source: "kanban_drag_drop",
+                      });
+                      if (res.status === "ok") {
+                        toast({ title: "Adicionado ao Kanban" });
+                        qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                      } else if (res.status === "duplicate") {
+                        toast({ title: "Este item já está nesta coluna do Kanban." });
+                      } else if (res.status === "forbidden") {
+                        toast({ title: "Você não pode soltar nesta linha.", variant: "destructive" });
+                      } else if (res.status === "invalid") {
+                        toast({ title: "Destino inválido.", variant: "destructive" });
+                      } else {
+                        toast({ title: "Erro ao adicionar", description: res.message, variant: "destructive" });
+                      }
+                    }}
                   />
+
                 ))}
               </div>
             )}
@@ -666,6 +792,7 @@ function laneTypeIcon(t: LaneType) {
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
+  onDropItem,
 }: {
   lane: Lane;
   columns: Column[];
@@ -683,7 +810,9 @@ function LaneRow({
   onDeleteLane: () => void;
   onMoveCard: (cardId: string, newColumnId: string) => void;
   onDeleteCard: (cardId: string) => void;
+  onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
 }) {
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b bg-muted/30">
@@ -729,7 +858,31 @@ function LaneRow({
             columns.map((col) => (
               <div
                 key={col.id}
-                className="w-64 shrink-0 rounded-md border bg-card/50 flex flex-col max-h-[60vh]"
+                className={`w-64 shrink-0 rounded-md border bg-card/50 flex flex-col max-h-[60vh] transition-colors ${
+                  dragOverCol === col.id ? "ring-2 ring-primary border-primary bg-primary/5" : ""
+                }`}
+                onDragOver={(e) => {
+                  if (!onDropItem) return;
+                  if (e.dataTransfer.types.includes(DRAG_MIME)) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                    if (dragOverCol !== col.id) setDragOverCol(col.id);
+                  }
+                }}
+                onDragLeave={() => {
+                  if (dragOverCol === col.id) setDragOverCol(null);
+                }}
+                onDrop={(e) => {
+                  if (!onDropItem) return;
+                  const raw = e.dataTransfer.getData(DRAG_MIME);
+                  setDragOverCol(null);
+                  if (!raw) return;
+                  e.preventDefault();
+                  try {
+                    const parsed = JSON.parse(raw) as SideItem;
+                    if (parsed && parsed.id && parsed.kind) onDropItem(col.id, parsed);
+                  } catch { /* ignore */ }
+                }}
               >
                 <div
                   className="flex items-center justify-between px-2 py-1.5 border-b rounded-t-md"
@@ -1239,68 +1392,40 @@ function LinkToKanbanDialog({
       toast({ title: "Selecione linha e coluna", variant: "destructive" });
       return;
     }
-    const lane = lanes.find((l) => l.id === laneId);
-    const col = columns.find((c) => c.id === columnId);
-    if (!lane || !col || lane.company_id !== companyId || col.lane_id !== laneId) {
-      toast({ title: "Seleção inválida", variant: "destructive" });
-      return;
-    }
-    // duplicate check
-    const dup = existingCards.find((c) =>
-      c.column_id === columnId &&
-      ((item.kind === "ticket" && c.ticket_id === item.id) ||
-       (item.kind === "contact" && c.contact_id === item.id) ||
-       (item.kind === "opportunity" && c.opportunity_id === item.id))
-    );
-    if (dup) {
-      toast({ title: "Este item já está nesta coluna do Kanban." });
-      return;
-    }
-
     setSaving(true);
     try {
-      const position = existingCards.filter((c) => c.column_id === columnId).length;
-      const payload: Record<string, unknown> = {
-        company_id: companyId,
-        lane_id: laneId,
-        column_id: columnId,
-        title: title.trim() || item.label,
-        description: description.trim() || null,
-        card_type: item.kind,
-        position,
-        created_by: userId,
-      };
-      if (item.kind === "ticket") payload.ticket_id = item.id;
-      if (item.kind === "contact") payload.contact_id = item.id;
-      if (item.kind === "opportunity") payload.opportunity_id = item.id;
-
-      const { data, error } = await (supabase as any)
-        .from("kanban_cards")
-        .insert(payload)
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      await writeAudit(companyId, userId, "kanban.card_linked", {
-        card_id: data?.id,
-        card_type: item.kind,
-        ticket_id: item.kind === "ticket" ? item.id : null,
-        contact_id: item.kind === "contact" ? item.id : null,
-        opportunity_id: item.kind === "opportunity" ? item.id : null,
-        lane_id: laneId,
-        column_id: columnId,
+      const res = await linkItemToColumn({
+        item,
+        companyId,
+        userId,
+        laneId,
+        columnId,
+        lanes,
+        columns,
+        existingCards,
+        canManageCompany,
+        currentUserId,
         source: "kanban_sidebar",
+        title,
+        description,
       });
-
-      toast({ title: `${cardTypeLabel} adicionado ao Kanban` });
-      onSaved();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erro ao adicionar";
-      toast({ title: msg, variant: "destructive" });
+      if (res.status === "ok") {
+        toast({ title: `${cardTypeLabel} adicionado ao Kanban` });
+        onSaved();
+      } else if (res.status === "duplicate") {
+        toast({ title: "Este item já está nesta coluna do Kanban." });
+      } else if (res.status === "forbidden") {
+        toast({ title: "Você não pode adicionar nesta linha.", variant: "destructive" });
+      } else if (res.status === "invalid") {
+        toast({ title: "Seleção inválida", variant: "destructive" });
+      } else {
+        toast({ title: "Erro ao adicionar", description: res.message, variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
   }
+
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
