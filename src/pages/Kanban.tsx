@@ -792,6 +792,7 @@ function laneTypeIcon(t: LaneType) {
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
+  onDropItem,
 }: {
   lane: Lane;
   columns: Column[];
@@ -809,7 +810,9 @@ function LaneRow({
   onDeleteLane: () => void;
   onMoveCard: (cardId: string, newColumnId: string) => void;
   onDeleteCard: (cardId: string) => void;
+  onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
 }) {
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b bg-muted/30">
