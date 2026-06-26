@@ -1392,68 +1392,40 @@ function LinkToKanbanDialog({
       toast({ title: "Selecione linha e coluna", variant: "destructive" });
       return;
     }
-    const lane = lanes.find((l) => l.id === laneId);
-    const col = columns.find((c) => c.id === columnId);
-    if (!lane || !col || lane.company_id !== companyId || col.lane_id !== laneId) {
-      toast({ title: "Seleção inválida", variant: "destructive" });
-      return;
-    }
-    // duplicate check
-    const dup = existingCards.find((c) =>
-      c.column_id === columnId &&
-      ((item.kind === "ticket" && c.ticket_id === item.id) ||
-       (item.kind === "contact" && c.contact_id === item.id) ||
-       (item.kind === "opportunity" && c.opportunity_id === item.id))
-    );
-    if (dup) {
-      toast({ title: "Este item já está nesta coluna do Kanban." });
-      return;
-    }
-
     setSaving(true);
     try {
-      const position = existingCards.filter((c) => c.column_id === columnId).length;
-      const payload: Record<string, unknown> = {
-        company_id: companyId,
-        lane_id: laneId,
-        column_id: columnId,
-        title: title.trim() || item.label,
-        description: description.trim() || null,
-        card_type: item.kind,
-        position,
-        created_by: userId,
-      };
-      if (item.kind === "ticket") payload.ticket_id = item.id;
-      if (item.kind === "contact") payload.contact_id = item.id;
-      if (item.kind === "opportunity") payload.opportunity_id = item.id;
-
-      const { data, error } = await (supabase as any)
-        .from("kanban_cards")
-        .insert(payload)
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      await writeAudit(companyId, userId, "kanban.card_linked", {
-        card_id: data?.id,
-        card_type: item.kind,
-        ticket_id: item.kind === "ticket" ? item.id : null,
-        contact_id: item.kind === "contact" ? item.id : null,
-        opportunity_id: item.kind === "opportunity" ? item.id : null,
-        lane_id: laneId,
-        column_id: columnId,
+      const res = await linkItemToColumn({
+        item,
+        companyId,
+        userId,
+        laneId,
+        columnId,
+        lanes,
+        columns,
+        existingCards,
+        canManageCompany,
+        currentUserId,
         source: "kanban_sidebar",
+        title,
+        description,
       });
-
-      toast({ title: `${cardTypeLabel} adicionado ao Kanban` });
-      onSaved();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erro ao adicionar";
-      toast({ title: msg, variant: "destructive" });
+      if (res.status === "ok") {
+        toast({ title: `${cardTypeLabel} adicionado ao Kanban` });
+        onSaved();
+      } else if (res.status === "duplicate") {
+        toast({ title: "Este item já está nesta coluna do Kanban." });
+      } else if (res.status === "forbidden") {
+        toast({ title: "Você não pode adicionar nesta linha.", variant: "destructive" });
+      } else if (res.status === "invalid") {
+        toast({ title: "Seleção inválida", variant: "destructive" });
+      } else {
+        toast({ title: "Erro ao adicionar", description: res.message, variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
   }
+
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
