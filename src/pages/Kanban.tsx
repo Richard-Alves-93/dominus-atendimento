@@ -852,7 +852,7 @@ function laneTypeIcon(t: LaneType) {
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
-  onDropItem,
+  onDropItem, latestTransfers, onOpenTransferHistory,
 }: {
   lane: Lane;
   columns: Column[];
@@ -871,6 +871,8 @@ function LaneRow({
   onMoveCard: (cardId: string, newColumnId: string) => void;
   onDeleteCard: (cardId: string) => void;
   onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
+  latestTransfers: Record<string, any>;
+  onOpenTransferHistory: (ticketId: string) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   return (
