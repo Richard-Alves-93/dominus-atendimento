@@ -126,6 +126,7 @@ export default function Kanban() {
   const { activeMembership } = useCompany();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const companyId = activeMembership?.company_id ?? null;
   const isMaster = profile?.is_master === true || profile?.global_role === "master";
