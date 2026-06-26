@@ -646,7 +646,8 @@ export default function Kanban() {
                       }
                     }}
                     canManage={canManage || (lane.is_personal && lane.owner_user_id === user?.id)}
-                    onAddColumn={() => setColDialog({ open: true, laneId: lane.id })}
+                    onAddColumn={() => setColDialog({ open: true, laneId: lane.id, column: null })}
+                    onEditColumn={(column) => setColDialog({ open: true, laneId: lane.id, column })}
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
                     onEditLane={() => setLaneDialog({ open: true, lane })}
                     onDeleteLane={async () => {
