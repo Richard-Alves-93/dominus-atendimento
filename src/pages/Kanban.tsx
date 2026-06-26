@@ -1173,3 +1173,187 @@ function CardDialog({
     </Dialog>
   );
 }
+
+/* =================================================================== */
+/* Link to Kanban (sidebar action)                                     */
+/* =================================================================== */
+
+function LinkToKanbanDialog({
+  open, item, companyId, userId, lanes, columns, existingCards,
+  canManageCompany, currentUserId, onClose, onSaved,
+}: {
+  open: boolean;
+  item: SideItem | null;
+  companyId: string | null;
+  userId: string | null;
+  lanes: Lane[];
+  columns: Column[];
+  existingCards: CardRow[];
+  canManageCompany: boolean;
+  currentUserId: string | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [laneId, setLaneId] = useState<string>("");
+  const [columnId, setColumnId] = useState<string>("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const visibleLanes = useMemo(
+    () => lanes.filter((l) =>
+      l.is_active && (canManageCompany || !l.is_personal || l.owner_user_id === currentUserId)
+    ),
+    [lanes, canManageCompany, currentUserId],
+  );
+  const laneColumns = useMemo(
+    () => columns.filter((c) => c.lane_id === laneId).sort((a, b) => a.position - b.position),
+    [columns, laneId],
+  );
+
+  useEffect(() => {
+    if (!open || !item) return;
+    setTitle(item.label || "");
+    setDescription("");
+    setLaneId("");
+    setColumnId("");
+  }, [open, item]);
+
+  useEffect(() => {
+    if (laneColumns.length && !laneColumns.find((c) => c.id === columnId)) {
+      setColumnId(laneColumns[0].id);
+    }
+  }, [laneColumns, columnId]);
+
+  if (!item) return null;
+
+  const cardTypeLabel =
+    item.kind === "ticket" ? "Atendimento"
+    : item.kind === "opportunity" ? "Oportunidade"
+    : "Contato";
+
+  async function save() {
+    if (!companyId || !userId || !item) return;
+    if (!laneId || !columnId) {
+      toast({ title: "Selecione linha e coluna", variant: "destructive" });
+      return;
+    }
+    const lane = lanes.find((l) => l.id === laneId);
+    const col = columns.find((c) => c.id === columnId);
+    if (!lane || !col || lane.company_id !== companyId || col.lane_id !== laneId) {
+      toast({ title: "Seleção inválida", variant: "destructive" });
+      return;
+    }
+    // duplicate check
+    const dup = existingCards.find((c) =>
+      c.column_id === columnId &&
+      ((item.kind === "ticket" && c.ticket_id === item.id) ||
+       (item.kind === "contact" && c.contact_id === item.id) ||
+       (item.kind === "opportunity" && c.opportunity_id === item.id))
+    );
+    if (dup) {
+      toast({ title: "Este item já está nesta coluna do Kanban." });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const position = existingCards.filter((c) => c.column_id === columnId).length;
+      const payload: Record<string, unknown> = {
+        company_id: companyId,
+        lane_id: laneId,
+        column_id: columnId,
+        title: title.trim() || item.label,
+        description: description.trim() || null,
+        card_type: item.kind,
+        position,
+        created_by: userId,
+      };
+      if (item.kind === "ticket") payload.ticket_id = item.id;
+      if (item.kind === "contact") payload.contact_id = item.id;
+      if (item.kind === "opportunity") payload.opportunity_id = item.id;
+
+      const { data, error } = await (supabase as any)
+        .from("kanban_cards")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await writeAudit(companyId, userId, "kanban.card_linked", {
+        card_id: data?.id,
+        card_type: item.kind,
+        ticket_id: item.kind === "ticket" ? item.id : null,
+        contact_id: item.kind === "contact" ? item.id : null,
+        opportunity_id: item.kind === "opportunity" ? item.id : null,
+        lane_id: laneId,
+        column_id: columnId,
+        source: "kanban_sidebar",
+      });
+
+      toast({ title: `${cardTypeLabel} adicionado ao Kanban` });
+      onSaved();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao adicionar";
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Adicionar ao Kanban</DialogTitle>
+          <DialogDescription>
+            Vínculo apenas organizacional — não altera o {cardTypeLabel.toLowerCase()} original.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Tipo</Label>
+            <Input value={cardTypeLabel} disabled />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Linha</Label>
+            <Select value={laneId} onValueChange={setLaneId}>
+              <SelectTrigger><SelectValue placeholder="Selecione a linha" /></SelectTrigger>
+              <SelectContent>
+                {visibleLanes.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Coluna</Label>
+            <Select value={columnId} onValueChange={setColumnId} disabled={!laneId}>
+              <SelectTrigger><SelectValue placeholder="Selecione a coluna" /></SelectTrigger>
+              <SelectContent>
+                {laneColumns.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Título do card</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Descrição (opcional)</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving || !laneId || !columnId}>
+            {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Adicionar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
