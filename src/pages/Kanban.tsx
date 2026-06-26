@@ -27,6 +27,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  TicketTransferHistoryDialog,
+  TransferStatusBadge,
+  useLatestTransfers,
+} from "@/features/kanban/TicketTransferHistoryDialog";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
