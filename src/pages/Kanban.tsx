@@ -73,6 +73,8 @@ type Column = {
   name: string;
   position: number;
   color: string | null;
+  commercial_action_enabled?: boolean;
+  commercial_action?: string | null;
 };
 
 type CardRow = {
@@ -356,7 +358,7 @@ export default function Kanban() {
   const [laneFilter, setLaneFilter] = useState<"all" | LaneType>("all");
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
-  const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string }>({ open: false });
+  const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
@@ -644,7 +646,8 @@ export default function Kanban() {
                       }
                     }}
                     canManage={canManage || (lane.is_personal && lane.owner_user_id === user?.id)}
-                    onAddColumn={() => setColDialog({ open: true, laneId: lane.id })}
+                    onAddColumn={() => setColDialog({ open: true, laneId: lane.id, column: null })}
+                    onEditColumn={(column) => setColDialog({ open: true, laneId: lane.id, column })}
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
                     onEditLane={() => setLaneDialog({ open: true, lane })}
                     onDeleteLane={async () => {
@@ -720,6 +723,43 @@ export default function Kanban() {
                         }
                       }
 
+                      // K.7: commercial action when applicable
+                      const shouldRunCommercial =
+                        card.card_type === "opportunity"
+                        && !!card.opportunity_id
+                        && destLane
+                        && (destLane as any).lane_type === "commercial"
+                        && (destCol as any)?.commercial_action_enabled === true
+                        && !!(destCol as any)?.commercial_action
+                        && (destCol as any)?.commercial_action !== "none";
+
+                      if (shouldRunCommercial && companyId) {
+                        const { error: oppErr } = await (supabase as any).rpc(
+                          "update_opportunity_status_from_kanban",
+                          {
+                            _company_id: companyId,
+                            _opportunity_id: card.opportunity_id,
+                            _kanban_card_id: cardId,
+                            _kanban_lane_id: (destLane as any).id,
+                            _kanban_column_id: newColumnId,
+                          },
+                        );
+                        if (oppErr) {
+                          await (supabase as any)
+                            .from("kanban_cards")
+                            .update({ column_id: oldColumnId, lane_id: oldLaneId })
+                            .eq("id", cardId);
+                          toast({
+                            title: "Não foi possível atualizar a oportunidade",
+                            description: oppErr.message,
+                            variant: "destructive",
+                          });
+                          qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                          return;
+                        }
+                        qc.invalidateQueries({ queryKey: ["opportunities"] });
+                      }
+
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
                     onDeleteCard={async (cardId) => {
@@ -788,6 +828,12 @@ export default function Kanban() {
       <ColumnDialog
         open={colDialog.open}
         laneId={colDialog.laneId ?? null}
+        column={colDialog.column ?? null}
+        laneType={
+          colDialog.laneId
+            ? ((lanesQ.data ?? []).find((l: any) => l.id === colDialog.laneId)?.lane_type ?? null)
+            : null
+        }
         companyId={companyId}
         userId={user?.id ?? null}
         existingCount={
@@ -858,7 +904,7 @@ function laneTypeIcon(t: LaneType) {
 
 function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, onOpenLinked,
-  onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard,
+  onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory,
 }: {
   lane: Lane;
@@ -877,6 +923,7 @@ function LaneRow({
   onDeleteLane: () => void;
   onMoveCard: (cardId: string, newColumnId: string) => void;
   onDeleteCard: (cardId: string) => void;
+  onEditColumn?: (column: Column) => void;
   onDropItem?: (columnId: string, item: SideItem) => void | Promise<void>;
   latestTransfers: Record<string, any>;
   onOpenTransferHistory: (ticketId: string) => void;
@@ -968,9 +1015,14 @@ function LaneRow({
                     </span>
                   </div>
                   {canManage && (
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onAddCard(col.id)}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onAddCard(col.id)} title="Novo card">
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onEditColumn?.(col)} title="Editar coluna">
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   )}
                 </div>
                 <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-2">
@@ -1312,10 +1364,12 @@ function LaneDialog({
 }
 
 function ColumnDialog({
-  open, laneId, companyId, userId, existingCount, onClose, onSaved,
+  open, laneId, column, laneType, companyId, userId, existingCount, onClose, onSaved,
 }: {
   open: boolean;
   laneId: string | null;
+  column?: Column | null;
+  laneType?: LaneType | null;
   companyId: string;
   userId: string | null;
   existingCount: number;
@@ -1323,13 +1377,28 @@ function ColumnDialog({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
+  const isEdit = !!column?.id;
+  const isCommercialLane = laneType === "commercial";
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>("slate");
+  const [commercialEnabled, setCommercialEnabled] = useState(false);
+  const [commercialAction, setCommercialAction] = useState<string>("none");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) { setName(""); setColor("slate"); }
-  }, [open]);
+    if (!open) return;
+    if (column) {
+      setName(column.name ?? "");
+      setColor((column.color as string) ?? "slate");
+      setCommercialEnabled(!!column.commercial_action_enabled);
+      setCommercialAction(column.commercial_action ?? "none");
+    } else {
+      setName("");
+      setColor("slate");
+      setCommercialEnabled(false);
+      setCommercialAction("none");
+    }
+  }, [open, column]);
 
   const save = async () => {
     if (!laneId) return;
@@ -1337,23 +1406,47 @@ function ColumnDialog({
       toast({ title: "Informe o nome da coluna", variant: "destructive" });
       return;
     }
+    if (isCommercialLane && commercialEnabled && !["mark_open","mark_won","mark_lost","mark_canceled"].includes(commercialAction)) {
+      toast({ title: "Selecione uma ação comercial válida", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from("kanban_columns")
-        .insert({
-          company_id: companyId,
-          lane_id: laneId,
-          name: name.trim(),
-          color,
-          position: existingCount,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      await writeAudit(companyId, userId, "kanban.column_created", {
-        column_id: data?.id, lane_id: laneId,
-      });
+      const payload: any = {
+        name: name.trim(),
+        color,
+        commercial_action_enabled: isCommercialLane ? commercialEnabled : false,
+        commercial_action: isCommercialLane && commercialEnabled ? commercialAction : null,
+      };
+      if (isEdit && column) {
+        const { error } = await (supabase as any)
+          .from("kanban_columns")
+          .update(payload)
+          .eq("id", column.id);
+        if (error) throw error;
+        await writeAudit(companyId, userId, "kanban.column_updated", {
+          column_id: column.id, lane_id: laneId,
+          commercial_action_enabled: payload.commercial_action_enabled,
+          commercial_action: payload.commercial_action,
+        });
+      } else {
+        const { data, error } = await (supabase as any)
+          .from("kanban_columns")
+          .insert({
+            company_id: companyId,
+            lane_id: laneId,
+            position: existingCount,
+            ...payload,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        await writeAudit(companyId, userId, "kanban.column_created", {
+          column_id: data?.id, lane_id: laneId,
+          commercial_action_enabled: payload.commercial_action_enabled,
+          commercial_action: payload.commercial_action,
+        });
+      }
       onSaved();
     } catch (e: any) {
       toast({ title: "Erro ao salvar coluna", description: e.message, variant: "destructive" });
@@ -1366,7 +1459,7 @@ function ColumnDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova coluna</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar coluna" : "Nova coluna"}</DialogTitle>
           <DialogDescription>Etapa dentro da linha.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1389,6 +1482,39 @@ function ColumnDialog({
               ))}
             </div>
           </div>
+
+          {isCommercialLane && (
+            <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Regras comerciais da coluna</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Quando ativado, cards de oportunidade movidos para esta coluna poderão atualizar o status da oportunidade.
+                  </p>
+                </div>
+                <Switch checked={commercialEnabled} onCheckedChange={setCommercialEnabled} />
+              </div>
+              {commercialEnabled && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Ação ao mover oportunidade para esta coluna</Label>
+                  <Select value={commercialAction} onValueChange={setCommercialAction}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma ação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mark_open">Marcar como aberta</SelectItem>
+                      <SelectItem value="mark_won">Marcar como ganha</SelectItem>
+                      <SelectItem value="mark_lost">Marcar como perdida</SelectItem>
+                      <SelectItem value="mark_canceled">Marcar como cancelada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    A comissão é gerada ou cancelada automaticamente pelas regras já existentes da oportunidade.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
