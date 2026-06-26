@@ -170,7 +170,7 @@ export default function Kanban() {
     queryFn: async (): Promise<CardRow[]> => {
       const { data, error } = await (supabase as any)
         .from("kanban_cards")
-        .select("id,company_id,lane_id,column_id,title,description,card_type,assigned_user_id,position")
+        .select("id,company_id,lane_id,column_id,title,description,card_type,assigned_user_id,position,contact_id,ticket_id,opportunity_id")
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("position", { ascending: true });
