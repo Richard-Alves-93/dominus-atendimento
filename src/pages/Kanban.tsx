@@ -435,6 +435,7 @@ export default function Kanban() {
     },
   });
   const linkEnrich = linkEnrichQ.data ?? { contacts: {}, tickets: {}, opportunities: {} };
+  const latestTransfers = useLatestTransfers(companyId, linkIds.tickets);
 
   /* ---------------- Sidebar items ---------------- */
   const sideItems: SideItem[] = useMemo(() => {
