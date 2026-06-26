@@ -54,6 +54,11 @@ type Lane = {
   is_personal: boolean;
   position: number;
   is_active: boolean;
+  operational_enabled?: boolean;
+  transfer_ticket_on_drop?: boolean;
+  return_if_unassigned?: boolean;
+  return_timeout_minutes?: number | null;
+  return_target?: string | null;
 };
 
 type Column = {
