@@ -559,7 +559,17 @@ export default function Kanban() {
                 sideItems.map((it) => (
                   <div
                     key={`${it.kind}-${it.id}`}
-                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1"
+                    draggable
+                    onDragStart={(e) => {
+                      try {
+                        const payload = JSON.stringify({ kind: it.kind, id: it.id, label: it.label });
+                        e.dataTransfer.setData(DRAG_MIME, payload);
+                        e.dataTransfer.setData("text/plain", it.label);
+                        e.dataTransfer.effectAllowed = "copy";
+                      } catch { /* ignore */ }
+                    }}
+                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1 cursor-grab active:cursor-grabbing"
+                    title="Arraste para uma coluna do Kanban ou use o botão"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{it.label}</div>
