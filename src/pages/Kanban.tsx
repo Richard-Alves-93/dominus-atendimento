@@ -674,7 +674,36 @@ export default function Kanban() {
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
+                    onDropItem={async (columnId, item) => {
+                      if (!companyId || !user?.id) return;
+                      const res = await linkItemToColumn({
+                        item,
+                        companyId,
+                        userId: user.id,
+                        laneId: lane.id,
+                        columnId,
+                        lanes: lanesQ.data ?? [],
+                        columns: columnsQ.data ?? [],
+                        existingCards: cardsQ.data ?? [],
+                        canManageCompany: canManage,
+                        currentUserId: user.id,
+                        source: "kanban_drag_drop",
+                      });
+                      if (res.status === "ok") {
+                        toast({ title: "Adicionado ao Kanban" });
+                        qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                      } else if (res.status === "duplicate") {
+                        toast({ title: "Este item já está nesta coluna do Kanban." });
+                      } else if (res.status === "forbidden") {
+                        toast({ title: "Você não pode soltar nesta linha.", variant: "destructive" });
+                      } else if (res.status === "invalid") {
+                        toast({ title: "Destino inválido.", variant: "destructive" });
+                      } else {
+                        toast({ title: "Erro ao adicionar", description: res.message, variant: "destructive" });
+                      }
+                    }}
                   />
+
                 ))}
               </div>
             )}
