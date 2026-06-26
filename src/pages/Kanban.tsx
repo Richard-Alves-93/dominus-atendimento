@@ -832,6 +832,13 @@ export default function Kanban() {
           setLinkDialog({ open: false });
         }}
       />
+
+      <TicketTransferHistoryDialog
+        open={transferHistory.open}
+        ticketId={transferHistory.ticketId}
+        companyId={companyId}
+        onClose={() => setTransferHistory({ open: false, ticketId: null })}
+      />
     </AppLayout>
   );
 }
