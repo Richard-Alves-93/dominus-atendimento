@@ -1169,6 +1169,50 @@ function LaneDialog({
               </p>
             </div>
           )}
+          {laneType === "department" && canEditOperational && (
+            <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+              <div>
+                <Label className="text-sm font-semibold">Regras operacionais do setor</Label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Quando ativado futuramente, cards de atendimento movidos para esta linha poderão transferir o atendimento para o setor vinculado. Nesta etapa, as regras serão apenas configuradas. A transferência real será ativada em uma fase posterior.
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Ativar regras operacionais nesta linha</Label>
+                <Switch checked={opEnabled} onCheckedChange={setOpEnabled} disabled={!departmentId} />
+              </div>
+              {opEnabled && (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm">Transferir atendimento ao mover para esta linha</Label>
+                    <Switch checked={opTransfer} onCheckedChange={setOpTransfer} />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm">Retornar automaticamente se ninguém assumir</Label>
+                    <Switch checked={opReturn} onCheckedChange={setOpReturn} />
+                  </div>
+                  {opReturn && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Tempo para retorno (minutos)</Label>
+                        <Input type="number" min={1} value={opReturnMin} onChange={(e) => setOpReturnMin(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Destino do retorno</Label>
+                        <Select value={opReturnTarget} onValueChange={setOpReturnTarget}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="previous_user">Atendente anterior</SelectItem>
+                            <SelectItem value="origin_department">Setor de origem</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {laneType === "personal" && (
             <p className="text-[11px] text-muted-foreground">
               Linhas pessoais são visíveis apenas para você e administradores da empresa.
