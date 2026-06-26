@@ -546,7 +546,7 @@ export default function Kanban() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={laneFilter} onValueChange={(v) => setLaneFilter(v as any)}>
-              <SelectTrigger className="h-9 w-[160px]">
+              <SelectTrigger className="h-9 w-[150px]">
                 <ListFilter className="h-4 w-4 mr-1" />
                 <SelectValue />
               </SelectTrigger>
@@ -558,11 +558,45 @@ export default function Kanban() {
                 <SelectItem value="custom">Personalizada</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={cardTypeFilter} onValueChange={(v) => setCardTypeFilter(v as any)}>
+              <SelectTrigger className="h-9 w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os cards</SelectItem>
+                <SelectItem value="ticket">Atendimento</SelectItem>
+                <SelectItem value="contact">Contato</SelectItem>
+                <SelectItem value="opportunity">Oportunidade</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+              <SelectTrigger className="h-9 w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos responsáveis</SelectItem>
+                <SelectItem value="me">Eu</SelectItem>
+                {(membersQ.data ?? []).filter((m) => m.user_id !== user?.id).map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={globalSearch}
+                onChange={(e) => setGlobalSearch(e.target.value)}
+                placeholder="Buscar nos cards..."
+                className="pl-7 h-9 w-[180px] text-sm"
+              />
+            </div>
             <Button size="sm" onClick={() => setLaneDialog({ open: true, lane: null })}>
               <Plus className="h-4 w-4 mr-1" /> Nova linha
             </Button>
           </div>
         </div>
+
 
         {/* Body: sidebar + board */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
