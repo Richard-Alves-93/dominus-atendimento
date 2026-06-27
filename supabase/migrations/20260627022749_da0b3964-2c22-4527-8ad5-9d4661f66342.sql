@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.user_company_role(uuid, uuid) TO authenticated;
