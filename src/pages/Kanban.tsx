@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Columns3, Plus, Search, Loader2, MoreVertical, Trash2, ArrowRightLeft,
+  Columns3, Plus, Search, Loader2, MoreVertical, ArrowRightLeft,
   User as UserIcon, Building, Briefcase, ListFilter, LinkIcon, ExternalLink,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Archive, Pencil,
 } from "lucide-react";
