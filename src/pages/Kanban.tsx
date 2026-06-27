@@ -2034,3 +2034,102 @@ function LinkToKanbanDialog({
     </Dialog>
   );
 }
+
+/* =================================================================== */
+/* Edit manual card (K.10)                                              */
+/* =================================================================== */
+function EditManualCardDialog({
+  open, onOpenChange, card, companyId, members, onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  card: CardRow | null;
+  companyId: string | null;
+  members: { user_id: string; name: string }[];
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assignee, setAssignee] = useState<string>("none");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && card) {
+      setTitle(card.title ?? "");
+      setDescription(card.description ?? "");
+      setAssignee(card.assigned_user_id ?? "none");
+    }
+  }, [open, card]);
+
+  const submit = async () => {
+    if (!card || !companyId) return;
+    if (!title.trim()) {
+      toast({ title: "Informe um título", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    const { error } = await (supabase as any).rpc("update_kanban_manual_card", {
+      _company_id: companyId,
+      _card_id: card.id,
+      _title: title.trim(),
+      _description: description.trim() || null,
+      _assigned_user_id: assignee === "none" ? null : assignee,
+    });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Card atualizado" });
+    onOpenChange(false);
+    onSaved();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar card manual</DialogTitle>
+          <DialogDescription>
+            Apenas cards manuais podem ser editados diretamente. Cards vinculados a
+            atendimentos, contatos ou oportunidades mantêm os dados do item original.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Título</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          </div>
+          <div>
+            <Label>Descrição</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              maxLength={1000}
+            />
+          </div>
+          <div>
+            <Label>Responsável</Label>
+            <Select value={assignee} onValueChange={setAssignee}>
+              <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem responsável</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
