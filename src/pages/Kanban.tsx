@@ -1293,8 +1293,24 @@ function LaneRow({
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
+                                {onMoveCardOrder && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "up")}>
+                                      <ArrowUp className="h-3 w-3 mr-2" /> Mover card para cima
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "down")}>
+                                      <ArrowDown className="h-3 w-3 mr-2" /> Mover card para baixo
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+                                {card.card_type === "manual" && onEditCard && (
+                                  <DropdownMenuItem onClick={() => onEditCard(card)}>
+                                    <Pencil className="h-3 w-3 mr-2" /> Editar card
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem className="text-destructive" onClick={() => onDeleteCard(card.id)}>
-                                  <Trash2 className="h-3 w-3 mr-2" /> Remover
+                                  <Archive className="h-3 w-3 mr-2" /> Arquivar
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
