@@ -1339,6 +1339,11 @@ function LaneRow({
                                         <Briefcase className="h-3 w-3 mr-2" /> Criar oportunidade
                                       </DropdownMenuItem>
                                     )}
+                                    {onOpenTags && card.card_type !== "manual" && (
+                                      <DropdownMenuItem onClick={() => onOpenTags(card)}>
+                                        <TagIcon className="h-3 w-3 mr-2" /> Etiquetas
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
