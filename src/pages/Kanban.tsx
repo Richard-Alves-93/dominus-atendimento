@@ -502,7 +502,7 @@ export default function Kanban() {
       items = (ticketsQ.data ?? []).map((t: any) => ({
         kind: "ticket" as const,
         id: t.id,
-        label: t.contact?.name || t.contact?.phone || "Atendimento",
+        label: t.contact?.name || t.contact?.phone_number || "Atendimento",
         sub: [t.department?.name, t.status === "open" ? "Aberto" : "Pendente"].filter(Boolean).join(" • "),
         extra: t.assignee?.full_name || undefined,
       }));
