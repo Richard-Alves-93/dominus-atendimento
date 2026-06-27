@@ -1121,9 +1121,20 @@ function LaneRow({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onEditLane}>Editar linha</DropdownMenuItem>
+                {onMoveLane && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onMoveLane("up")}>
+                      <ArrowUp className="h-3.5 w-3.5 mr-2" /> Mover linha para cima
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onMoveLane("down")}>
+                      <ArrowDown className="h-3.5 w-3.5 mr-2" /> Mover linha para baixo
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={onDeleteLane}>
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Ocultar linha
+                  <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar linha
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
