@@ -440,6 +440,9 @@ export default function Kanban() {
     return { tickets: [...t], contacts: [...c], opportunities: [...o] };
   }, [cardsQ.data]);
 
+  // T.1 — etiquetas dos cards visíveis (batch)
+  const tagsMapQ = useEntityTags(companyId, (cardsQ.data ?? []) as any);
+
   const linkEnrichQ = useQuery({
     queryKey: [
       "kanban-link-enrich",
