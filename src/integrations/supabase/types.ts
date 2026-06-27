@@ -1895,6 +1895,128 @@ export type Database = {
           },
         ]
       }
+      tag_links: {
+        Row: {
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          entity_type: string
+          id: string
+          opportunity_id: string | null
+          tag_id: string
+          ticket_id: string | null
+        }
+        Insert: {
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          entity_type: string
+          id?: string
+          opportunity_id?: string | null
+          tag_id: string
+          ticket_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          entity_type?: string
+          id?: string
+          opportunity_id?: string | null
+          tag_id?: string
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_links_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_links_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_links_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_links_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          color: string | null
+          company_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_protocol_sequences: {
         Row: {
           company_id: string
@@ -2224,6 +2346,32 @@ export type Database = {
         }
         Returns: undefined
       }
+      _tags_can_access_entity: {
+        Args: {
+          _company_id: string
+          _contact_id: string
+          _entity_type: string
+          _opportunity_id: string
+          _ticket_id: string
+          _uid: string
+        }
+        Returns: boolean
+      }
+      _tags_can_manage: {
+        Args: { _company_id: string; _uid: string }
+        Returns: boolean
+      }
+      apply_tag_to_entity: {
+        Args: {
+          _company_id: string
+          _contact_id?: string
+          _entity_type: string
+          _opportunity_id?: string
+          _tag_id: string
+          _ticket_id?: string
+        }
+        Returns: string
+      }
       archive_kanban_card: {
         Args: { _card_id: string; _company_id: string }
         Returns: undefined
@@ -2376,6 +2524,17 @@ export type Database = {
       }
       release_kanban_returns_cron_lock: { Args: never; Returns: boolean }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
+      remove_tag_from_entity: {
+        Args: {
+          _company_id: string
+          _contact_id?: string
+          _entity_type: string
+          _opportunity_id?: string
+          _tag_id: string
+          _ticket_id?: string
+        }
+        Returns: undefined
+      }
       reorder_kanban_card: {
         Args: { _card_id: string; _company_id: string; _direction: string }
         Returns: undefined
