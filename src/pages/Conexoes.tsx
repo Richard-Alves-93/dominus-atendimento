@@ -91,10 +91,13 @@ export default function Conexoes() {
 
   useEffect(() => stopPolling, []);
 
-  const callFn = async (action: "create_or_connect" | "status" | "disconnect") => {
+  const callFn = async (
+    action: "create_or_connect" | "status" | "disconnect" | "recreate",
+    extra: Record<string, unknown> = {},
+  ) => {
     if (!activeCompanyId) return null;
     const { data, error } = await supabase.functions.invoke("whatsapp-connection", {
-      body: { action, company_id: activeCompanyId },
+      body: { action, company_id: activeCompanyId, ...extra },
     });
     if (error) {
       toast.error(error.message);
@@ -102,9 +105,9 @@ export default function Conexoes() {
     }
     if (data && (data as { error?: string }).error) {
       toast.error((data as { error: string }).error);
-      return data as { status: string; qr_code?: string | null; instance_name?: string | null };
+      return data as { status: string; qr_code?: string | null; instance_name?: string | null; can_recreate?: boolean };
     }
-    return data as { status: string; qr_code?: string | null; instance_name?: string | null };
+    return data as { status: string; qr_code?: string | null; instance_name?: string | null; recreated?: boolean; forced?: boolean };
   };
 
   const invalidateContactCaches = async (reason: "whatsapp_disconnect" | "whatsapp_reconnect") => {
@@ -180,9 +183,9 @@ export default function Conexoes() {
     }, 4000);
   };
 
-  const disconnect = async () => {
+  const disconnect = async (force = false) => {
     setLoading(true);
-    const res = await callFn("disconnect");
+    const res = await callFn("disconnect", force ? { force: true } : {});
     setLoading(false);
     if (!res) return;
     setStatus(res.status);
@@ -190,9 +193,36 @@ export default function Conexoes() {
       setQr(null);
       stopPolling();
       await invalidateContactCaches("whatsapp_disconnect");
-      toast.success("WhatsApp desconectado.");
+      toast.success(force ? "Conexão marcada como desconectada localmente." : "WhatsApp desconectado.");
     }
     await loadChannels();
+  };
+
+  const recreateInstance = async () => {
+    if (!confirm("Isso vai recriar a instância do WhatsApp na Evolution e gerar um novo QR Code. Seus contatos, atendimentos e mensagens NÃO serão afetados. Continuar?")) return;
+    setLoading(true);
+    const res = await callFn("recreate");
+    setLoading(false);
+    if (!res) return;
+    await invalidateContactCaches("whatsapp_reconnect");
+    setStatus(res.status);
+    setQr(res.qr_code ?? null);
+    setInstanceName(res.instance_name ?? null);
+    await loadChannels();
+    toast.success("Instância recriada. Escaneie o novo QR Code.");
+
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      const s = await callFn("status");
+      if (!s) return;
+      setStatus(s.status);
+      setQr(s.qr_code ?? null);
+      if (s.status === "connected" || s.status === "error") {
+        stopPolling();
+        await loadChannels();
+        if (s.status === "connected") toast.success("WhatsApp conectado!");
+      }
+    }, 4000);
   };
 
   const reapplySettings = async (channelId: string) => {
@@ -306,17 +336,28 @@ export default function Conexoes() {
               <p className="text-xs text-muted-foreground font-mono">{instanceName}</p>
             )}
 
-            <div className="flex gap-2 w-full">
+            <div className="flex flex-col gap-2 w-full">
               {status === "connected" ? (
-                <Button variant="destructive" className="flex-1" onClick={disconnect} disabled={loading}>
+                <Button variant="destructive" className="w-full" onClick={() => disconnect(false)} disabled={loading}>
                   <Power className="w-4 h-4" /> Desconectar
                 </Button>
               ) : (
-                <Button className="flex-1" onClick={generateQr} disabled={loading}>
+                <Button className="w-full" onClick={generateQr} disabled={loading}>
                   {qr ? <RefreshCw className="w-4 h-4" /> : <QrCode className="w-4 h-4" />}
                   {qr ? "Gerar novo QR Code" : "Gerar QR Code"}
                 </Button>
               )}
+              <div className="flex gap-2 w-full">
+                <Button variant="outline" className="flex-1" onClick={() => disconnect(true)} disabled={loading}>
+                  Forçar desconexão local
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={recreateInstance} disabled={loading}>
+                  <RefreshCw className="w-4 h-4" /> Recriar instância
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center">
+                Use "Recriar instância" se o WhatsApp estiver travado/inconsistente. Contatos, atendimentos e mensagens não são afetados.
+              </p>
             </div>
           </div>
         </DialogContent>

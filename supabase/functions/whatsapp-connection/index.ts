@@ -2,9 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 interface Body {
-  action: "create_or_connect" | "status" | "disconnect";
+  action: "create_or_connect" | "status" | "disconnect" | "recreate";
   company_id: string;
   channel_id?: string;
+  force?: boolean;
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -223,6 +224,22 @@ async function evoLogout(instanceName: string) {
     ok: (res as Response).ok,
     body_raw_truncated: text.slice(0, 240),
     endpoint_path: `/instance/logout/${instanceName}`,
+  });
+  return { ok: (res as Response).ok, status: (res as Response).status, body: text };
+}
+
+async function evoDeleteInstance(instanceName: string) {
+  // Evolution v2.3.x: DELETE /instance/delete/{instance}
+  const res = await fetch(`${evoBase()}/instance/delete/${instanceName}`, {
+    method: "DELETE",
+    headers: evoHeaders(),
+  }).catch((e) => ({ ok: false, status: 0, text: async () => String((e as Error)?.message ?? e) } as any));
+  const text = await (res as Response).text().catch(() => "");
+  console.log("[EVOLUTION_DELETE_RESPONSE]", {
+    status: (res as Response).status,
+    ok: (res as Response).ok,
+    body_raw_truncated: text.slice(0, 240),
+    endpoint_path: `/instance/delete/${instanceName}`,
   });
   return { ok: (res as Response).ok, status: (res as Response).status, body: text };
 }
@@ -492,17 +509,143 @@ Deno.serve(async (req) => {
         : `Logout falhou (HTTP ${logout.status}): ${logout.body.slice(0, 160)}`;
 
       console.log("[EVOLUTION_DISCONNECT_AUDIT_END]", {
-        local_status_after: local_status_before,
-        success: false,
+        local_status_after: body.force ? "disconnected" : local_status_before,
+        success: !!body.force,
         failure_reason,
       });
 
+      // Force fallback: mark local as disconnected so user can recreate.
+      if (body.force) {
+        await admin.from("channels").update({ status: "disconnected" }).eq("id", channel.id);
+        await admin
+          .from("whatsapp_instances")
+          .update({
+            status: "disconnected",
+            qr_code: null,
+            disconnected_at: new Date().toISOString(),
+            settings_sync_error: failure_reason.slice(0, 240),
+          })
+          .eq("channel_id", channel.id);
+        return json({
+          status: "disconnected",
+          instance_name: target,
+          forced: true,
+          evolution_state: evoState,
+          warning: "Instância inconsistente na Evolution. Status local marcado como desconectado.",
+        });
+      }
+
       return json({
-        error: "Não foi possível desconectar o WhatsApp na Evolution. Tente novamente ou verifique a instância no painel Evolution.",
+        error: "A instância está inconsistente na Evolution. Recrie a conexão para gerar um novo QR Code.",
         evolution_state: evoState,
         status: mapped,
         instance_name: target,
+        can_recreate: true,
       }, 200);
+    }
+
+    if (body.action === "recreate") {
+      if (!EVO_ENABLED) {
+        return json({ error: "Evolution API não configurada." }, 500);
+      }
+
+      const { data: inst } = channel
+        ? await admin
+            .from("whatsapp_instances")
+            .select("id, instance_name")
+            .eq("channel_id", channel.id)
+            .maybeSingle()
+        : { data: null as any };
+
+      const oldName = inst?.instance_name ?? null;
+
+      console.log("[EVOLUTION_RECREATE_AUDIT_START]", {
+        company_id: body.company_id,
+        channel_id: channel?.id ?? null,
+        old_instance_name: oldName,
+      });
+
+      // Best-effort cleanup on Evolution (do NOT delete internal data).
+      if (oldName) {
+        try { await evoLogout(oldName); } catch (_) { /* ignore */ }
+        try { await evoDeleteInstance(oldName); } catch (_) { /* ignore */ }
+      }
+
+      // Ensure channel exists
+      if (!channel) {
+        const { data: created, error } = await admin
+          .from("channels")
+          .insert({
+            company_id: body.company_id,
+            channel_type: "whatsapp",
+            channel_provider: "evolution",
+            name: "WhatsApp",
+            status: "pending",
+          })
+          .select()
+          .single();
+        if (error) return json({ error: error.message }, 500);
+        channel = created;
+      } else {
+        await admin.from("channels").update({ status: "pending" }).eq("id", channel.id);
+      }
+
+      // Generate a fresh instance name (avoiding collision with the old one and others on Evolution).
+      const newName = await resolveNewInstanceName(desiredBaseName);
+      const evo = await evoCreateInstance(newName);
+
+      let webhookErr: string | null = null;
+      try { await evoSyncWebhook(newName); } catch (e) { webhookErr = (e as Error)?.message ?? "unknown"; }
+
+      const syncFields = webhookErr
+        ? { settings_sync_error: webhookErr }
+        : {
+            webhook_configured: true,
+            events_configured: true,
+            last_settings_sync_at: new Date().toISOString(),
+            settings_sync_error: null,
+          };
+
+      if (inst) {
+        await admin
+          .from("whatsapp_instances")
+          .update({
+            instance_name: newName,
+            status: "pending",
+            qr_code: evo.qr_code,
+            phone_number: null,
+            connected_at: null,
+            disconnected_at: new Date().toISOString(),
+            ...syncFields,
+          })
+          .eq("id", inst.id);
+      } else {
+        await admin.from("whatsapp_instances").insert({
+          company_id: body.company_id,
+          channel_id: channel.id,
+          instance_name: newName,
+          status: "pending",
+          qr_code: evo.qr_code,
+          ...syncFields,
+        });
+      }
+
+      console.log("[EVOLUTION_RECREATE_AUDIT_END]", {
+        company_id: body.company_id,
+        channel_id: channel.id,
+        old_instance_name: oldName,
+        new_instance_name: newName,
+        webhook_error: webhookErr,
+      });
+
+      return json({
+        status: "pending",
+        qr_code: evo.qr_code,
+        instance_name: newName,
+        channel_id: channel.id,
+        recreated: true,
+        old_instance_name: oldName,
+      });
     }
 
     return json({ error: "Unknown action" }, 400);
