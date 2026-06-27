@@ -15,19 +15,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info, Inbox } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 
@@ -44,13 +36,6 @@ interface ChannelRow {
   status: string;
   name: string;
 }
-
-interface DepartmentRow {
-  id: string;
-  name: string;
-  assignment_mode: string | null;
-}
-
 
 const statusVariant: Record<string, string> = {
   connected: "bg-success/10 text-success border-success/20",
@@ -71,21 +56,13 @@ const statusLabel: Record<string, string> = {
 export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
-  const { profile } = useAuth() as { profile: { is_master?: boolean; global_role?: string } | null };
   const [channels, setChannels] = useState<ChannelRow[]>([]);
-  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
-  const [inboxDeptId, setInboxDeptId] = useState<string | null>(null);
-  const [companyRole, setCompanyRole] = useState<string | null>(null);
-  const [savingInbox, setSavingInbox] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("disconnected");
   const [instanceName, setInstanceName] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
-
-  const isMaster = !!(profile?.is_master || profile?.global_role === "master");
-  const canEditInbox = isMaster || companyRole === "owner" || companyRole === "admin";
 
   const loadChannels = async () => {
     if (!activeCompanyId) return;
@@ -101,74 +78,9 @@ export default function Conexoes() {
     setChannels((data as ChannelRow[] | null) ?? []);
   };
 
-  const loadDepartments = async () => {
-    if (!activeCompanyId) return;
-    const { data, error } = await supabase
-      .from("departments")
-      .select("id, name, assignment_mode")
-      .eq("company_id", activeCompanyId)
-      .is("deleted_at", null)
-      .eq("status", "active")
-      .order("name", { ascending: true });
-    if (error) {
-      console.error("[Conexoes] loadDepartments error", error);
-      return;
-    }
-    setDepartments((data as DepartmentRow[] | null) ?? []);
-  };
-
-  const loadCompanyInbox = async () => {
-    if (!activeCompanyId) return;
-    const [{ data: comp }, { data: cu }] = await Promise.all([
-      supabase.from("companies").select("default_inbox_department_id").eq("id", activeCompanyId).maybeSingle(),
-      supabase.from("company_users").select("role").eq("company_id", activeCompanyId).eq("status", "active").maybeSingle(),
-    ]);
-    setInboxDeptId((comp as { default_inbox_department_id: string | null } | null)?.default_inbox_department_id ?? null);
-    setCompanyRole((cu as { role: string } | null)?.role ?? null);
-  };
-
   useEffect(() => {
     loadChannels();
-    loadDepartments();
-    loadCompanyInbox();
   }, [activeCompanyId]);
-
-  const inboxDeptName = (() => {
-    if (!inboxDeptId) return null;
-    return departments.find((d) => d.id === inboxDeptId)?.name ?? null;
-  })();
-
-  const updateInboxDept = async (value: string) => {
-    if (!activeCompanyId) return;
-    const next = value === "__none__" ? null : value;
-    const prev = inboxDeptId;
-    if (prev === next) return;
-    setSavingInbox(true);
-    const { error } = await supabase
-      .from("companies")
-      .update({ default_inbox_department_id: next })
-      .eq("id", activeCompanyId);
-    setSavingInbox(false);
-    if (error) {
-      toast.error(`Não foi possível salvar a entrada geral: ${error.message}`);
-      return;
-    }
-    setInboxDeptId(next);
-    try {
-      await supabase.from("audit_logs").insert({
-        company_id: activeCompanyId,
-        event_type: "company.default_inbox_department_changed",
-        metadata: {
-          old_department_id: prev,
-          new_department_id: next,
-          source: "connections_inbox_settings",
-        },
-      });
-    } catch (e) {
-      console.warn("[Conexoes] audit insert failed", (e as Error)?.message);
-    }
-    toast.success("Setor de entrada geral atualizado.");
-  };
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -273,7 +185,6 @@ export default function Conexoes() {
     const res = await callFn("disconnect");
     setLoading(false);
     if (!res) return;
-    // Only flip UI if the backend confirmed Evolution actually disconnected.
     setStatus(res.status);
     if (res.status === "disconnected") {
       setQr(null);
@@ -315,50 +226,6 @@ export default function Conexoes() {
             da integração nessa versão.
           </p>
         </div>
-
-        <Card className="mb-6 p-4 border-primary/20 bg-primary/5">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-              <Inbox className="w-5 h-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0 space-y-2">
-              <div>
-                <h3 className="font-semibold text-sm">Entrada inicial das conversas</h3>
-                <p className="text-sm text-foreground mt-0.5">
-                  {inboxDeptName ? `Recepção / Entrada Geral · ${inboxDeptName}` : "Recepção / Entrada Geral"}
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-snug">
-                Todas as novas conversas recebidas por esta conexão entram primeiro na fila geral de triagem. Depois,
-                a Recepção pode direcionar o atendimento para o setor correto pelo atendimento ou Kanban.
-              </p>
-              {canEditInbox && (
-                <div className="pt-1 max-w-sm">
-                  <label className="text-xs font-medium text-foreground">Setor de triagem (Entrada Geral)</label>
-                  <Select
-                    value={inboxDeptId ?? "__none__"}
-                    onValueChange={updateInboxDept}
-                    disabled={savingInbox}
-                  >
-                    <SelectTrigger className="h-9 mt-1">
-                      <SelectValue placeholder="Detectar automaticamente (Recepção / Entrada Geral / Triagem)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Detectar automaticamente</SelectItem>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground leading-snug mt-1">
-                    Não é possível direcionar uma conexão diretamente para Vendas, Financeiro ou Suporte nesta fase.
-                    A triagem é sempre manual a partir da Entrada Geral.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
           {CHANNEL_DEFS.map((def) => {
