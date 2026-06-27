@@ -287,11 +287,12 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("departments")
-        .select("id,name,is_active")
+        .select("id,name,status,deleted_at")
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string; is_active: boolean }[];
+      return (data ?? []).map((d: any) => ({ id: d.id, name: d.name, is_active: d.status === "active" })) as { id: string; name: string; is_active: boolean }[];
     },
   });
 
@@ -760,15 +761,15 @@ export default function Kanban() {
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
                     onEditLane={() => setLaneDialog({ open: true, lane })}
                     onDeleteLane={async () => {
-                      if (!confirm(`Arquivar esta linha?\n\nEla só pode ser arquivada se não houver colunas ou cards ativos.`)) return;
+                      if (!confirm(`Excluir esta linha?\n\nEla só pode ser excluída se não houver colunas ou cards ativos.`)) return;
                       const { error } = await (supabase as any).rpc("archive_kanban_lane", {
                         _company_id: companyId, _lane_id: lane.id,
                       });
                       if (error) {
                         const msg = /lane_has_active_content/i.test(error.message)
-                          ? "Esta linha ainda possui colunas ou cards ativos. Arquive-os ou limpe antes."
+                          ? "Esta linha ainda possui colunas ou cards ativos. Exclua-os ou limpe antes."
                           : error.message;
-                        toast({ title: "Não foi possível arquivar a linha", description: msg, variant: "destructive" });
+                        toast({ title: "Não foi possível excluir a linha", description: msg, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-lanes", companyId] });
@@ -788,15 +789,15 @@ export default function Kanban() {
                       qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
                     }}
                     onArchiveColumn={async (columnId) => {
-                      if (!confirm("Arquivar esta coluna?\n\nEla só pode ser arquivada se não houver cards ativos.")) return;
+                      if (!confirm("Excluir esta coluna?\n\nEla só pode ser excluída se não houver cards ativos.")) return;
                       const { error } = await (supabase as any).rpc("archive_kanban_column", {
                         _company_id: companyId, _column_id: columnId,
                       });
                       if (error) {
                         const msg = /column_has_active_cards/i.test(error.message)
-                          ? "Esta coluna ainda possui cards ativos. Mova ou arquive os cards antes."
+                          ? "Esta coluna ainda possui cards ativos. Mova ou exclua os cards antes."
                           : error.message;
-                        toast({ title: "Não foi possível arquivar a coluna", description: msg, variant: "destructive" });
+                        toast({ title: "Não foi possível excluir a coluna", description: msg, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
@@ -913,8 +914,8 @@ export default function Kanban() {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
                       const isManual = card?.card_type === "manual";
                       const msg = isManual
-                        ? "Arquivar este card manual?\n\nEle será removido da visualização do Kanban."
-                        : "Arquivar este card do Kanban?\n\nIsso não exclui o contato, atendimento ou oportunidade vinculada.";
+                        ? "Excluir este card do Kanban?\n\nIsso remove apenas o card. O item original (contato, atendimento ou oportunidade) não será excluído."
+                        : "Excluir este card do Kanban?\n\nIsso remove apenas o card. O contato, atendimento ou oportunidade vinculada não será excluído.";
                       if (!confirm(msg)) return;
                       const { error } = await (supabase as any).rpc("archive_kanban_card", {
                         _company_id: companyId, _card_id: cardId,
@@ -1173,7 +1174,7 @@ function LaneRow({
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={onDeleteLane}>
-                  <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar linha
+                  <Archive className="h-3.5 w-3.5 mr-2" /> Excluir linha
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1269,7 +1270,7 @@ function LaneRow({
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive" onClick={() => onArchiveColumn(col.id)}>
-                                <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar coluna
+                                <Archive className="h-3.5 w-3.5 mr-2" /> Excluir coluna
                               </DropdownMenuItem>
                             </>
                           )}
@@ -1349,7 +1350,7 @@ function LaneRow({
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem className="text-destructive" onClick={() => onDeleteCard(card.id)}>
-                                  <Archive className="h-3 w-3 mr-2" /> Arquivar
+                                  <Archive className="h-3 w-3 mr-2" /> Excluir
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -1582,11 +1583,17 @@ function LaneDialog({
             <div className="space-y-1.5">
               <Label>Setor vinculado</Label>
               <Select value={departmentId} onValueChange={setDepartmentId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione um setor" /></SelectTrigger>
                 <SelectContent>
-                  {departments.filter((d) => d.is_active).map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
+                  {departments.filter((d) => d.is_active).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      Nenhum setor ativo encontrado. Crie um setor em Configuração &gt; Setores.
+                    </div>
+                  ) : (
+                    departments.filter((d) => d.is_active).map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
