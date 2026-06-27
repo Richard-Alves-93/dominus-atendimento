@@ -372,12 +372,27 @@ Deno.serve(async (req) => {
     });
 
     if (!result.ok) {
+      if (result.connectionLost) {
+        try {
+          await admin
+            .from("whatsapp_instances")
+            .update({ status: "disconnected", settings_sync_error: "Evolution reportou conexão perdida no envio." })
+            .eq("instance_name", instance.instance_name);
+        } catch (e) {
+          console.warn("[WA_INSTANCE_STATUS_UPDATE_FAIL]", (e as Error)?.message);
+        }
+      }
+      const friendly = result.friendlyReason ?? "Não foi possível enviar a mensagem.";
       return json({
         ok: false,
         success: false,
         status: "failed",
+        step: result.connectionLost ? "provider_disconnected" : "provider_error",
+        error: friendly,
         message_id: inserted.id,
         failure_reason: result.failureReason ?? "unknown",
+        friendly_reason: friendly,
+        connection_lost: result.connectionLost === true,
         evolution_status: result.status ?? null,
         body_raw: result.bodyRaw ?? null,
       });
