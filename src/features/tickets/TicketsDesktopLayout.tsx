@@ -1911,11 +1911,14 @@ const TicketsDesktopLayout = () => {
         prev.map((p) => (p.tempId === vars.tempId ? { ...p, status: "error" } : p)),
       );
       const expired = e?.code === 401;
+      const disconnected = e?.code === "WA_DISCONNECTED";
       toast({
         title: expired
           ? "Sua sessão expirou. Faça login novamente."
+          : disconnected
+          ? "WhatsApp desconectado"
           : "Não foi possível enviar a mensagem. Tente novamente.",
-        description: expired ? undefined : e.message,
+        description: expired ? undefined : disconnected ? "Reconecte a instância em Conexões e tente novamente." : e.message,
         variant: "destructive",
       });
     },
