@@ -143,6 +143,7 @@ interface Props {
   setSearch: (s: string) => void;
   canSeeGeneralQueue: boolean;
   activeDepts: AnyDept[];
+  canSeeAllDepartmentsOption?: boolean;
   deptFilter: string;
   setDeptFilter: (id: string) => void;
   // E.1 — read-only extras
@@ -241,6 +242,7 @@ export default function TicketsMobileLayout(props: Props) {
     activeDepts,
     deptFilter,
     setDeptFilter,
+    canSeeAllDepartmentsOption = true,
     reactionsByMsg,
     canEditSelected = false,
     canAcceptSelected = false,
@@ -567,7 +569,7 @@ export default function TicketsMobileLayout(props: Props) {
                 ariaLabel="Filtro de atendimentos"
                 className="flex-1"
               />
-              {activeDepts.length > 0 && (
+              {activeDepts.length > 0 && (canSeeAllDepartmentsOption || activeDepts.length > 1) && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
@@ -585,14 +587,16 @@ export default function TicketsMobileLayout(props: Props) {
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-56 p-1">
-                    <button
-                      onClick={() => setDeptFilter("all")}
-                      className={`w-full text-left text-sm px-3 py-2 rounded-md hover:bg-muted ${
-                        deptFilter === "all" ? "bg-muted font-medium" : ""
-                      }`}
-                    >
-                      Todos os setores
-                    </button>
+                    {canSeeAllDepartmentsOption && (
+                      <button
+                        onClick={() => setDeptFilter("all")}
+                        className={`w-full text-left text-sm px-3 py-2 rounded-md hover:bg-muted ${
+                          deptFilter === "all" ? "bg-muted font-medium" : ""
+                        }`}
+                      >
+                        Todos os setores
+                      </button>
+                    )}
                     {activeDepts.map((d) => (
                       <button
                         key={d.id}
