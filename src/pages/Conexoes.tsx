@@ -315,6 +315,51 @@ export default function Conexoes() {
             da integração nessa versão.
           </p>
         </div>
+
+        <Card className="mb-6 p-4 border-primary/20 bg-primary/5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+              <Inbox className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-2">
+              <div>
+                <h3 className="font-semibold text-sm">Entrada inicial das conversas</h3>
+                <p className="text-sm text-foreground mt-0.5">
+                  {inboxDeptName ? `Recepção / Entrada Geral · ${inboxDeptName}` : "Recepção / Entrada Geral"}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-snug">
+                Todas as novas conversas recebidas por esta conexão entram primeiro na fila geral de triagem. Depois,
+                a Recepção pode direcionar o atendimento para o setor correto pelo atendimento ou Kanban.
+              </p>
+              {canEditInbox && (
+                <div className="pt-1 max-w-sm">
+                  <label className="text-xs font-medium text-foreground">Setor de triagem (Entrada Geral)</label>
+                  <Select
+                    value={inboxDeptId ?? "__none__"}
+                    onValueChange={updateInboxDept}
+                    disabled={savingInbox}
+                  >
+                    <SelectTrigger className="h-9 mt-1">
+                      <SelectValue placeholder="Detectar automaticamente (Recepção / Entrada Geral / Triagem)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Detectar automaticamente</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                    Não é possível direcionar uma conexão diretamente para Vendas, Financeiro ou Suporte nesta fase.
+                    A triagem é sempre manual a partir da Entrada Geral.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
           {CHANNEL_DEFS.map((def) => {
             const existing = channels.find((c) => c.channel_type === def.type);
