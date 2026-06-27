@@ -91,10 +91,13 @@ export default function Conexoes() {
 
   useEffect(() => stopPolling, []);
 
-  const callFn = async (action: "create_or_connect" | "status" | "disconnect") => {
+  const callFn = async (
+    action: "create_or_connect" | "status" | "disconnect" | "recreate",
+    extra: Record<string, unknown> = {},
+  ) => {
     if (!activeCompanyId) return null;
     const { data, error } = await supabase.functions.invoke("whatsapp-connection", {
-      body: { action, company_id: activeCompanyId },
+      body: { action, company_id: activeCompanyId, ...extra },
     });
     if (error) {
       toast.error(error.message);
@@ -102,9 +105,9 @@ export default function Conexoes() {
     }
     if (data && (data as { error?: string }).error) {
       toast.error((data as { error: string }).error);
-      return data as { status: string; qr_code?: string | null; instance_name?: string | null };
+      return data as { status: string; qr_code?: string | null; instance_name?: string | null; can_recreate?: boolean };
     }
-    return data as { status: string; qr_code?: string | null; instance_name?: string | null };
+    return data as { status: string; qr_code?: string | null; instance_name?: string | null; recreated?: boolean; forced?: boolean };
   };
 
   const invalidateContactCaches = async (reason: "whatsapp_disconnect" | "whatsapp_reconnect") => {
