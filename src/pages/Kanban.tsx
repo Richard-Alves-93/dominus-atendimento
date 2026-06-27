@@ -1174,7 +1174,7 @@ function LaneRow({
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={onDeleteLane}>
-                  <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar linha
+                  <Archive className="h-3.5 w-3.5 mr-2" /> Excluir linha
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1270,7 +1270,7 @@ function LaneRow({
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive" onClick={() => onArchiveColumn(col.id)}>
-                                <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar coluna
+                                <Archive className="h-3.5 w-3.5 mr-2" /> Excluir coluna
                               </DropdownMenuItem>
                             </>
                           )}
@@ -1350,7 +1350,7 @@ function LaneRow({
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem className="text-destructive" onClick={() => onDeleteCard(card.id)}>
-                                  <Archive className="h-3 w-3 mr-2" /> Arquivar
+                                  <Archive className="h-3 w-3 mr-2" /> Excluir
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
