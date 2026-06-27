@@ -182,6 +182,7 @@ export type Database = {
       companies: {
         Row: {
           created_at: string
+          default_inbox_department_id: string | null
           document: string | null
           email: string | null
           id: string
@@ -194,6 +195,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_inbox_department_id?: string | null
           document?: string | null
           email?: string | null
           id?: string
@@ -206,6 +208,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_inbox_department_id?: string | null
           document?: string | null
           email?: string | null
           id?: string
@@ -216,7 +219,15 @@ export type Database = {
           status?: Database["public"]["Enums"]["company_status"]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "companies_default_inbox_department_id_fkey"
+            columns: ["default_inbox_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_settings: {
         Row: {

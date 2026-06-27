@@ -22,11 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info, Inbox } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 
@@ -42,7 +43,6 @@ interface ChannelRow {
   channel_type: string;
   status: string;
   name: string;
-  default_department_id: string | null;
 }
 
 interface DepartmentRow {
@@ -71,9 +71,12 @@ const statusLabel: Record<string, string> = {
 export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
+  const { profile } = useAuth() as { profile: { is_master?: boolean; global_role?: string } | null };
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
-  const [savingDept, setSavingDept] = useState<string | null>(null);
+  const [inboxDeptId, setInboxDeptId] = useState<string | null>(null);
+  const [companyRole, setCompanyRole] = useState<string | null>(null);
+  const [savingInbox, setSavingInbox] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
@@ -81,11 +84,14 @@ export default function Conexoes() {
   const [instanceName, setInstanceName] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
+  const isMaster = !!(profile?.is_master || profile?.global_role === "master");
+  const canEditInbox = isMaster || companyRole === "owner" || companyRole === "admin";
+
   const loadChannels = async () => {
     if (!activeCompanyId) return;
     const { data, error } = await supabase
       .from("channels")
-      .select("id, channel_type, status, name, default_department_id")
+      .select("id, channel_type, status, name")
       .eq("company_id", activeCompanyId);
     if (error) {
       console.error("[Conexoes] loadChannels error", error);
@@ -111,45 +117,57 @@ export default function Conexoes() {
     setDepartments((data as DepartmentRow[] | null) ?? []);
   };
 
+  const loadCompanyInbox = async () => {
+    if (!activeCompanyId) return;
+    const [{ data: comp }, { data: cu }] = await Promise.all([
+      supabase.from("companies").select("default_inbox_department_id").eq("id", activeCompanyId).maybeSingle(),
+      supabase.from("company_users").select("role").eq("company_id", activeCompanyId).eq("status", "active").maybeSingle(),
+    ]);
+    setInboxDeptId((comp as { default_inbox_department_id: string | null } | null)?.default_inbox_department_id ?? null);
+    setCompanyRole((cu as { role: string } | null)?.role ?? null);
+  };
+
   useEffect(() => {
     loadChannels();
     loadDepartments();
+    loadCompanyInbox();
   }, [activeCompanyId]);
 
-  const updateDefaultDepartment = async (channel: ChannelRow, value: string) => {
+  const inboxDeptName = (() => {
+    if (!inboxDeptId) return null;
+    return departments.find((d) => d.id === inboxDeptId)?.name ?? null;
+  })();
+
+  const updateInboxDept = async (value: string) => {
+    if (!activeCompanyId) return;
     const next = value === "__none__" ? null : value;
-    const prev = channel.default_department_id ?? null;
+    const prev = inboxDeptId;
     if (prev === next) return;
-    setSavingDept(channel.id);
+    setSavingInbox(true);
     const { error } = await supabase
-      .from("channels")
-      .update({ default_department_id: next })
-      .eq("id", channel.id)
-      .eq("company_id", activeCompanyId!);
-    setSavingDept(null);
+      .from("companies")
+      .update({ default_inbox_department_id: next })
+      .eq("id", activeCompanyId);
+    setSavingInbox(false);
     if (error) {
-      toast.error(`Não foi possível salvar o setor padrão: ${error.message}`);
+      toast.error(`Não foi possível salvar a entrada geral: ${error.message}`);
       return;
     }
-    setChannels((prevList) =>
-      prevList.map((c) => (c.id === channel.id ? { ...c, default_department_id: next } : c)),
-    );
+    setInboxDeptId(next);
     try {
       await supabase.from("audit_logs").insert({
-        company_id: activeCompanyId!,
-        event_type: "connection.default_department_changed",
+        company_id: activeCompanyId,
+        event_type: "company.default_inbox_department_changed",
         metadata: {
-          connection_id: channel.id,
-          connection_name: channel.name,
           old_department_id: prev,
           new_department_id: next,
-          source: "admin_panel",
+          source: "connections_inbox_settings",
         },
       });
     } catch (e) {
       console.warn("[Conexoes] audit insert failed", (e as Error)?.message);
     }
-    toast.success("Setor padrão atualizado.");
+    toast.success("Setor de entrada geral atualizado.");
   };
 
   const stopPolling = () => {
@@ -297,6 +315,51 @@ export default function Conexoes() {
             da integração nessa versão.
           </p>
         </div>
+
+        <Card className="mb-6 p-4 border-primary/20 bg-primary/5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+              <Inbox className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-2">
+              <div>
+                <h3 className="font-semibold text-sm">Entrada inicial das conversas</h3>
+                <p className="text-sm text-foreground mt-0.5">
+                  {inboxDeptName ? `Recepção / Entrada Geral · ${inboxDeptName}` : "Recepção / Entrada Geral"}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-snug">
+                Todas as novas conversas recebidas por esta conexão entram primeiro na fila geral de triagem. Depois,
+                a Recepção pode direcionar o atendimento para o setor correto pelo atendimento ou Kanban.
+              </p>
+              {canEditInbox && (
+                <div className="pt-1 max-w-sm">
+                  <label className="text-xs font-medium text-foreground">Setor de triagem (Entrada Geral)</label>
+                  <Select
+                    value={inboxDeptId ?? "__none__"}
+                    onValueChange={updateInboxDept}
+                    disabled={savingInbox}
+                  >
+                    <SelectTrigger className="h-9 mt-1">
+                      <SelectValue placeholder="Detectar automaticamente (Recepção / Entrada Geral / Triagem)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Detectar automaticamente</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                    Não é possível direcionar uma conexão diretamente para Vendas, Financeiro ou Suporte nesta fase.
+                    A triagem é sempre manual a partir da Entrada Geral.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-4">
           {CHANNEL_DEFS.map((def) => {
             const existing = channels.find((c) => c.channel_type === def.type);
@@ -330,36 +393,7 @@ export default function Conexoes() {
                 </div>
                 <h3 className="font-semibold">{def.name}</h3>
                 <p className="text-sm text-muted-foreground flex-1 mt-1">{def.desc}</p>
-                {def.available && existing && (
-                  <div className="mt-4 space-y-1.5">
-                    <label className="text-xs font-medium text-foreground">
-                      Setor padrão de entrada
-                    </label>
-                    <Select
-                      value={existing.default_department_id ?? "__none__"}
-                      onValueChange={(v) => updateDefaultDepartment(existing, v)}
-                      disabled={savingDept === existing.id}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Sem setor padrão" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Sem setor padrão</SelectItem>
-                        {departments.map((d) => (
-                          <SelectItem key={d.id} value={d.id}>
-                            {d.name}
-                            {d.assignment_mode === "round_robin" ? " · Rotativo" : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      {existing.default_department_id
-                        ? "Novos atendimentos recebidos por esta conexão entrarão automaticamente neste setor. Se o setor estiver em modo rotativo, poderão ser distribuídos entre os usuários ativos."
-                        : "Sem setor padrão. Os novos atendimentos entrarão na fila geral conforme regra atual."}
-                    </p>
-                  </div>
-                )}
+
                 <Button
                   className="mt-4 w-full"
                   variant={def.available ? "default" : "outline"}
