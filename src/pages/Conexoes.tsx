@@ -22,11 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info } from "lucide-react";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info, Inbox } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 
@@ -42,7 +43,6 @@ interface ChannelRow {
   channel_type: string;
   status: string;
   name: string;
-  default_department_id: string | null;
 }
 
 interface DepartmentRow {
@@ -71,9 +71,12 @@ const statusLabel: Record<string, string> = {
 export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
+  const { profile } = useAuth() as { profile: { is_master?: boolean; global_role?: string } | null };
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
-  const [savingDept, setSavingDept] = useState<string | null>(null);
+  const [inboxDeptId, setInboxDeptId] = useState<string | null>(null);
+  const [companyRole, setCompanyRole] = useState<string | null>(null);
+  const [savingInbox, setSavingInbox] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
@@ -81,11 +84,14 @@ export default function Conexoes() {
   const [instanceName, setInstanceName] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
+  const isMaster = !!(profile?.is_master || profile?.global_role === "master");
+  const canEditInbox = isMaster || companyRole === "owner" || companyRole === "admin";
+
   const loadChannels = async () => {
     if (!activeCompanyId) return;
     const { data, error } = await supabase
       .from("channels")
-      .select("id, channel_type, status, name, default_department_id")
+      .select("id, channel_type, status, name")
       .eq("company_id", activeCompanyId);
     if (error) {
       console.error("[Conexoes] loadChannels error", error);
@@ -111,45 +117,57 @@ export default function Conexoes() {
     setDepartments((data as DepartmentRow[] | null) ?? []);
   };
 
+  const loadCompanyInbox = async () => {
+    if (!activeCompanyId) return;
+    const [{ data: comp }, { data: cu }] = await Promise.all([
+      supabase.from("companies").select("default_inbox_department_id").eq("id", activeCompanyId).maybeSingle(),
+      supabase.from("company_users").select("role").eq("company_id", activeCompanyId).eq("status", "active").maybeSingle(),
+    ]);
+    setInboxDeptId((comp as { default_inbox_department_id: string | null } | null)?.default_inbox_department_id ?? null);
+    setCompanyRole((cu as { role: string } | null)?.role ?? null);
+  };
+
   useEffect(() => {
     loadChannels();
     loadDepartments();
+    loadCompanyInbox();
   }, [activeCompanyId]);
 
-  const updateDefaultDepartment = async (channel: ChannelRow, value: string) => {
+  const inboxDeptName = (() => {
+    if (!inboxDeptId) return null;
+    return departments.find((d) => d.id === inboxDeptId)?.name ?? null;
+  })();
+
+  const updateInboxDept = async (value: string) => {
+    if (!activeCompanyId) return;
     const next = value === "__none__" ? null : value;
-    const prev = channel.default_department_id ?? null;
+    const prev = inboxDeptId;
     if (prev === next) return;
-    setSavingDept(channel.id);
+    setSavingInbox(true);
     const { error } = await supabase
-      .from("channels")
-      .update({ default_department_id: next })
-      .eq("id", channel.id)
-      .eq("company_id", activeCompanyId!);
-    setSavingDept(null);
+      .from("companies")
+      .update({ default_inbox_department_id: next })
+      .eq("id", activeCompanyId);
+    setSavingInbox(false);
     if (error) {
-      toast.error(`Não foi possível salvar o setor padrão: ${error.message}`);
+      toast.error(`Não foi possível salvar a entrada geral: ${error.message}`);
       return;
     }
-    setChannels((prevList) =>
-      prevList.map((c) => (c.id === channel.id ? { ...c, default_department_id: next } : c)),
-    );
+    setInboxDeptId(next);
     try {
       await supabase.from("audit_logs").insert({
-        company_id: activeCompanyId!,
-        event_type: "connection.default_department_changed",
+        company_id: activeCompanyId,
+        event_type: "company.default_inbox_department_changed",
         metadata: {
-          connection_id: channel.id,
-          connection_name: channel.name,
           old_department_id: prev,
           new_department_id: next,
-          source: "admin_panel",
+          source: "connections_inbox_settings",
         },
       });
     } catch (e) {
       console.warn("[Conexoes] audit insert failed", (e as Error)?.message);
     }
-    toast.success("Setor padrão atualizado.");
+    toast.success("Setor de entrada geral atualizado.");
   };
 
   const stopPolling = () => {
