@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Columns3, Plus, Search, Loader2, MoreVertical, ArrowRightLeft,
   User as UserIcon, Building, Briefcase, ListFilter, LinkIcon, ExternalLink,
-  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Archive, Pencil,
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Archive, Pencil, Tag as TagIcon,
 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,8 @@ import {
   useLatestTransfers,
 } from "@/features/kanban/TicketTransferHistoryDialog";
 import CreateOpportunityFromCardDialog from "@/features/kanban/CreateOpportunityFromCardDialog";
+import TagPickerDialog, { type TagEntityType } from "@/features/tags/TagPickerDialog";
+import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
@@ -375,6 +377,7 @@ export default function Kanban() {
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
   const [createOppDialog, setCreateOppDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
   const [editCardDialog, setEditCardDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
+  const [tagDialog, setTagDialog] = useState<{ open: boolean; entityType: TagEntityType | null; entityId: string | null; label?: string }>({ open: false, entityType: null, entityId: null });
 
   // K.9: lista leve de membros para filtro de responsável (Master/Admin/Manager)
   const membersQ = useQuery({
@@ -436,6 +439,9 @@ export default function Kanban() {
     }
     return { tickets: [...t], contacts: [...c], opportunities: [...o] };
   }, [cardsQ.data]);
+
+  // T.1 — etiquetas dos cards visíveis (batch)
+  const tagsMapQ = useEntityTags(companyId, (cardsQ.data ?? []) as any);
 
   const linkEnrichQ = useQuery({
     queryKey: [
@@ -743,6 +749,19 @@ export default function Kanban() {
                     linkEnrich={linkEnrich}
                     linkEnrichLoaded={linkEnrichQ.isSuccess}
                     latestTransfers={latestTransfers}
+                    tagsMap={tagsMapQ.data}
+                    onOpenTags={(card) => {
+                      let et: TagEntityType | null = null;
+                      let id: string | null = null;
+                      if (card.card_type === "ticket" && card.ticket_id) { et = "ticket"; id = card.ticket_id; }
+                      else if (card.card_type === "contact" && card.contact_id) { et = "contact"; id = card.contact_id; }
+                      else if (card.card_type === "opportunity" && card.opportunity_id) { et = "opportunity"; id = card.opportunity_id; }
+                      if (!et || !id) {
+                        toast({ title: "Etiquetas indisponíveis", description: "Este tipo de card ainda não suporta etiquetas.", variant: "destructive" });
+                        return;
+                      }
+                      setTagDialog({ open: true, entityType: et, entityId: id, label: card.title });
+                    }}
                     onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
                     onCreateOpportunity={(card) => setCreateOppDialog({ open: true, card })}
                     onOpenLinked={(card) => {
@@ -1065,6 +1084,18 @@ export default function Kanban() {
         members={membersQ.data ?? []}
         onSaved={() => qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] })}
       />
+
+      <TagPickerDialog
+        open={tagDialog.open && !!tagDialog.entityType && !!tagDialog.entityId}
+        onClose={() => {
+          setTagDialog({ open: false, entityType: null, entityId: null });
+          qc.invalidateQueries({ queryKey: ["entity-tags", companyId] });
+        }}
+        companyId={companyId}
+        entityType={(tagDialog.entityType ?? "ticket") as TagEntityType}
+        entityId={tagDialog.entityId ?? ""}
+        entityLabel={tagDialog.label}
+      />
     </AppLayout>
   );
 }
@@ -1087,6 +1118,7 @@ function LaneRow({
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
   onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onEditCard,
+  tagsMap, onOpenTags,
 }: {
   lane: Lane;
   columns: Column[];
@@ -1115,6 +1147,8 @@ function LaneRow({
   onArchiveColumn?: (columnId: string) => void;
   onMoveCardOrder?: (cardId: string, direction: "up" | "down") => void;
   onEditCard?: (card: CardRow) => void;
+  tagsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
+  onOpenTags?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
@@ -1317,6 +1351,11 @@ function LaneRow({
                                         <Briefcase className="h-3 w-3 mr-2" /> Criar oportunidade
                                       </DropdownMenuItem>
                                     )}
+                                    {onOpenTags && card.card_type !== "manual" && (
+                                      <DropdownMenuItem onClick={() => onOpenTags(card)}>
+                                        <TagIcon className="h-3 w-3 mr-2" /> Etiquetas
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
@@ -1361,6 +1400,10 @@ function LaneRow({
                             {card.description}
                           </p>
                         )}
+                        {tagsMap && (() => {
+                          const tags = tagsForCard(tagsMap, card as any);
+                          return tags.length > 0 ? <div className="mt-1.5"><CardTagsBadges tags={tags} max={3} /></div> : null;
+                        })()}
                         <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                           <Badge variant="outline" className="text-[9px] px-1 py-0">
                             {card.card_type === "manual" ? "Manual"
