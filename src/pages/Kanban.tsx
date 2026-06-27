@@ -1025,6 +1025,15 @@ export default function Kanban() {
           qc.invalidateQueries({ queryKey: ["opportunities"] });
         }}
       />
+
+      <EditManualCardDialog
+        open={editCardDialog.open}
+        onOpenChange={(v) => setEditCardDialog((s) => ({ ...s, open: v }))}
+        card={editCardDialog.card}
+        companyId={companyId}
+        members={membersQ.data ?? []}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] })}
+      />
     </AppLayout>
   );
 }
