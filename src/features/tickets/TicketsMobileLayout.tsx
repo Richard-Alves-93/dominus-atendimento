@@ -242,6 +242,7 @@ export default function TicketsMobileLayout(props: Props) {
     activeDepts,
     deptFilter,
     setDeptFilter,
+    canSeeAllDepartmentsOption = true,
     reactionsByMsg,
     canEditSelected = false,
     canAcceptSelected = false,
