@@ -511,7 +511,7 @@ export default function Kanban() {
         kind: "opportunity" as const,
         id: o.id,
         label: o.title || "Oportunidade",
-        sub: o.contact?.name || o.contact?.phone || "",
+        sub: o.contact?.name || o.contact?.phone_number || "",
         extra: typeof o.amount === "number"
           ? `R$ ${Number(o.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
           : undefined,
