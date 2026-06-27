@@ -1583,11 +1583,17 @@ function LaneDialog({
             <div className="space-y-1.5">
               <Label>Setor vinculado</Label>
               <Select value={departmentId} onValueChange={setDepartmentId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione um setor" /></SelectTrigger>
                 <SelectContent>
-                  {departments.filter((d) => d.is_active).map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
+                  {departments.filter((d) => d.is_active).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      Nenhum setor ativo encontrado. Crie um setor em Configuração &gt; Setores.
+                    </div>
+                  ) : (
+                    departments.filter((d) => d.is_active).map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
