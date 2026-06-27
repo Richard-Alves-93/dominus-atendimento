@@ -287,11 +287,12 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("departments")
-        .select("id,name,is_active")
+        .select("id,name,status,deleted_at")
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .order("name");
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string; is_active: boolean }[];
+      return (data ?? []).map((d: any) => ({ id: d.id, name: d.name, is_active: d.status === "active" })) as { id: string; name: string; is_active: boolean }[];
     },
   });
 
