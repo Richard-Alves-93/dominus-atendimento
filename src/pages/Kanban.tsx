@@ -363,7 +363,7 @@ export default function Kanban() {
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "me" | userId
   const [globalSearch, setGlobalSearch] = useState("");
 
-  const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
+  const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null; presetType?: LaneType }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
