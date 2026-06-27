@@ -377,6 +377,7 @@ export default function Kanban() {
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
   const [createOppDialog, setCreateOppDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
   const [editCardDialog, setEditCardDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
+  const [tagDialog, setTagDialog] = useState<{ open: boolean; entityType: TagEntityType | null; entityId: string | null; label?: string }>({ open: false, entityType: null, entityId: null });
 
   // K.9: lista leve de membros para filtro de responsável (Master/Admin/Manager)
   const membersQ = useQuery({
