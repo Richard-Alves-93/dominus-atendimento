@@ -1046,6 +1046,7 @@ function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, linkEnrichLoaded, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
+  onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onEditCard,
 }: {
   lane: Lane;
   columns: Column[];
@@ -1069,6 +1070,11 @@ function LaneRow({
   latestTransfers: Record<string, any>;
   onOpenTransferHistory: (ticketId: string) => void;
   onCreateOpportunity?: (card: CardRow) => void;
+  onMoveLane?: (direction: "up" | "down") => void;
+  onMoveColumn?: (columnId: string, direction: "left" | "right") => void;
+  onArchiveColumn?: (columnId: string) => void;
+  onMoveCardOrder?: (cardId: string, direction: "up" | "down") => void;
+  onEditCard?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
