@@ -2651,7 +2651,8 @@ const TicketsDesktopLayout = () => {
           search={search}
           setSearch={setSearch}
           canSeeGeneralQueue={canSeeGeneralQueue}
-          activeDepts={activeDepts}
+          activeDepts={visibleDeptsForFilter}
+          canSeeAllDepartmentsOption={canSeeAllDepartmentsOption}
           deptFilter={deptFilter}
           setDeptFilter={setDeptFilter}
           reactionsByMsg={reactionsByMsg}
