@@ -1880,10 +1880,12 @@ const TicketsDesktopLayout = () => {
         throw err;
       }
       const d = data as any;
-      if (d?.ok === false || d?.error) {
-        const detail = d?.detail ? ` — ${d.detail}` : "";
-        const err: any = new Error(`[${d?.step ?? "erro"}] ${d?.error ?? "Falha"}${detail}`);
+      if (d?.ok === false || (d?.error && d?.success !== true)) {
+        const friendly = d?.friendly_reason ?? d?.error ?? "Falha ao enviar";
+        const err: any = new Error(friendly);
         if (d?.step === "auth") err.code = 401;
+        if (d?.connection_lost) err.code = "WA_DISCONNECTED";
+        err.failureReason = d?.failure_reason;
         throw err;
       }
       return { data, tempId: vars.tempId, ticketId: vars.ticketId };
@@ -1909,11 +1911,14 @@ const TicketsDesktopLayout = () => {
         prev.map((p) => (p.tempId === vars.tempId ? { ...p, status: "error" } : p)),
       );
       const expired = e?.code === 401;
+      const disconnected = e?.code === "WA_DISCONNECTED";
       toast({
         title: expired
           ? "Sua sessão expirou. Faça login novamente."
+          : disconnected
+          ? "WhatsApp desconectado"
           : "Não foi possível enviar a mensagem. Tente novamente.",
-        description: expired ? undefined : e.message,
+        description: expired ? undefined : disconnected ? "Reconecte a instância em Conexões e tente novamente." : e.message,
         variant: "destructive",
       });
     },

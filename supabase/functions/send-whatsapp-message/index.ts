@@ -86,7 +86,7 @@ async function dispatchToEvolution(params: {
   quotedProviderId?: string | null;
   quotedFromMe?: boolean;
   quotedText?: string | null;
-}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
+}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; friendlyReason?: string; connectionLost?: boolean; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
   const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText } = params;
   let quoteFallbackUsed = false;
   try {
@@ -135,10 +135,22 @@ async function dispatchToEvolution(params: {
         null;
       const detail = (typeof nested === "string" ? nested : JSON.stringify(nested ?? evoData)).slice(0, 400);
       const failureReason = `evolution_${evoRes.status}: ${detail}`;
+      const lowered = `${detail} ${evoText}`.toLowerCase();
+      const connectionLost =
+        lowered.includes("error connection") ||
+        lowered.includes("connection closed") ||
+        lowered.includes("not connected") ||
+        lowered.includes("connection is not open") ||
+        lowered.includes("instance not connected") ||
+        lowered.includes("instance is not connected");
+      const friendlyReason = connectionLost
+        ? "WhatsApp desconectado. Reconecte a instância em Conexões."
+        : `Falha no provedor WhatsApp (HTTP ${evoRes.status}).`;
       console.error("[EVOLUTION_SEND_RESPONSE]", {
         message_id: messageId,
         status: evoRes.status,
         ok: false,
+        connection_lost: connectionLost,
         body_raw_truncated: evoText.slice(0, 600),
         error_message_truncated: detail.slice(0, 300),
         payload_shape: "number+text",
@@ -152,7 +164,7 @@ async function dispatchToEvolution(params: {
         failure_reason: failureReason,
         raw: evoData,
       }).eq("id", messageId);
-      return { ok: false, status: evoRes.status, failureReason, bodyRaw: evoText.slice(0, 300) };
+      return { ok: false, status: evoRes.status, failureReason, friendlyReason, connectionLost, bodyRaw: evoText.slice(0, 300) };
     }
 
     const externalId =
@@ -360,12 +372,27 @@ Deno.serve(async (req) => {
     });
 
     if (!result.ok) {
+      if (result.connectionLost) {
+        try {
+          await admin
+            .from("whatsapp_instances")
+            .update({ status: "disconnected", settings_sync_error: "Evolution reportou conexão perdida no envio." })
+            .eq("instance_name", instance.instance_name);
+        } catch (e) {
+          console.warn("[WA_INSTANCE_STATUS_UPDATE_FAIL]", (e as Error)?.message);
+        }
+      }
+      const friendly = result.friendlyReason ?? "Não foi possível enviar a mensagem.";
       return json({
         ok: false,
         success: false,
         status: "failed",
+        step: result.connectionLost ? "provider_disconnected" : "provider_error",
+        error: friendly,
         message_id: inserted.id,
         failure_reason: result.failureReason ?? "unknown",
+        friendly_reason: friendly,
+        connection_lost: result.connectionLost === true,
         evolution_status: result.status ?? null,
         body_raw: result.bodyRaw ?? null,
       });
