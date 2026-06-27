@@ -183,9 +183,9 @@ export default function Conexoes() {
     }, 4000);
   };
 
-  const disconnect = async () => {
+  const disconnect = async (force = false) => {
     setLoading(true);
-    const res = await callFn("disconnect");
+    const res = await callFn("disconnect", force ? { force: true } : {});
     setLoading(false);
     if (!res) return;
     setStatus(res.status);
@@ -193,9 +193,36 @@ export default function Conexoes() {
       setQr(null);
       stopPolling();
       await invalidateContactCaches("whatsapp_disconnect");
-      toast.success("WhatsApp desconectado.");
+      toast.success(force ? "Conexão marcada como desconectada localmente." : "WhatsApp desconectado.");
     }
     await loadChannels();
+  };
+
+  const recreateInstance = async () => {
+    if (!confirm("Isso vai recriar a instância do WhatsApp na Evolution e gerar um novo QR Code. Seus contatos, atendimentos e mensagens NÃO serão afetados. Continuar?")) return;
+    setLoading(true);
+    const res = await callFn("recreate");
+    setLoading(false);
+    if (!res) return;
+    await invalidateContactCaches("whatsapp_reconnect");
+    setStatus(res.status);
+    setQr(res.qr_code ?? null);
+    setInstanceName(res.instance_name ?? null);
+    await loadChannels();
+    toast.success("Instância recriada. Escaneie o novo QR Code.");
+
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      const s = await callFn("status");
+      if (!s) return;
+      setStatus(s.status);
+      setQr(s.qr_code ?? null);
+      if (s.status === "connected" || s.status === "error") {
+        stopPolling();
+        await loadChannels();
+        if (s.status === "connected") toast.success("WhatsApp conectado!");
+      }
+    }, 4000);
   };
 
   const reapplySettings = async (channelId: string) => {
