@@ -1092,9 +1092,6 @@ export default function Kanban() {
         entityType={(tagDialog.entityType ?? "ticket") as TagEntityType}
         entityId={tagDialog.entityId ?? ""}
         entityLabel={tagDialog.label}
-        onChanged={() => {
-          qc.invalidateQueries({ queryKey: ["entity-tags", companyId] });
-        }}
       />
     </AppLayout>
   );
