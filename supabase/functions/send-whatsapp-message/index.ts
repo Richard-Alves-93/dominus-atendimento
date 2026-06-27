@@ -86,7 +86,7 @@ async function dispatchToEvolution(params: {
   quotedProviderId?: string | null;
   quotedFromMe?: boolean;
   quotedText?: string | null;
-}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
+}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; friendlyReason?: string; connectionLost?: boolean; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
   const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText } = params;
   let quoteFallbackUsed = false;
   try {
