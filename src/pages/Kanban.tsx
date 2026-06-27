@@ -321,7 +321,7 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tickets")
-        .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name),assignee:profiles!tickets_assigned_user_id_fkey(full_name)")
+        .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone_number),department:departments(name),assignee:profiles!tickets_assigned_user_id_fkey(full_name)")
         .eq("company_id", companyId)
         .in("status", ["open", "pending"])
         .order("updated_at", { ascending: false })
@@ -330,7 +330,7 @@ export default function Kanban() {
         // Fallback simples se o alias de FK não casar
         const r = await (supabase as any)
           .from("tickets")
-          .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name)")
+          .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone_number),department:departments(name)")
           .eq("company_id", companyId)
           .in("status", ["open", "pending"])
           .order("updated_at", { ascending: false })
