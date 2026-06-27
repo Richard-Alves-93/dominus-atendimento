@@ -1570,6 +1570,9 @@ function LaneDialog({
                 <SelectItem value="personal">Pessoal</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Use <strong>Personalizada</strong> para organização livre. Use <strong>Setor</strong> apenas quando a linha representar um setor real da empresa. Use <strong>Comercial</strong> para oportunidades e vendas. Use <strong>Pessoal</strong> para organização individual.
+            </p>
           </div>
           {laneType === "department" && (
             <div className="space-y-1.5">
