@@ -1084,6 +1084,19 @@ export default function Kanban() {
         members={membersQ.data ?? []}
         onSaved={() => qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] })}
       />
+
+      <TagPickerDialog
+        open={tagDialog.open}
+        onOpenChange={(v) => setTagDialog((s) => ({ ...s, open: v }))}
+        companyId={companyId}
+        entityType={tagDialog.entityType}
+        entityId={tagDialog.entityId}
+        entityLabel={tagDialog.label}
+        onChanged={() => {
+          // invalida tags do batch
+          qc.invalidateQueries({ queryKey: ["entity-tags", companyId] });
+        }}
+      />
     </AppLayout>
   );
 }
