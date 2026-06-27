@@ -731,17 +731,55 @@ export default function Kanban() {
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
                     onEditLane={() => setLaneDialog({ open: true, lane })}
                     onDeleteLane={async () => {
-                      if (!confirm(`Ocultar a linha "${lane.name}"? Esta ação pode ser revertida pelo banco.`)) return;
-                      const { error } = await (supabase as any)
-                        .from("kanban_lanes")
-                        .update({ deleted_at: new Date().toISOString(), is_active: false })
-                        .eq("id", lane.id);
+                      if (!confirm(`Arquivar esta linha?\n\nEla só pode ser arquivada se não houver colunas ou cards ativos.`)) return;
+                      const { error } = await (supabase as any).rpc("archive_kanban_lane", {
+                        _company_id: companyId, _lane_id: lane.id,
+                      });
                       if (error) {
-                        toast({ title: "Erro", description: error.message, variant: "destructive" });
+                        const msg = /lane_has_active_content/i.test(error.message)
+                          ? "Esta linha ainda possui colunas ou cards ativos. Arquive-os ou limpe antes."
+                          : error.message;
+                        toast({ title: "Não foi possível arquivar a linha", description: msg, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-lanes", companyId] });
                     }}
+                    onMoveLane={async (direction) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_lane", {
+                        _company_id: companyId, _lane_id: lane.id, _direction: direction,
+                      });
+                      if (error) { toast({ title: "Erro ao mover linha", description: error.message, variant: "destructive" }); return; }
+                      qc.invalidateQueries({ queryKey: ["kanban-lanes", companyId] });
+                    }}
+                    onMoveColumn={async (columnId, direction) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_column", {
+                        _company_id: companyId, _column_id: columnId, _direction: direction,
+                      });
+                      if (error) { toast({ title: "Erro ao mover coluna", description: error.message, variant: "destructive" }); return; }
+                      qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
+                    }}
+                    onArchiveColumn={async (columnId) => {
+                      if (!confirm("Arquivar esta coluna?\n\nEla só pode ser arquivada se não houver cards ativos.")) return;
+                      const { error } = await (supabase as any).rpc("archive_kanban_column", {
+                        _company_id: companyId, _column_id: columnId,
+                      });
+                      if (error) {
+                        const msg = /column_has_active_cards/i.test(error.message)
+                          ? "Esta coluna ainda possui cards ativos. Mova ou arquive os cards antes."
+                          : error.message;
+                        toast({ title: "Não foi possível arquivar a coluna", description: msg, variant: "destructive" });
+                        return;
+                      }
+                      qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
+                    }}
+                    onMoveCardOrder={async (cardId, direction) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_card", {
+                        _company_id: companyId, _card_id: cardId, _direction: direction,
+                      });
+                      if (error) { toast({ title: "Erro ao mover card", description: error.message, variant: "destructive" }); return; }
+                      qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                    }}
+                    onEditCard={(card) => setEditCardDialog({ open: true, card })}
                     onMoveCard={async (cardId, newColumnId) => {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
                       if (!card) return;
@@ -843,13 +881,20 @@ export default function Kanban() {
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
                     onDeleteCard={async (cardId) => {
-                      if (!confirm("Remover este card?")) return;
-                      const { error } = await (supabase as any)
-                        .from("kanban_cards")
-                        .update({ deleted_at: new Date().toISOString() })
-                        .eq("id", cardId);
+                      const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
+                      const isManual = card?.card_type === "manual";
+                      const msg = isManual
+                        ? "Arquivar este card manual?\n\nEle será removido da visualização do Kanban."
+                        : "Arquivar este card do Kanban?\n\nIsso não exclui o contato, atendimento ou oportunidade vinculada.";
+                      if (!confirm(msg)) return;
+                      const { error } = await (supabase as any).rpc("archive_kanban_card", {
+                        _company_id: companyId, _card_id: cardId,
+                      });
                       if (error) {
-                        toast({ title: "Erro", description: error.message, variant: "destructive" });
+                        const friendly = /forbidden_archive_card/i.test(error.message)
+                          ? "Você não tem permissão para arquivar este card."
+                          : error.message;
+                        toast({ title: "Não foi possível arquivar", description: friendly, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
