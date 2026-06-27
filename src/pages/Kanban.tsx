@@ -1106,6 +1106,7 @@ function LaneRow({
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
   onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onEditCard,
+  tagsMap, onOpenTags,
 }: {
   lane: Lane;
   columns: Column[];
@@ -1134,6 +1135,8 @@ function LaneRow({
   onArchiveColumn?: (columnId: string) => void;
   onMoveCardOrder?: (cardId: string, direction: "up" | "down") => void;
   onEditCard?: (card: CardRow) => void;
+  tagsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
+  onOpenTags?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
