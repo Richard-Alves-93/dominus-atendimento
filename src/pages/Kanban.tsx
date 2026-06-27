@@ -1432,10 +1432,11 @@ function LaneRow({
 /* =================================================================== */
 
 function LaneDialog({
-  open, lane, departments, companyId, userId, canManageCompany, onClose, onSaved,
+  open, lane, presetType, departments, companyId, userId, canManageCompany, onClose, onSaved,
 }: {
   open: boolean;
   lane: Lane | null;
+  presetType?: LaneType | null;
   departments: { id: string; name: string; is_active: boolean }[];
   companyId: string;
   userId: string | null;
