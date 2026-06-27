@@ -749,6 +749,19 @@ export default function Kanban() {
                     linkEnrich={linkEnrich}
                     linkEnrichLoaded={linkEnrichQ.isSuccess}
                     latestTransfers={latestTransfers}
+                    tagsMap={tagsMapQ.data}
+                    onOpenTags={(card) => {
+                      let et: TagEntityType | null = null;
+                      let id: string | null = null;
+                      if (card.card_type === "ticket" && card.ticket_id) { et = "ticket"; id = card.ticket_id; }
+                      else if (card.card_type === "contact" && card.contact_id) { et = "contact"; id = card.contact_id; }
+                      else if (card.card_type === "opportunity" && card.opportunity_id) { et = "opportunity"; id = card.opportunity_id; }
+                      if (!et || !id) {
+                        toast({ title: "Etiquetas indisponíveis", description: "Este tipo de card ainda não suporta etiquetas.", variant: "destructive" });
+                        return;
+                      }
+                      setTagDialog({ open: true, entityType: et, entityId: id, label: card.title });
+                    }}
                     onOpenTransferHistory={(ticketId) => setTransferHistory({ open: true, ticketId })}
                     onCreateOpportunity={(card) => setCreateOppDialog({ open: true, card })}
                     onOpenLinked={(card) => {
