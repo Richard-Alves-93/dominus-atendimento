@@ -964,6 +964,7 @@ export default function Kanban() {
       <LaneDialog
         open={laneDialog.open}
         lane={laneDialog.lane ?? null}
+        presetType={laneDialog.presetType ?? null}
         departments={departmentsQ.data ?? []}
         companyId={companyId}
         userId={user?.id ?? null}
