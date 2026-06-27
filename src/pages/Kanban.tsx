@@ -1492,7 +1492,7 @@ function LaneDialog({
       return;
     }
     if (laneType === "department" && !departmentId) {
-      toast({ title: "Selecione o setor vinculado", variant: "destructive" });
+      toast({ title: "Selecione um setor vinculado para criar uma linha do tipo Setor.", variant: "destructive" });
       return;
     }
     if (laneType === "department" && opEnabled && opReturn) {
