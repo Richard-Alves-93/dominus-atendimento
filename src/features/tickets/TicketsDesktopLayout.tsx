@@ -518,6 +518,31 @@ const TicketsDesktopLayout = () => {
   }, [deptsQuery.data, myDeptIds, isAdmin]);
   const canSeeGeneralQueue = isAdmin || generalQueueDeptIds.length > 0;
 
+  // Visibilidade do filtro de setores por perfil.
+  // - Master/Admin: vê todos os setores + opção "Todos os setores".
+  // - Gerente: vê apenas setores que gerencia + opção "Todos" (limitada).
+  // - Atendente comum: vê apenas setores aos quais pertence; sem "Todos".
+  const canSeeAllDepartmentsOption = isAdmin || isManager;
+  const visibleDeptsForFilter = useMemo(() => {
+    if (isAdmin) return activeDepts;
+    if (isManager) return activeDepts.filter((d) => myManagedDeptIds.includes(d.id));
+    return activeDepts.filter((d) => myDeptIds.includes(d.id));
+  }, [activeDepts, isAdmin, isManager, myManagedDeptIds, myDeptIds]);
+
+  // Reseta deptFilter se a opção atual não for mais permitida ao usuário.
+  useEffect(() => {
+    if (deptFilter === "all") {
+      if (!canSeeAllDepartmentsOption) {
+        const fallback = visibleDeptsForFilter[0]?.id ?? "all";
+        if (fallback !== "all") setDeptFilter(fallback);
+      }
+      return;
+    }
+    if (!visibleDeptsForFilter.some((d) => d.id === deptFilter)) {
+      setDeptFilter(canSeeAllDepartmentsOption ? "all" : (visibleDeptsForFilter[0]?.id ?? "all"));
+    }
+  }, [deptFilter, canSeeAllDepartmentsOption, visibleDeptsForFilter]);
+
   const ticketsQuery = useQuery({
     queryKey: ["tickets", activeCompanyId, filter, deptFilter, profile?.id, isAdmin, myDeptIds.join(","), generalQueueDeptIds.join(",")],
     enabled: !!activeCompanyId && (isAdmin || myDeptsQuery.isFetched || !profile?.id),
