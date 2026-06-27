@@ -530,6 +530,147 @@ export default function Setores() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <KanbanSetupDialog
+        open={kanbanSetup.open}
+        departmentId={kanbanSetup.departmentId}
+        departmentName={kanbanSetup.departmentName}
+        companyId={activeCompanyId ?? null}
+        userId={profile?.id ?? null}
+        onClose={() => setKanbanSetup({ open: false })}
+      />
     </AppLayout>
+  );
+}
+
+const KANBAN_TEMPLATES: Record<string, { label: string; columns: string[] }> = {
+  blank: { label: "Criar em branco", columns: [] },
+  atendimento: { label: "Modelo Atendimento", columns: ["Novo", "Em atendimento", "Aguardando cliente", "Encaminhar", "Resolvido"] },
+  comercial: { label: "Modelo Comercial", columns: ["Novo lead", "Em atendimento", "Proposta enviada", "Negociação", "Ganha", "Perdida"] },
+  suporte: { label: "Modelo Suporte", columns: ["Novo chamado", "Em análise", "Aguardando cliente", "Em solução", "Resolvido"] },
+};
+
+function KanbanSetupDialog({
+  open, departmentId, departmentName, companyId, userId, onClose,
+}: {
+  open: boolean;
+  departmentId?: string;
+  departmentName?: string;
+  companyId: string | null;
+  userId: string | null;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  const writeAudit = async (event_type: string, metadata: Record<string, any>) => {
+    try {
+      await (supabase as any).from("audit_logs").insert({
+        company_id: companyId,
+        event_type,
+        changed_by: userId,
+        metadata: { source: "departments_kanban_setup", department_id: departmentId, ...metadata },
+      });
+    } catch {}
+  };
+
+  const apply = async (templateKey: keyof typeof KANBAN_TEMPLATES | "later") => {
+    if (!companyId || !departmentId) return;
+    if (templateKey === "later") {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    try {
+      // Duplicate check
+      const { data: existing } = await (supabase as any)
+        .from("kanban_lanes")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("department_id", departmentId)
+        .eq("lane_type", "department")
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (existing?.id) {
+        toast({ title: "Este setor já possui uma linha no Kanban.", variant: "destructive" });
+        setBusy(false);
+        onClose();
+        return;
+      }
+      // Determine next position
+      const { data: lastPos } = await (supabase as any)
+        .from("kanban_lanes")
+        .select("position")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .order("position", { ascending: false })
+        .limit(1);
+      const nextPos = ((lastPos?.[0]?.position as number) ?? -1) + 1;
+
+      const { data: lane, error: laneErr } = await (supabase as any)
+        .from("kanban_lanes")
+        .insert({
+          company_id: companyId,
+          name: departmentName,
+          lane_type: "department",
+          department_id: departmentId,
+          is_personal: false,
+          owner_user_id: null,
+          is_active: true,
+          position: nextPos,
+          created_by: userId,
+        })
+        .select("id")
+        .single();
+      if (laneErr) throw laneErr;
+
+      await writeAudit("kanban.department_lane_created", { lane_id: lane.id, template: templateKey });
+
+      const cols = KANBAN_TEMPLATES[templateKey].columns;
+      if (cols.length > 0) {
+        const payload = cols.map((name, i) => ({
+          company_id: companyId,
+          lane_id: lane.id,
+          name,
+          position: i,
+        }));
+        const { error: colErr } = await (supabase as any).from("kanban_columns").insert(payload);
+        if (colErr) throw colErr;
+        await writeAudit("kanban.department_lane_template_applied", {
+          lane_id: lane.id,
+          template: templateKey,
+          columns: cols,
+        });
+      }
+
+      toast({ title: "Kanban configurado", description: `Linha do setor "${departmentName}" criada.` });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Erro ao configurar Kanban", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Deseja configurar o Kanban deste setor?</DialogTitle>
+          <DialogDescription>
+            Você pode criar uma linha no Kanban para organizar os atendimentos deste setor. Escolha um modelo pronto ou comece em branco.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Button variant="outline" disabled={busy} onClick={() => apply("blank")}>Criar em branco</Button>
+          <Button variant="outline" disabled={busy} onClick={() => apply("atendimento")}>Modelo Atendimento</Button>
+          <Button variant="outline" disabled={busy} onClick={() => apply("comercial")}>Modelo Comercial</Button>
+          <Button variant="outline" disabled={busy} onClick={() => apply("suporte")}>Modelo Suporte</Button>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" disabled={busy} onClick={() => apply("later")}>Configurar depois</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
