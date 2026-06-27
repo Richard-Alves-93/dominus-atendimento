@@ -1459,7 +1459,7 @@ function LaneDialog({
   useEffect(() => {
     if (open) {
       setName(lane?.name ?? "");
-      setLaneType((lane?.lane_type as LaneType) ?? "custom");
+      setLaneType((lane?.lane_type as LaneType) ?? presetType ?? "custom");
       setDepartmentId(lane?.department_id ?? "");
       setIsActive(lane?.is_active ?? true);
       setOpEnabled(lane?.operational_enabled ?? false);
