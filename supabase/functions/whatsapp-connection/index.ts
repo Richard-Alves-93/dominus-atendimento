@@ -228,6 +228,22 @@ async function evoLogout(instanceName: string) {
   return { ok: (res as Response).ok, status: (res as Response).status, body: text };
 }
 
+async function evoDeleteInstance(instanceName: string) {
+  // Evolution v2.3.x: DELETE /instance/delete/{instance}
+  const res = await fetch(`${evoBase()}/instance/delete/${instanceName}`, {
+    method: "DELETE",
+    headers: evoHeaders(),
+  }).catch((e) => ({ ok: false, status: 0, text: async () => String((e as Error)?.message ?? e) } as any));
+  const text = await (res as Response).text().catch(() => "");
+  console.log("[EVOLUTION_DELETE_RESPONSE]", {
+    status: (res as Response).status,
+    ok: (res as Response).ok,
+    body_raw_truncated: text.slice(0, 240),
+    endpoint_path: `/instance/delete/${instanceName}`,
+  });
+  return { ok: (res as Response).ok, status: (res as Response).status, body: text };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
