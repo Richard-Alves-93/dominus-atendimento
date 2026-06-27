@@ -1205,9 +1205,37 @@ function LaneRow({
                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onAddCard(col.id)} title="Novo card">
                         <Plus className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onEditColumn?.(col)} title="Editar coluna">
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title="Ações da coluna">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onEditColumn?.(col)}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar coluna
+                          </DropdownMenuItem>
+                          {onMoveColumn && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => onMoveColumn(col.id, "left")}>
+                                <ArrowLeft className="h-3.5 w-3.5 mr-2" /> Mover para esquerda
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onMoveColumn(col.id, "right")}>
+                                <ArrowRight className="h-3.5 w-3.5 mr-2" /> Mover para direita
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {onArchiveColumn && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onClick={() => onArchiveColumn(col.id)}>
+                                <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar coluna
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   )}
                 </div>
