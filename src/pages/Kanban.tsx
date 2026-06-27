@@ -761,15 +761,15 @@ export default function Kanban() {
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
                     onEditLane={() => setLaneDialog({ open: true, lane })}
                     onDeleteLane={async () => {
-                      if (!confirm(`Arquivar esta linha?\n\nEla só pode ser arquivada se não houver colunas ou cards ativos.`)) return;
+                      if (!confirm(`Excluir esta linha?\n\nEla só pode ser excluída se não houver colunas ou cards ativos.`)) return;
                       const { error } = await (supabase as any).rpc("archive_kanban_lane", {
                         _company_id: companyId, _lane_id: lane.id,
                       });
                       if (error) {
                         const msg = /lane_has_active_content/i.test(error.message)
-                          ? "Esta linha ainda possui colunas ou cards ativos. Arquive-os ou limpe antes."
+                          ? "Esta linha ainda possui colunas ou cards ativos. Exclua-os ou limpe antes."
                           : error.message;
-                        toast({ title: "Não foi possível arquivar a linha", description: msg, variant: "destructive" });
+                        toast({ title: "Não foi possível excluir a linha", description: msg, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-lanes", companyId] });
@@ -789,15 +789,15 @@ export default function Kanban() {
                       qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
                     }}
                     onArchiveColumn={async (columnId) => {
-                      if (!confirm("Arquivar esta coluna?\n\nEla só pode ser arquivada se não houver cards ativos.")) return;
+                      if (!confirm("Excluir esta coluna?\n\nEla só pode ser excluída se não houver cards ativos.")) return;
                       const { error } = await (supabase as any).rpc("archive_kanban_column", {
                         _company_id: companyId, _column_id: columnId,
                       });
                       if (error) {
                         const msg = /column_has_active_cards/i.test(error.message)
-                          ? "Esta coluna ainda possui cards ativos. Mova ou arquive os cards antes."
+                          ? "Esta coluna ainda possui cards ativos. Mova ou exclua os cards antes."
                           : error.message;
-                        toast({ title: "Não foi possível arquivar a coluna", description: msg, variant: "destructive" });
+                        toast({ title: "Não foi possível excluir a coluna", description: msg, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
@@ -914,8 +914,8 @@ export default function Kanban() {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
                       const isManual = card?.card_type === "manual";
                       const msg = isManual
-                        ? "Arquivar este card manual?\n\nEle será removido da visualização do Kanban."
-                        : "Arquivar este card do Kanban?\n\nIsso não exclui o contato, atendimento ou oportunidade vinculada.";
+                        ? "Excluir este card do Kanban?\n\nIsso remove apenas o card. O item original (contato, atendimento ou oportunidade) não será excluído."
+                        : "Excluir este card do Kanban?\n\nIsso remove apenas o card. O contato, atendimento ou oportunidade vinculada não será excluído.";
                       if (!confirm(msg)) return;
                       const { error } = await (supabase as any).rpc("archive_kanban_card", {
                         _company_id: companyId, _card_id: cardId,
