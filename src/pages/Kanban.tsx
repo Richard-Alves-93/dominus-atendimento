@@ -348,7 +348,7 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("opportunities")
-        .select("id,title,amount,status,assigned_user_id,contact_id,ticket_id,contact:contacts(name,phone)")
+        .select("id,title,amount,status,assigned_user_id,contact_id,ticket_id,contact:contacts(name,phone_number)")
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
