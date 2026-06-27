@@ -454,19 +454,19 @@ export default function Kanban() {
       if (linkIds.contacts.length) {
         const { data } = await (supabase as any)
           .from("contacts")
-          .select("id,name,phone")
+          .select("id,name,phone_number")
           .eq("company_id", companyId)
           .in("id", linkIds.contacts);
-        for (const r of data ?? []) out.contacts[r.id] = { name: r.name, phone: r.phone };
+        for (const r of data ?? []) out.contacts[r.id] = { name: r.name, phone: r.phone_number };
       }
       if (linkIds.tickets.length) {
         const { data } = await (supabase as any)
           .from("tickets")
-          .select("id,status,contact:contacts(name,phone),department:departments(name)")
+          .select("id,status,contact:contacts(name,phone_number),department:departments(name)")
           .eq("company_id", companyId)
           .in("id", linkIds.tickets);
         for (const r of data ?? []) out.tickets[r.id] = {
-          contact_name: r.contact?.name || r.contact?.phone || null,
+          contact_name: r.contact?.name || r.contact?.phone_number || null,
           department_name: r.department?.name || null,
           status: r.status,
         };
