@@ -67,6 +67,7 @@ export default function Setores() {
   const [targetId, setTargetId] = useState<string>("");
   const [form, setForm] = useState({ name: "", description: "", status: "active" as "active" | "inactive", allow_general_queue: false, allow_stalled_takeover: false, assignment_mode: "manual" as "manual" | "round_robin" });
   const [busy, setBusy] = useState(false);
+  const [kanbanSetup, setKanbanSetup] = useState<{ open: boolean; departmentId?: string; departmentName?: string }>({ open: false });
 
   const load = async () => {
     if (!activeCompanyId) return;
