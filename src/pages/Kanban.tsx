@@ -34,6 +34,8 @@ import {
   useLatestTransfers,
 } from "@/features/kanban/TicketTransferHistoryDialog";
 import CreateOpportunityFromCardDialog from "@/features/kanban/CreateOpportunityFromCardDialog";
+import TagPickerDialog, { type TagEntityType } from "@/features/tags/TagPickerDialog";
+import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
