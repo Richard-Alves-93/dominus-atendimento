@@ -1087,7 +1087,10 @@ export default function Kanban() {
 
       <TagPickerDialog
         open={tagDialog.open && !!tagDialog.entityType && !!tagDialog.entityId}
-        onClose={() => setTagDialog({ open: false, entityType: null, entityId: null })}
+        onClose={() => {
+          setTagDialog({ open: false, entityType: null, entityId: null });
+          qc.invalidateQueries({ queryKey: ["entity-tags", companyId] });
+        }}
         companyId={companyId}
         entityType={(tagDialog.entityType ?? "ticket") as TagEntityType}
         entityId={tagDialog.entityId ?? ""}
