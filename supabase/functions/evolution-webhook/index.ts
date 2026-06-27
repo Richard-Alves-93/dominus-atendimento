@@ -1298,27 +1298,43 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       .limit(1)
       .maybeSingle();
     if (!ticket) {
-      // R.4.3: resolve default department from channel (same company), tolerant to errors.
+      // Entrada Geral (Recepção/Triagem): new conversations always land in the
+      // company-wide triage inbox, never directly in commercial departments.
+      // Resolution order:
+      //  1) companies.default_inbox_department_id (config explícita)
+      //  2) setor por nome: Recepção / Entrada Geral / Triagem
+      // Errors must NEVER break inbound persistence.
       let defaultDeptId: string | null = null;
       try {
-        const { data: ch } = await admin
-          .from("channels")
-          .select("default_department_id, company_id")
-          .eq("id", inst.channel_id)
-          .eq("company_id", inst.company_id)
+        const { data: comp } = await admin
+          .from("companies")
+          .select("default_inbox_department_id")
+          .eq("id", inst.company_id)
           .maybeSingle();
-        if (ch?.default_department_id) {
+        if (comp?.default_inbox_department_id) {
           const { data: dep } = await admin
             .from("departments")
             .select("id")
-            .eq("id", ch.default_department_id)
+            .eq("id", comp.default_inbox_department_id)
             .eq("company_id", inst.company_id)
             .is("deleted_at", null)
             .maybeSingle();
           if (dep?.id) defaultDeptId = dep.id;
         }
+        if (!defaultDeptId) {
+          const { data: depByName } = await admin
+            .from("departments")
+            .select("id, name")
+            .eq("company_id", inst.company_id)
+            .is("deleted_at", null)
+            .eq("status", "active")
+            .or("name.ilike.recep%,name.ilike.entrada geral%,name.ilike.triagem%")
+            .limit(1)
+            .maybeSingle();
+          if (depByName?.id) defaultDeptId = depByName.id;
+        }
       } catch (e) {
-        console.warn("[DEFAULT_DEPT] resolve_failed", (e as Error)?.message);
+        console.warn("[INBOX_DEPT] resolve_failed", (e as Error)?.message);
       }
       const insertPayload: Record<string, unknown> = {
         company_id: inst.company_id,
