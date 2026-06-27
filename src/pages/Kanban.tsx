@@ -302,12 +302,16 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("contacts")
-        .select("id,name,phone")
+        .select("id,name,phone_number")
         .eq("company_id", companyId)
         .order("updated_at", { ascending: false })
         .limit(40);
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string | null; phone: string | null }[];
+      return (data ?? []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone_number,
+      })) as { id: string; name: string | null; phone: string | null }[];
     },
   });
 
@@ -317,7 +321,7 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("tickets")
-        .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name),assignee:profiles!tickets_assigned_user_id_fkey(full_name)")
+        .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone_number),department:departments(name),assignee:profiles!tickets_assigned_user_id_fkey(full_name)")
         .eq("company_id", companyId)
         .in("status", ["open", "pending"])
         .order("updated_at", { ascending: false })
@@ -326,7 +330,7 @@ export default function Kanban() {
         // Fallback simples se o alias de FK não casar
         const r = await (supabase as any)
           .from("tickets")
-          .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone),department:departments(name)")
+          .select("id,contact_id,status,department_id,assigned_user_id,updated_at,contact:contacts(name,phone_number),department:departments(name)")
           .eq("company_id", companyId)
           .in("status", ["open", "pending"])
           .order("updated_at", { ascending: false })
@@ -344,7 +348,7 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("opportunities")
-        .select("id,title,amount,status,assigned_user_id,contact_id,ticket_id,contact:contacts(name,phone)")
+        .select("id,title,amount,status,assigned_user_id,contact_id,ticket_id,contact:contacts(name,phone_number)")
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
@@ -450,19 +454,19 @@ export default function Kanban() {
       if (linkIds.contacts.length) {
         const { data } = await (supabase as any)
           .from("contacts")
-          .select("id,name,phone")
+          .select("id,name,phone_number")
           .eq("company_id", companyId)
           .in("id", linkIds.contacts);
-        for (const r of data ?? []) out.contacts[r.id] = { name: r.name, phone: r.phone };
+        for (const r of data ?? []) out.contacts[r.id] = { name: r.name, phone: r.phone_number };
       }
       if (linkIds.tickets.length) {
         const { data } = await (supabase as any)
           .from("tickets")
-          .select("id,status,contact:contacts(name,phone),department:departments(name)")
+          .select("id,status,contact:contacts(name,phone_number),department:departments(name)")
           .eq("company_id", companyId)
           .in("id", linkIds.tickets);
         for (const r of data ?? []) out.tickets[r.id] = {
-          contact_name: r.contact?.name || r.contact?.phone || null,
+          contact_name: r.contact?.name || r.contact?.phone_number || null,
           department_name: r.department?.name || null,
           status: r.status,
         };
@@ -498,7 +502,7 @@ export default function Kanban() {
       items = (ticketsQ.data ?? []).map((t: any) => ({
         kind: "ticket" as const,
         id: t.id,
-        label: t.contact?.name || t.contact?.phone || "Atendimento",
+        label: t.contact?.name || t.contact?.phone_number || "Atendimento",
         sub: [t.department?.name, t.status === "open" ? "Aberto" : "Pendente"].filter(Boolean).join(" • "),
         extra: t.assignee?.full_name || undefined,
       }));
@@ -507,7 +511,7 @@ export default function Kanban() {
         kind: "opportunity" as const,
         id: o.id,
         label: o.title || "Oportunidade",
-        sub: o.contact?.name || o.contact?.phone || "",
+        sub: o.contact?.name || o.contact?.phone_number || "",
         extra: typeof o.amount === "number"
           ? `R$ ${Number(o.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
           : undefined,
