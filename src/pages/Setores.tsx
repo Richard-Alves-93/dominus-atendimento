@@ -175,6 +175,7 @@ export default function Setores() {
           assignment_mode: form.assignment_mode,
           status: form.status,
         });
+        setKanbanSetup({ open: true, departmentId: created.id, departmentName: form.name.trim() });
       }
       toast({ title: "Setor criado" });
       setCreating(false);
