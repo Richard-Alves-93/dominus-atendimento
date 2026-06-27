@@ -302,12 +302,16 @@ export default function Kanban() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("contacts")
-        .select("id,name,phone")
+        .select("id,name,phone_number")
         .eq("company_id", companyId)
         .order("updated_at", { ascending: false })
         .limit(40);
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string | null; phone: string | null }[];
+      return (data ?? []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone_number,
+      })) as { id: string; name: string | null; phone: string | null }[];
     },
   });
 
