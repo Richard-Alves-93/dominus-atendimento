@@ -363,7 +363,7 @@ export default function Kanban() {
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "me" | userId
   const [globalSearch, setGlobalSearch] = useState("");
 
-  const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null }>({ open: false });
+  const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null; presetType?: LaneType }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
   const [cardDialog, setCardDialog] = useState<{ open: boolean; laneId?: string; columnId?: string }>({ open: false });
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
@@ -693,14 +693,39 @@ export default function Kanban() {
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando...
               </div>
             ) : lanes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center p-6">
-                <Columns3 className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground mb-3">
-                  Nenhuma linha criada ainda. Crie a primeira linha para começar.
-                </p>
-                <Button size="sm" onClick={() => setLaneDialog({ open: true, lane: null })}>
-                  <Plus className="h-4 w-4 mr-1" /> Nova linha
-                </Button>
+              <div className="flex flex-col items-center justify-center min-h-full text-center p-6">
+                <div className="max-w-md w-full rounded-lg border border-dashed bg-card/50 p-6 space-y-4">
+                  <div className="flex justify-center">
+                    <Columns3 className="h-10 w-10 text-muted-foreground/50" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-semibold">Nenhuma linha criada ainda</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Crie sua primeira linha para organizar atendimentos, oportunidades ou tarefas.
+                    </p>
+                  </div>
+                  <ul className="text-xs text-muted-foreground text-left space-y-1 bg-muted/30 rounded-md p-3">
+                    <li><strong className="text-foreground">Personalizada:</strong> para organizar livremente</li>
+                    <li><strong className="text-foreground">Setor:</strong> para representar um setor real da empresa</li>
+                    <li><strong className="text-foreground">Comercial:</strong> para funil de vendas</li>
+                    <li><strong className="text-foreground">Pessoal:</strong> para organização individual</li>
+                  </ul>
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <Button size="sm" onClick={() => setLaneDialog({ open: true, lane: null, presetType: "custom" })}>
+                      <Plus className="h-4 w-4 mr-1" /> Criar linha personalizada
+                    </Button>
+                    {canManage && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => setLaneDialog({ open: true, lane: null, presetType: "commercial" })}>
+                          Criar linha comercial
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setLaneDialog({ open: true, lane: null, presetType: "department" })}>
+                          Criar linha de setor
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-4 p-3 md:p-4">
@@ -939,6 +964,7 @@ export default function Kanban() {
       <LaneDialog
         open={laneDialog.open}
         lane={laneDialog.lane ?? null}
+        presetType={laneDialog.presetType ?? null}
         departments={departmentsQ.data ?? []}
         companyId={companyId}
         userId={user?.id ?? null}
@@ -1406,10 +1432,11 @@ function LaneRow({
 /* =================================================================== */
 
 function LaneDialog({
-  open, lane, departments, companyId, userId, canManageCompany, onClose, onSaved,
+  open, lane, presetType, departments, companyId, userId, canManageCompany, onClose, onSaved,
 }: {
   open: boolean;
   lane: Lane | null;
+  presetType?: LaneType | null;
   departments: { id: string; name: string; is_active: boolean }[];
   companyId: string;
   userId: string | null;
@@ -1432,7 +1459,7 @@ function LaneDialog({
   useEffect(() => {
     if (open) {
       setName(lane?.name ?? "");
-      setLaneType((lane?.lane_type as LaneType) ?? "custom");
+      setLaneType((lane?.lane_type as LaneType) ?? presetType ?? "custom");
       setDepartmentId(lane?.department_id ?? "");
       setIsActive(lane?.is_active ?? true);
       setOpEnabled(lane?.operational_enabled ?? false);
@@ -1465,7 +1492,7 @@ function LaneDialog({
       return;
     }
     if (laneType === "department" && !departmentId) {
-      toast({ title: "Selecione o setor vinculado", variant: "destructive" });
+      toast({ title: "Selecione um setor vinculado para criar uma linha do tipo Setor.", variant: "destructive" });
       return;
     }
     if (laneType === "department" && opEnabled && opReturn) {
@@ -1543,6 +1570,9 @@ function LaneDialog({
                 <SelectItem value="personal">Pessoal</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Use <strong>Personalizada</strong> para organização livre. Use <strong>Setor</strong> apenas quando a linha representar um setor real da empresa. Use <strong>Comercial</strong> para oportunidades e vendas. Use <strong>Pessoal</strong> para organização individual.
+            </p>
           </div>
           {laneType === "department" && (
             <div className="space-y-1.5">
