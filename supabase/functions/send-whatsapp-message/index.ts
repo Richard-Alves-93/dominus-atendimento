@@ -135,10 +135,22 @@ async function dispatchToEvolution(params: {
         null;
       const detail = (typeof nested === "string" ? nested : JSON.stringify(nested ?? evoData)).slice(0, 400);
       const failureReason = `evolution_${evoRes.status}: ${detail}`;
+      const lowered = `${detail} ${evoText}`.toLowerCase();
+      const connectionLost =
+        lowered.includes("error connection") ||
+        lowered.includes("connection closed") ||
+        lowered.includes("not connected") ||
+        lowered.includes("connection is not open") ||
+        lowered.includes("instance not connected") ||
+        lowered.includes("instance is not connected");
+      const friendlyReason = connectionLost
+        ? "WhatsApp desconectado. Reconecte a instância em Conexões."
+        : `Falha no provedor WhatsApp (HTTP ${evoRes.status}).`;
       console.error("[EVOLUTION_SEND_RESPONSE]", {
         message_id: messageId,
         status: evoRes.status,
         ok: false,
+        connection_lost: connectionLost,
         body_raw_truncated: evoText.slice(0, 600),
         error_message_truncated: detail.slice(0, 300),
         payload_shape: "number+text",
@@ -152,7 +164,7 @@ async function dispatchToEvolution(params: {
         failure_reason: failureReason,
         raw: evoData,
       }).eq("id", messageId);
-      return { ok: false, status: evoRes.status, failureReason, bodyRaw: evoText.slice(0, 300) };
+      return { ok: false, status: evoRes.status, failureReason, friendlyReason, connectionLost, bodyRaw: evoText.slice(0, 300) };
     }
 
     const externalId =
