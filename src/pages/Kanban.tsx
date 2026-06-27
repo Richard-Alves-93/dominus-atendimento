@@ -2048,6 +2048,7 @@ function EditManualCardDialog({
   members: { user_id: string; name: string }[];
   onSaved: () => void;
 }) {
+  const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState<string>("none");
