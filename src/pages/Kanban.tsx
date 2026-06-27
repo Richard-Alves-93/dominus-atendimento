@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Columns3, Plus, Search, Loader2, MoreVertical, Trash2, ArrowRightLeft,
   User as UserIcon, Building, Briefcase, ListFilter, LinkIcon, ExternalLink,
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Archive, Pencil,
 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
