@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Columns3, Plus, Search, Loader2, MoreVertical, Trash2, ArrowRightLeft,
+  Columns3, Plus, Search, Loader2, MoreVertical, ArrowRightLeft,
   User as UserIcon, Building, Briefcase, ListFilter, LinkIcon, ExternalLink,
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Archive, Pencil,
 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
@@ -368,6 +369,7 @@ export default function Kanban() {
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: SideItem | null }>({ open: false });
   const [transferHistory, setTransferHistory] = useState<{ open: boolean; ticketId: string | null }>({ open: false, ticketId: null });
   const [createOppDialog, setCreateOppDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
+  const [editCardDialog, setEditCardDialog] = useState<{ open: boolean; card: CardRow | null }>({ open: false, card: null });
 
   // K.9: lista leve de membros para filtro de responsável (Master/Admin/Manager)
   const membersQ = useQuery({
@@ -729,17 +731,55 @@ export default function Kanban() {
                     onAddCard={(columnId) => setCardDialog({ open: true, laneId: lane.id, columnId })}
                     onEditLane={() => setLaneDialog({ open: true, lane })}
                     onDeleteLane={async () => {
-                      if (!confirm(`Ocultar a linha "${lane.name}"? Esta ação pode ser revertida pelo banco.`)) return;
-                      const { error } = await (supabase as any)
-                        .from("kanban_lanes")
-                        .update({ deleted_at: new Date().toISOString(), is_active: false })
-                        .eq("id", lane.id);
+                      if (!confirm(`Arquivar esta linha?\n\nEla só pode ser arquivada se não houver colunas ou cards ativos.`)) return;
+                      const { error } = await (supabase as any).rpc("archive_kanban_lane", {
+                        _company_id: companyId, _lane_id: lane.id,
+                      });
                       if (error) {
-                        toast({ title: "Erro", description: error.message, variant: "destructive" });
+                        const msg = /lane_has_active_content/i.test(error.message)
+                          ? "Esta linha ainda possui colunas ou cards ativos. Arquive-os ou limpe antes."
+                          : error.message;
+                        toast({ title: "Não foi possível arquivar a linha", description: msg, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-lanes", companyId] });
                     }}
+                    onMoveLane={async (direction) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_lane", {
+                        _company_id: companyId, _lane_id: lane.id, _direction: direction,
+                      });
+                      if (error) { toast({ title: "Erro ao mover linha", description: error.message, variant: "destructive" }); return; }
+                      qc.invalidateQueries({ queryKey: ["kanban-lanes", companyId] });
+                    }}
+                    onMoveColumn={async (columnId, direction) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_column", {
+                        _company_id: companyId, _column_id: columnId, _direction: direction,
+                      });
+                      if (error) { toast({ title: "Erro ao mover coluna", description: error.message, variant: "destructive" }); return; }
+                      qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
+                    }}
+                    onArchiveColumn={async (columnId) => {
+                      if (!confirm("Arquivar esta coluna?\n\nEla só pode ser arquivada se não houver cards ativos.")) return;
+                      const { error } = await (supabase as any).rpc("archive_kanban_column", {
+                        _company_id: companyId, _column_id: columnId,
+                      });
+                      if (error) {
+                        const msg = /column_has_active_cards/i.test(error.message)
+                          ? "Esta coluna ainda possui cards ativos. Mova ou arquive os cards antes."
+                          : error.message;
+                        toast({ title: "Não foi possível arquivar a coluna", description: msg, variant: "destructive" });
+                        return;
+                      }
+                      qc.invalidateQueries({ queryKey: ["kanban-columns", companyId] });
+                    }}
+                    onMoveCardOrder={async (cardId, direction) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_card", {
+                        _company_id: companyId, _card_id: cardId, _direction: direction,
+                      });
+                      if (error) { toast({ title: "Erro ao mover card", description: error.message, variant: "destructive" }); return; }
+                      qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                    }}
+                    onEditCard={(card) => setEditCardDialog({ open: true, card })}
                     onMoveCard={async (cardId, newColumnId) => {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
                       if (!card) return;
@@ -841,13 +881,20 @@ export default function Kanban() {
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
                     onDeleteCard={async (cardId) => {
-                      if (!confirm("Remover este card?")) return;
-                      const { error } = await (supabase as any)
-                        .from("kanban_cards")
-                        .update({ deleted_at: new Date().toISOString() })
-                        .eq("id", cardId);
+                      const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
+                      const isManual = card?.card_type === "manual";
+                      const msg = isManual
+                        ? "Arquivar este card manual?\n\nEle será removido da visualização do Kanban."
+                        : "Arquivar este card do Kanban?\n\nIsso não exclui o contato, atendimento ou oportunidade vinculada.";
+                      if (!confirm(msg)) return;
+                      const { error } = await (supabase as any).rpc("archive_kanban_card", {
+                        _company_id: companyId, _card_id: cardId,
+                      });
                       if (error) {
-                        toast({ title: "Erro", description: error.message, variant: "destructive" });
+                        const friendly = /forbidden_archive_card/i.test(error.message)
+                          ? "Você não tem permissão para arquivar este card."
+                          : error.message;
+                        toast({ title: "Não foi possível arquivar", description: friendly, variant: "destructive" });
                         return;
                       }
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
@@ -978,6 +1025,15 @@ export default function Kanban() {
           qc.invalidateQueries({ queryKey: ["opportunities"] });
         }}
       />
+
+      <EditManualCardDialog
+        open={editCardDialog.open}
+        onOpenChange={(v) => setEditCardDialog((s) => ({ ...s, open: v }))}
+        card={editCardDialog.card}
+        companyId={companyId}
+        members={membersQ.data ?? []}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] })}
+      />
     </AppLayout>
   );
 }
@@ -999,6 +1055,7 @@ function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, linkEnrichLoaded, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
+  onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onEditCard,
 }: {
   lane: Lane;
   columns: Column[];
@@ -1022,6 +1079,11 @@ function LaneRow({
   latestTransfers: Record<string, any>;
   onOpenTransferHistory: (ticketId: string) => void;
   onCreateOpportunity?: (card: CardRow) => void;
+  onMoveLane?: (direction: "up" | "down") => void;
+  onMoveColumn?: (columnId: string, direction: "left" | "right") => void;
+  onArchiveColumn?: (columnId: string) => void;
+  onMoveCardOrder?: (cardId: string, direction: "up" | "down") => void;
+  onEditCard?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
@@ -1068,9 +1130,20 @@ function LaneRow({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onEditLane}>Editar linha</DropdownMenuItem>
+                {onMoveLane && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onMoveLane("up")}>
+                      <ArrowUp className="h-3.5 w-3.5 mr-2" /> Mover linha para cima
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onMoveLane("down")}>
+                      <ArrowDown className="h-3.5 w-3.5 mr-2" /> Mover linha para baixo
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={onDeleteLane}>
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Ocultar linha
+                  <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar linha
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1141,9 +1214,37 @@ function LaneRow({
                       <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onAddCard(col.id)} title="Novo card">
                         <Plus className="h-3.5 w-3.5" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onEditColumn?.(col)} title="Editar coluna">
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title="Ações da coluna">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => onEditColumn?.(col)}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar coluna
+                          </DropdownMenuItem>
+                          {onMoveColumn && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => onMoveColumn(col.id, "left")}>
+                                <ArrowLeft className="h-3.5 w-3.5 mr-2" /> Mover para esquerda
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onMoveColumn(col.id, "right")}>
+                                <ArrowRight className="h-3.5 w-3.5 mr-2" /> Mover para direita
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {onArchiveColumn && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onClick={() => onArchiveColumn(col.id)}>
+                                <Archive className="h-3.5 w-3.5 mr-2" /> Arquivar coluna
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   )}
                 </div>
@@ -1201,8 +1302,24 @@ function LaneRow({
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
+                                {onMoveCardOrder && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "up")}>
+                                      <ArrowUp className="h-3 w-3 mr-2" /> Mover card para cima
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "down")}>
+                                      <ArrowDown className="h-3 w-3 mr-2" /> Mover card para baixo
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+                                {card.card_type === "manual" && onEditCard && (
+                                  <DropdownMenuItem onClick={() => onEditCard(card)}>
+                                    <Pencil className="h-3 w-3 mr-2" /> Editar card
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem className="text-destructive" onClick={() => onDeleteCard(card.id)}>
-                                  <Trash2 className="h-3 w-3 mr-2" /> Remover
+                                  <Archive className="h-3 w-3 mr-2" /> Arquivar
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -1911,6 +2028,105 @@ function LinkToKanbanDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
           <Button onClick={save} disabled={saving || !laneId || !columnId}>
             {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Adicionar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* =================================================================== */
+/* Edit manual card (K.10)                                              */
+/* =================================================================== */
+function EditManualCardDialog({
+  open, onOpenChange, card, companyId, members, onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  card: CardRow | null;
+  companyId: string | null;
+  members: { user_id: string; name: string }[];
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assignee, setAssignee] = useState<string>("none");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && card) {
+      setTitle(card.title ?? "");
+      setDescription(card.description ?? "");
+      setAssignee(card.assigned_user_id ?? "none");
+    }
+  }, [open, card]);
+
+  const submit = async () => {
+    if (!card || !companyId) return;
+    if (!title.trim()) {
+      toast({ title: "Informe um título", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    const { error } = await (supabase as any).rpc("update_kanban_manual_card", {
+      _company_id: companyId,
+      _card_id: card.id,
+      _title: title.trim(),
+      _description: description.trim() || null,
+      _assigned_user_id: assignee === "none" ? null : assignee,
+    });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Card atualizado" });
+    onOpenChange(false);
+    onSaved();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar card manual</DialogTitle>
+          <DialogDescription>
+            Apenas cards manuais podem ser editados diretamente. Cards vinculados a
+            atendimentos, contatos ou oportunidades mantêm os dados do item original.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Título</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          </div>
+          <div>
+            <Label>Descrição</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              maxLength={1000}
+            />
+          </div>
+          <div>
+            <Label>Responsável</Label>
+            <Select value={assignee} onValueChange={setAssignee}>
+              <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem responsável</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            Salvar
           </Button>
         </DialogFooter>
       </DialogContent>
