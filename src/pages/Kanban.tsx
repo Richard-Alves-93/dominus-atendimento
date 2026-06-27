@@ -1388,6 +1388,10 @@ function LaneRow({
                             {card.description}
                           </p>
                         )}
+                        {tagsMap && (() => {
+                          const tags = tagsForCard(tagsMap, card as any);
+                          return tags.length > 0 ? <div className="mt-1.5"><CardTagsBadges tags={tags} max={3} /></div> : null;
+                        })()}
                         <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                           <Badge variant="outline" className="text-[9px] px-1 py-0">
                             {card.card_type === "manual" ? "Manual"
