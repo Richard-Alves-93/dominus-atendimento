@@ -2779,14 +2779,16 @@ const TicketsDesktopLayout = () => {
               </DropdownMenu>
             </div>
 
-            {activeDepts.length > 0 && (
+            {visibleDeptsForFilter.length > 0 && (canSeeAllDepartmentsOption || visibleDeptsForFilter.length > 1) && (
               <Select value={deptFilter} onValueChange={setDeptFilter}>
                 <SelectTrigger className="h-8 bg-secondary border-0 text-xs">
                   <SelectValue placeholder="Setor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os setores</SelectItem>
-                  {activeDepts.map((d) => (
+                  {canSeeAllDepartmentsOption && (
+                    <SelectItem value="all">Todos os setores</SelectItem>
+                  )}
+                  {visibleDeptsForFilter.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                   ))}
                 </SelectContent>
