@@ -26,6 +26,7 @@ import MensagensRapidas from "./pages/MensagensRapidas";
 import Oportunidades from "./pages/Oportunidades";
 import Comissoes from "./pages/Comissoes";
 import Kanban from "./pages/Kanban";
+import Tags from "./pages/Tags";
 import MasterDashboard from "./pages/master/MasterDashboard";
 import MasterEmpresas from "./pages/master/MasterEmpresas";
 import MasterPlaceholder from "./pages/master/MasterPlaceholder";
