@@ -336,17 +336,28 @@ export default function Conexoes() {
               <p className="text-xs text-muted-foreground font-mono">{instanceName}</p>
             )}
 
-            <div className="flex gap-2 w-full">
+            <div className="flex flex-col gap-2 w-full">
               {status === "connected" ? (
-                <Button variant="destructive" className="flex-1" onClick={disconnect} disabled={loading}>
+                <Button variant="destructive" className="w-full" onClick={() => disconnect(false)} disabled={loading}>
                   <Power className="w-4 h-4" /> Desconectar
                 </Button>
               ) : (
-                <Button className="flex-1" onClick={generateQr} disabled={loading}>
+                <Button className="w-full" onClick={generateQr} disabled={loading}>
                   {qr ? <RefreshCw className="w-4 h-4" /> : <QrCode className="w-4 h-4" />}
                   {qr ? "Gerar novo QR Code" : "Gerar QR Code"}
                 </Button>
               )}
+              <div className="flex gap-2 w-full">
+                <Button variant="outline" className="flex-1" onClick={() => disconnect(true)} disabled={loading}>
+                  Forçar desconexão local
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={recreateInstance} disabled={loading}>
+                  <RefreshCw className="w-4 h-4" /> Recriar instância
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center">
+                Use "Recriar instância" se o WhatsApp estiver travado/inconsistente. Contatos, atendimentos e mensagens não são afetados.
+              </p>
             </div>
           </div>
         </DialogContent>
