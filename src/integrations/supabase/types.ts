@@ -2212,6 +2212,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _k10_can_manage_company: {
+        Args: { _company_id: string; _uid: string }
+        Returns: boolean
+      }
+      _k10_check_lane_access: {
+        Args: {
+          _company_id: string
+          _lane: Database["public"]["Tables"]["kanban_lanes"]["Row"]
+          _uid: string
+        }
+        Returns: undefined
+      }
+      archive_kanban_card: {
+        Args: { _card_id: string; _company_id: string }
+        Returns: undefined
+      }
+      archive_kanban_column: {
+        Args: { _column_id: string; _company_id: string }
+        Returns: undefined
+      }
+      archive_kanban_lane: {
+        Args: { _company_id: string; _lane_id: string }
+        Returns: undefined
+      }
       connection_health_cleanup: { Args: never; Returns: undefined }
       connection_message_flow_cleanup: { Args: never; Returns: undefined }
       create_opportunity_from_kanban: {
@@ -2352,6 +2376,18 @@ export type Database = {
       }
       release_kanban_returns_cron_lock: { Args: never; Returns: boolean }
       release_monitoring_cron_lock: { Args: never; Returns: boolean }
+      reorder_kanban_card: {
+        Args: { _card_id: string; _company_id: string; _direction: string }
+        Returns: undefined
+      }
+      reorder_kanban_column: {
+        Args: { _column_id: string; _company_id: string; _direction: string }
+        Returns: undefined
+      }
+      reorder_kanban_lane: {
+        Args: { _company_id: string; _direction: string; _lane_id: string }
+        Returns: undefined
+      }
       transfer_ticket_to_department_from_kanban: {
         Args: {
           _company_id: string
@@ -2393,6 +2429,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_kanban_manual_card: {
+        Args: {
+          _assigned_user_id: string
+          _card_id: string
+          _company_id: string
+          _description: string
+          _title: string
+        }
+        Returns: undefined
       }
       update_opportunity_status_from_kanban: {
         Args: {
