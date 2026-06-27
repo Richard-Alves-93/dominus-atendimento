@@ -143,6 +143,7 @@ interface Props {
   setSearch: (s: string) => void;
   canSeeGeneralQueue: boolean;
   activeDepts: AnyDept[];
+  canSeeAllDepartmentsOption?: boolean;
   deptFilter: string;
   setDeptFilter: (id: string) => void;
   // E.1 — read-only extras
