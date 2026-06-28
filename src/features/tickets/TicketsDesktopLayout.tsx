@@ -88,6 +88,7 @@ import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
 import TagPickerDialog from "@/features/tags/TagPickerDialog";
 import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
+import { TagFilter, useEntityIdsByTags } from "@/features/tags/TagFilter";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
