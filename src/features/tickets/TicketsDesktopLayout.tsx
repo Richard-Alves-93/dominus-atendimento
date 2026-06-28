@@ -3385,7 +3385,7 @@ const TicketsDesktopLayout = () => {
                             return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
                           })()}
                         </div>
-                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && (
+                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && !(typeof m.failure_reason === "string" && m.failure_reason.startsWith("Reenfileirado")) && (
                           <div className="mt-1 flex items-center justify-end gap-2">
                             {m.failure_reason ? (
                               <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
