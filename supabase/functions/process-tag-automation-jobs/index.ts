@@ -9,33 +9,53 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // Cron secret check (preferred). Allow service_role bearer as fallback for manual runs.
     const cronSecret = Deno.env.get("MONITORING_CRON_SECRET") || Deno.env.get("CRON_SECRET");
     const provided = req.headers.get("x-cron-secret");
     const auth = req.headers.get("Authorization") || "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const allowed =
-      (cronSecret && provided && provided === cronSecret) ||
-      (auth.startsWith("Bearer ") && auth.slice(7) === serviceKey);
-    if (!allowed) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const isCron = cronSecret && provided && provided === cronSecret;
+    const isService = auth.startsWith("Bearer ") && auth.slice(7) === serviceKey;
+
+    // Default limit; users get a smaller cap.
+    let limit = 25;
+    let worker = "edge";
+
+    if (!isCron && !isService) {
+      // User-authenticated immediate trigger (JWT validated via getClaims).
+      if (!auth.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: auth } },
       });
+      const token = auth.slice(7);
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (claimsErr || !claims?.claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      limit = 10;
+      worker = `user:${claims.claims.sub}`;
     }
 
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
-
-    let limit = 25;
     try {
       if (req.method === "POST") {
         const body = await req.json().catch(() => ({}));
-        if (typeof body?.limit === "number" && body.limit > 0 && body.limit <= 200) limit = body.limit;
+        if (typeof body?.limit === "number" && body.limit > 0 && body.limit <= (isCron || isService ? 200 : 10)) {
+          limit = body.limit;
+        }
       }
     } catch { /* ignore */ }
 
+    const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
     const { data, error } = await supabase.rpc("process_tag_automation_jobs", {
-      _limit: limit, _worker: "edge",
+      _limit: limit, _worker: worker,
     });
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
