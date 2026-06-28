@@ -1895,6 +1895,178 @@ export type Database = {
           },
         ]
       }
+      tag_automation_jobs: {
+        Row: {
+          attempts: number
+          automation_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          entity_type: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          run_after: string
+          started_at: string | null
+          status: string
+          tag_id: string
+          ticket_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          automation_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          entity_type?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          run_after?: string
+          started_at?: string | null
+          status?: string
+          tag_id: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          automation_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          entity_type?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          run_after?: string
+          started_at?: string | null
+          status?: string
+          tag_id?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_automation_jobs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "tag_automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_automation_jobs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_automation_jobs_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_automation_jobs_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tag_automations: {
+        Row: {
+          action_type: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          is_active: boolean
+          name: string | null
+          tag_id: string
+          target_kanban_column_id: string | null
+          target_kanban_lane_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_type?: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          tag_id: string
+          target_kanban_column_id?: string | null
+          target_kanban_lane_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          tag_id?: string
+          target_kanban_column_id?: string | null
+          target_kanban_lane_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_automations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_automations_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_automations_target_kanban_column_id_fkey"
+            columns: ["target_kanban_column_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_columns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_automations_target_kanban_lane_id_fkey"
+            columns: ["target_kanban_lane_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_lanes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tag_links: {
         Row: {
           company_id: string
@@ -2519,6 +2691,15 @@ export type Database = {
           accepted: number
           processed: number
           returned: number
+          skipped: number
+        }[]
+      }
+      process_tag_automation_jobs: {
+        Args: { _limit?: number; _worker?: string }
+        Returns: {
+          done: number
+          failed: number
+          processed: number
           skipped: number
         }[]
       }
