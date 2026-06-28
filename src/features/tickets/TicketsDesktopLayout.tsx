@@ -729,6 +729,17 @@ const TicketsDesktopLayout = () => {
     [tickets, selectedId],
   );
 
+  // T.1 — Etiquetas do atendimento selecionado (badges no cabeçalho)
+  const selectedTagsCards = useMemo(
+    () =>
+      selected
+        ? [{ id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }]
+        : [],
+    [selected],
+  );
+  const selectedTagsQ = useEntityTags(activeCompanyId ?? null, selectedTagsCards);
+  const selectedTicketTags = selected ? tagsForCard(selectedTagsQ.data, { id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }) : [];
+
   // Restaura o ticket selecionado quando a lista carrega. Só restaura se o
   // ticket existir na lista visível ao usuário (RLS + filtro do setor já
   // garantem que ele tem permissão). Caso contrário, limpa o storage.
