@@ -375,6 +375,7 @@ export default function Kanban() {
   const [cardTypeFilter, setCardTypeFilter] = useState<"all" | "ticket" | "contact" | "opportunity" | "manual">("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "me" | userId
   const [globalSearch, setGlobalSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null; presetType?: LaneType }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
