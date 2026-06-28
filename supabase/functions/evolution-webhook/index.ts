@@ -1668,6 +1668,38 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "unknown instance" });
     }
 
+    // Cross-tenant hardening: o channel vinculado à instância deve pertencer
+    // à mesma empresa da instância. Se não bater, abortar e logar warning.
+    {
+      const { data: chk } = await admin
+        .from("channels")
+        .select("company_id")
+        .eq("id", inst.channel_id)
+        .maybeSingle();
+      if (!chk || chk.company_id !== inst.company_id) {
+        await admin.from("channel_sync_logs").insert({
+          company_id: inst.company_id,
+          channel_id: inst.channel_id,
+          event_type: "cross_tenant_channel_blocked",
+          metadata: {
+            resolved_company_id: inst.company_id,
+            channel_company_id: chk?.company_id ?? null,
+            instance_name: inst.instance_name,
+            source: "evolution_webhook",
+            event: event || "unknown",
+          },
+          status: "blocked",
+        });
+        console.error("[EVO_WEBHOOK] cross_tenant_channel_blocked", {
+          instance_name: inst.instance_name,
+          inst_company: inst.company_id,
+          channel_company: chk?.company_id ?? null,
+        });
+        return json({ ok: true, skipped: "cross_tenant_channel_blocked" });
+      }
+    }
+
+
     // Phase 2.8: record last webhook timestamp (fire-and-forget, never blocks).
     admin
       .from("whatsapp_instances")
