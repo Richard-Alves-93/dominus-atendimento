@@ -65,6 +65,9 @@ export default function Configuracoes() {
       .maybeSingle()
       .then(({ data }: any) => setDefaultInboxDeptId(data?.default_inbox_department_id ?? ""));
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
     setLoading(true);
     (async () => {
       const { data } = await (supabase as any)
