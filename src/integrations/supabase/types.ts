@@ -2720,6 +2720,10 @@ export type Database = {
         Args: { _card_id: string; _company_id: string; _direction: string }
         Returns: undefined
       }
+      reorder_kanban_card_to_position: {
+        Args: { _card_id: string; _company_id: string; _new_index: number }
+        Returns: undefined
+      }
       reorder_kanban_column: {
         Args: { _column_id: string; _company_id: string; _direction: string }
         Returns: undefined
