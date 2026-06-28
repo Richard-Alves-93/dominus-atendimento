@@ -27,6 +27,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+
 import { useToast } from "@/hooks/use-toast";
 import {
   TicketTransferHistoryDialog,
@@ -97,13 +99,16 @@ type CardRow = {
 };
 
 type SideKind = "contact" | "ticket" | "opportunity";
+type SidePresence = { laneName: string | null; columnName: string | null };
 type SideItem = {
   kind: SideKind;
   id: string;
   label: string;
   sub?: string;
   extra?: string;
+  present?: SidePresence | null;
 };
+
 
 const COLOR_PRESETS = [
   { v: "slate", l: "Cinza", hex: "#64748b" },
@@ -494,6 +499,29 @@ export default function Kanban() {
   const linkEnrich = linkEnrichQ.data ?? { contacts: {}, tickets: {}, opportunities: {} };
   const latestTransfers = useLatestTransfers(companyId, linkIds.tickets);
 
+  /* ---------------- Sidebar presence map (K.13) ----------------
+   * Indica, sem nova query, quais itens da lista lateral já possuem
+   * card ativo no Kanban da empresa atual. Usa apenas dados já carregados
+   * (cardsQ + lanesQ + columnsQ) para evitar N+1.
+   */
+  const sidebarPresence = useMemo(() => {
+    const laneNameById: Record<string, string> = {};
+    for (const l of lanesQ.data ?? []) laneNameById[l.id] = l.name;
+    const colNameById: Record<string, string> = {};
+    for (const c of columnsQ.data ?? []) colNameById[c.id] = c.name;
+    const map: Record<string, SidePresence> = {};
+    for (const card of cardsQ.data ?? []) {
+      const loc: SidePresence = {
+        laneName: laneNameById[card.lane_id] ?? null,
+        columnName: colNameById[card.column_id] ?? null,
+      };
+      if (card.card_type === "ticket" && card.ticket_id) map[`ticket:${card.ticket_id}`] = loc;
+      else if (card.card_type === "contact" && card.contact_id) map[`contact:${card.contact_id}`] = loc;
+      else if (card.card_type === "opportunity" && card.opportunity_id) map[`opportunity:${card.opportunity_id}`] = loc;
+    }
+    return map;
+  }, [cardsQ.data, lanesQ.data, columnsQ.data]);
+
   /* ---------------- Sidebar items ---------------- */
   const sideItems: SideItem[] = useMemo(() => {
     const q = sideSearch.trim().toLowerCase();
@@ -524,13 +552,15 @@ export default function Kanban() {
           : undefined,
       }));
     }
+    items = items.map((i) => ({ ...i, present: sidebarPresence[`${i.kind}:${i.id}`] ?? null }));
     if (!q) return items;
     return items.filter((i) =>
       i.label.toLowerCase().includes(q) ||
       (i.sub ?? "").toLowerCase().includes(q) ||
       (i.extra ?? "").toLowerCase().includes(q),
     );
-  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data, opportunitiesQ.data]);
+  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data, opportunitiesQ.data, sidebarPresence]);
+
 
   /* ---------------- Loading ---------------- */
   if (!companyId) {
@@ -659,11 +689,30 @@ export default function Kanban() {
                   Nenhum item encontrado.
                 </p>
               ) : (
-                sideItems.map((it) => (
+                sideItems.map((it) => {
+                  const present = it.present ?? null;
+                  const isPresent = !!present;
+                  const locText = present
+                    ? [present.laneName, present.columnName].filter(Boolean).join(" › ")
+                    : "";
+                  const blockedMsg = isPresent
+                    ? (locText
+                        ? `Este item já está no Kanban em: ${locText}.`
+                        : "Este item já está no Kanban.")
+                    : "";
+                  return (
                   <div
                     key={`${it.kind}-${it.id}`}
-                    draggable
+                    draggable={!isPresent}
                     onDragStart={(e) => {
+                      if (isPresent) {
+                        e.preventDefault();
+                        toast({
+                          title: "Item já está no Kanban",
+                          description: "Use o card existente para mover entre colunas.",
+                        });
+                        return;
+                      }
                       try {
                         const payload = JSON.stringify({ kind: it.kind, id: it.id, label: it.label });
                         e.dataTransfer.setData(DRAG_MIME, payload);
@@ -671,25 +720,48 @@ export default function Kanban() {
                         e.dataTransfer.effectAllowed = "copy";
                       } catch { /* ignore */ }
                     }}
-                    className="rounded-md border bg-card px-2 py-1.5 text-xs hover:bg-accent group flex items-start gap-1 cursor-grab active:cursor-grabbing"
-                    title="Arraste para uma coluna do Kanban ou use o botão"
+                    className={cn(
+                      "rounded-md border px-2 py-1.5 text-xs group flex items-start gap-1",
+                      isPresent
+                        ? "bg-muted/40 opacity-60 cursor-not-allowed"
+                        : "bg-card hover:bg-accent cursor-grab active:cursor-grabbing",
+                    )}
+                    title={isPresent ? blockedMsg : "Arraste para uma coluna do Kanban ou use o botão"}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{it.label}</div>
                       {it.sub && <div className="text-muted-foreground truncate">{it.sub}</div>}
                       {it.extra && <div className="text-[10px] text-muted-foreground truncate">{it.extra}</div>}
+                      {isPresent && (
+                        <div className="mt-1 flex items-center gap-1 flex-wrap">
+                          <Badge variant="secondary" className="h-4 px-1.5 text-[9px] font-medium">
+                            No Kanban
+                          </Badge>
+                          {locText && (
+                            <span className="text-[10px] text-muted-foreground truncate">{locText}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <Button
                       size="icon"
                       variant="ghost"
                       className="h-6 w-6 shrink-0 opacity-60 group-hover:opacity-100"
-                      title="Adicionar ao Kanban"
-                      onClick={() => setLinkDialog({ open: true, item: it })}
+                      title={isPresent ? blockedMsg : "Adicionar ao Kanban"}
+                      onClick={() => {
+                        if (isPresent) {
+                          toast({ title: "Item já está no Kanban", description: blockedMsg });
+                          return;
+                        }
+                        setLinkDialog({ open: true, item: it });
+                      }}
                     >
                       <LinkIcon className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                ))
+                  );
+                })
+
               )}
             </div>
             <div className="p-2 border-t text-[10px] text-muted-foreground">
