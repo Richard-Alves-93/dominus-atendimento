@@ -107,11 +107,29 @@ export default function TagPickerDialog({
         _ticket_id: entityType === "ticket" ? entityId : null,
         _opportunity_id: entityType === "opportunity" ? entityId : null,
       };
-      const fn = appliedIds.has(tagId) ? "remove_tag_from_entity" : "apply_tag_to_entity";
+      const isApplying = !appliedIds.has(tagId);
+      const fn = isApplying ? "apply_tag_to_entity" : "remove_tag_from_entity";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase.rpc as any)(fn, payload);
       if (error) throw error;
       invalidate();
+
+      // Immediate processing trigger for ticket tag applications (T.2).
+      if (isApplying && entityType === "ticket") {
+        // Fire-and-forget; cron remains the fallback.
+        supabase.functions.invoke("process-tag-automation-jobs", { body: { limit: 10 } })
+          .then(() => {
+            qc.invalidateQueries({ queryKey: ["kanban-cards"] });
+            qc.invalidateQueries({ queryKey: ["kanban-lanes"] });
+            qc.invalidateQueries({ queryKey: ["kanban-columns"] });
+            qc.invalidateQueries({ queryKey: ["tag-automation-jobs"] });
+          })
+          .catch(() => { /* cron processará como fallback */ });
+        toast({
+          title: "Etiqueta aplicada",
+          description: "Automação em execução...",
+        });
+      }
     } catch (e) {
       toast({ title: "Erro ao atualizar etiqueta", description: formatTagLinkError(e), variant: "destructive" });
     } finally {
