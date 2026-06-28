@@ -88,6 +88,7 @@ import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
 import TagPickerDialog from "@/features/tags/TagPickerDialog";
 import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
+import { TagFilter, useEntityIdsByTags } from "@/features/tags/TagFilter";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
@@ -412,6 +413,7 @@ const TicketsDesktopLayout = () => {
   // G.5 — limpar seleção ao trocar de ticket
   useEffect(() => { clearSelection(); }, [selectedId]);
   const [search, setSearch] = useState("");
+  const [ticketTagFilter, setTicketTagFilter] = useState<string[]>([]);
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
   const [opportunityOpen, setOpportunityOpen] = useState(false);
@@ -697,6 +699,8 @@ const TicketsDesktopLayout = () => {
     staleTime: 0,
   });
 
+  const ticketTagIds = useEntityIdsByTags(activeCompanyId, "ticket", ticketTagFilter);
+
   const tickets = useMemo(() => {
     const list = ticketsQuery.data ?? [];
     const pmap = assigneeProfilesQuery.data ?? {};
@@ -705,7 +709,7 @@ const TicketsDesktopLayout = () => {
       assignee: t.assigned_user_id ? pmap[t.assigned_user_id] ?? null : null,
       pinned: pinnedIds.has(t.id),
     }));
-    const filtered = !search.trim()
+    const searched = !search.trim()
       ? withAssignee
       : withAssignee.filter((t) => {
           const s = search.toLowerCase();
@@ -714,6 +718,9 @@ const TicketsDesktopLayout = () => {
             (t.contact?.phone_number || "").includes(s)
           );
         });
+    const filtered = ticketTagFilter.length === 0
+      ? searched
+      : searched.filter((t) => ticketTagIds?.has(t.id));
     // Ordenação: fixadas primeiro, depois por last_message_at desc.
     return [...filtered].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -721,7 +728,7 @@ const TicketsDesktopLayout = () => {
       const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
       return tb - ta;
     });
-  }, [ticketsQuery.data, assigneeProfilesQuery.data, search, pinnedIds]);
+  }, [ticketsQuery.data, assigneeProfilesQuery.data, search, pinnedIds, ticketTagFilter, ticketTagIds]);
 
 
   const selected = useMemo(
@@ -2826,7 +2833,16 @@ const TicketsDesktopLayout = () => {
                 </SelectContent>
               </Select>
             )}
+
+            <TagFilter
+              companyId={activeCompanyId}
+              selected={ticketTagFilter}
+              onChange={setTicketTagFilter}
+              size="sm"
+            />
           </div>
+
+          {tickets.length === 0 && ticketTagFilter.length > 0 && !ticketsQuery.isLoading ? null : null}
 
           <div className="flex-1 overflow-y-auto scrollbar-thin">
             {ticketsQuery.isLoading ? (

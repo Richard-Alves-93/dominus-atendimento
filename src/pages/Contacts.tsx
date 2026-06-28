@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { TagFilter, useEntityIdsByTags } from "@/features/tags/TagFilter";
 
 type Contact = {
   id: string;
@@ -29,6 +30,7 @@ const initialsOf = (name: string | null, phone: string | null) => {
 
 const Contacts = () => {
   const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const { activeCompanyId } = useCompany();
 
   const { data: contacts = [], isLoading } = useQuery({
@@ -46,13 +48,19 @@ const Contacts = () => {
     },
   });
 
+  const tagFilteredIds = useEntityIdsByTags(activeCompanyId, "contact", tagFilter);
+
   const q = search.toLowerCase();
-  const filtered = contacts.filter(
-    (c) =>
-      (c.name ?? "").toLowerCase().includes(q) ||
-      (c.phone_number ?? "").includes(search) ||
-      (c.email ?? "").toLowerCase().includes(q)
-  );
+  const filtered = useMemo(() => contacts.filter(
+    (c) => {
+      if (tagFilter.length > 0 && !tagFilteredIds?.has(c.id)) return false;
+      return (
+        (c.name ?? "").toLowerCase().includes(q) ||
+        (c.phone_number ?? "").includes(search) ||
+        (c.email ?? "").toLowerCase().includes(q)
+      );
+    },
+  ), [contacts, q, search, tagFilter, tagFilteredIds]);
 
   return (
     <AppLayout title="Contatos">
@@ -67,6 +75,7 @@ const Contacts = () => {
               className="pl-9 h-10 bg-card border-border"
             />
           </div>
+          <TagFilter companyId={activeCompanyId} selected={tagFilter} onChange={setTagFilter} />
           <Button className="gradient-primary text-primary-foreground gap-2">
             <Plus className="w-4 h-4" />
             Novo Contato

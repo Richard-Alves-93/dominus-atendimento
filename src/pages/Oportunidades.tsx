@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { TagFilter, useEntityIdsByTags } from "@/features/tags/TagFilter";
 
 type OppStatus = "open" | "won" | "lost" | "canceled";
 
@@ -97,6 +98,7 @@ export default function Oportunidades() {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const oppsQuery = useQuery({
     queryKey: ["opportunities", activeCompanyId, statusFilter, assignedFilter, periodFilter],
@@ -195,14 +197,17 @@ export default function Oportunidades() {
     },
   });
 
+  const tagFilteredOppIds = useEntityIdsByTags(activeCompanyId, "opportunity", tagFilter);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return opps;
     return opps.filter((o) => {
+      if (tagFilter.length > 0 && !tagFilteredOppIds?.has(o.id)) return false;
+      if (!term) return true;
       const contact = o.contact_id ? contactsQuery.data?.get(o.contact_id)?.label ?? "" : "";
       return o.title.toLowerCase().includes(term) || contact.toLowerCase().includes(term);
     });
-  }, [opps, search, contactsQuery.data]);
+  }, [opps, search, contactsQuery.data, tagFilter, tagFilteredOppIds]);
 
   const summary = useMemo(() => {
     let openCount = 0, openValue = 0, wonCount = 0, wonValue = 0, lostCount = 0;
@@ -370,6 +375,7 @@ export default function Oportunidades() {
                 ))}
               </SelectContent>
             </Select>
+            <TagFilter companyId={activeCompanyId} selected={tagFilter} onChange={setTagFilter} />
           </div>
         </Card>
 

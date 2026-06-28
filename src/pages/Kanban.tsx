@@ -38,6 +38,7 @@ import {
 import CreateOpportunityFromCardDialog from "@/features/kanban/CreateOpportunityFromCardDialog";
 import TagPickerDialog, { type TagEntityType } from "@/features/tags/TagPickerDialog";
 import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
+import { TagFilter, useEntityIdsByTags } from "@/features/tags/TagFilter";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
@@ -374,6 +375,7 @@ export default function Kanban() {
   const [cardTypeFilter, setCardTypeFilter] = useState<"all" | "ticket" | "contact" | "opportunity" | "manual">("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // "all" | "me" | userId
   const [globalSearch, setGlobalSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const [laneDialog, setLaneDialog] = useState<{ open: boolean; lane?: Lane | null; presetType?: LaneType }>({ open: false });
   const [colDialog, setColDialog] = useState<{ open: boolean; laneId?: string; column?: Column | null }>({ open: false });
@@ -415,6 +417,12 @@ export default function Kanban() {
     return map;
   }, [cardsQ.data]);
 
+  // T.3 — IDs por entidade que possuem alguma das etiquetas selecionadas (OR).
+  const tagFilteredTicketIds = useEntityIdsByTags(companyId, "ticket", tagFilter);
+  const tagFilteredContactIds = useEntityIdsByTags(companyId, "contact", tagFilter);
+  const tagFilteredOppIds = useEntityIdsByTags(companyId, "opportunity", tagFilter);
+  const tagFilterActive = tagFilter.length > 0;
+
   // K.9: aplicação dos filtros visuais
   const cardsByColumn = useMemo(() => {
     const q = globalSearch.trim().toLowerCase();
@@ -428,11 +436,23 @@ export default function Kanban() {
           const hay = (card.title || "").toLowerCase();
           if (!hay.includes(q)) return false;
         }
+        if (tagFilterActive) {
+          if (card.card_type === "ticket") {
+            if (!card.ticket_id || !tagFilteredTicketIds?.has(card.ticket_id)) return false;
+          } else if (card.card_type === "contact") {
+            if (!card.contact_id || !tagFilteredContactIds?.has(card.contact_id)) return false;
+          } else if (card.card_type === "opportunity") {
+            if (!card.opportunity_id || !tagFilteredOppIds?.has(card.opportunity_id)) return false;
+          } else {
+            // manual: ocultar quando filtro por etiqueta ativo
+            return false;
+          }
+        }
         return true;
       });
     }
     return result;
-  }, [allCardsByColumn, cardTypeFilter, assigneeFilter, globalSearch, user?.id]);
+  }, [allCardsByColumn, cardTypeFilter, assigneeFilter, globalSearch, user?.id, tagFilterActive, tagFilteredTicketIds, tagFilteredContactIds, tagFilteredOppIds]);
 
   /* ---------------- Card link enrichment ---------------- */
   const linkIds = useMemo(() => {
@@ -634,6 +654,7 @@ export default function Kanban() {
                 className="pl-7 h-9 w-[180px] text-sm"
               />
             </div>
+            <TagFilter companyId={companyId} selected={tagFilter} onChange={setTagFilter} />
             <Button size="sm" onClick={() => setLaneDialog({ open: true, lane: null })}>
               <Plus className="h-4 w-4 mr-1" /> Nova linha
             </Button>
