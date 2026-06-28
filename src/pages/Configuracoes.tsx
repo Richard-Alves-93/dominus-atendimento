@@ -42,9 +42,29 @@ export default function Configuracoes() {
   const [protocolEnabled, setProtocolEnabled] = useState(false);
   const [protocolPrefix, setProtocolPrefix] = useState("");
   const [protocolFormat, setProtocolFormat] = useState("{PREFIX}-{YYYY}-{SEQUENCE_6}");
+  const [defaultInboxDeptId, setDefaultInboxDeptId] = useState<string>("");
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
+    (supabase as any)
+      .from("departments")
+      .select("id, name")
+      .eq("company_id", activeCompanyId)
+      .eq("status", "active")
+      .order("name")
+      .then(({ data }: any) => setDepartments(data ?? []));
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    (supabase as any)
+      .from("companies")
+      .select("default_inbox_department_id")
+      .eq("id", activeCompanyId)
+      .maybeSingle()
+      .then(({ data }: any) => setDefaultInboxDeptId(data?.default_inbox_department_id ?? ""));
+  }, [activeCompanyId]);
     setLoading(true);
     (async () => {
       const { data } = await (supabase as any)
