@@ -1338,10 +1338,14 @@ function LaneRow({
                   dragOverCol === col.id ? "ring-2 ring-primary border-primary bg-primary/5" : ""
                 }`}
                 onDragOver={(e) => {
-                  if (!onDropItem) return;
-                  if (e.dataTransfer.types.includes(DRAG_MIME)) {
+                  const types = e.dataTransfer.types;
+                  if (onDropItem && types.includes(DRAG_MIME)) {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "copy";
+                    if (dragOverCol !== col.id) setDragOverCol(col.id);
+                  } else if (types.includes(CARD_REORDER_MIME)) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
                     if (dragOverCol !== col.id) setDragOverCol(col.id);
                   }
                 }}
@@ -1349,9 +1353,25 @@ function LaneRow({
                   if (dragOverCol === col.id) setDragOverCol(null);
                 }}
                 onDrop={(e) => {
+                  setDragOverCol(null);
+                  const reorderRaw = e.dataTransfer.getData(CARD_REORDER_MIME);
+                  if (reorderRaw && onReorderCardToPosition) {
+                    e.preventDefault();
+                    try {
+                      const parsed = JSON.parse(reorderRaw) as { card_id: string; column_id: string };
+                      if (parsed?.card_id && parsed.column_id === col.id) {
+                        const target = reorderTarget && reorderTarget.colId === col.id
+                          ? reorderTarget.index
+                          : (cardsByColumn[col.id] ?? []).length;
+                        onReorderCardToPosition(parsed.card_id, target);
+                      }
+                    } catch { /* ignore */ }
+                    setReorderTarget(null);
+                    setDragHandleCardId(null);
+                    return;
+                  }
                   if (!onDropItem) return;
                   const raw = e.dataTransfer.getData(DRAG_MIME);
-                  setDragOverCol(null);
                   if (!raw) return;
                   e.preventDefault();
                   try {
