@@ -922,6 +922,16 @@ export default function Kanban() {
                       if (error) { toast({ title: "Erro ao mover card", description: error.message, variant: "destructive" }); return; }
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
+                    onReorderCardToPosition={async (cardId, newIndex) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_card_to_position", {
+                        _company_id: companyId, _card_id: cardId, _new_index: newIndex,
+                      });
+                      if (error) {
+                        toast({ title: "Não foi possível reordenar o card. Tente novamente.", description: error.message, variant: "destructive" });
+                        return;
+                      }
+                      qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                    }}
                     onEditCard={(card) => setEditCardDialog({ open: true, card })}
                     onMoveCard={async (cardId, newColumnId) => {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
