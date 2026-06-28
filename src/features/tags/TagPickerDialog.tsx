@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { TAG_COLOR_PRESETS, tagColorHex } from "@/features/tags/tagColors";
+import { formatTagError, formatTagLinkError } from "@/features/tags/formatTagError";
 
 export type TagEntityType = "contact" | "ticket" | "opportunity";
 
