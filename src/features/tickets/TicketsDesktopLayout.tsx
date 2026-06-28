@@ -413,6 +413,7 @@ const TicketsDesktopLayout = () => {
   // G.5 — limpar seleção ao trocar de ticket
   useEffect(() => { clearSelection(); }, [selectedId]);
   const [search, setSearch] = useState("");
+  const [ticketTagFilter, setTicketTagFilter] = useState<string[]>([]);
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
   const [opportunityOpen, setOpportunityOpen] = useState(false);
