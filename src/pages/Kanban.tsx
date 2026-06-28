@@ -5,6 +5,7 @@ import {
   Columns3, Plus, Search, Loader2, MoreVertical, ArrowRightLeft,
   User as UserIcon, Building, Briefcase, ListFilter, LinkIcon, ExternalLink,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Archive, Pencil, Tag as TagIcon,
+  GripVertical,
 } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card } from "@/components/ui/card";
@@ -921,6 +922,16 @@ export default function Kanban() {
                       if (error) { toast({ title: "Erro ao mover card", description: error.message, variant: "destructive" }); return; }
                       qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
                     }}
+                    onReorderCardToPosition={async (cardId, newIndex) => {
+                      const { error } = await (supabase as any).rpc("reorder_kanban_card_to_position", {
+                        _company_id: companyId, _card_id: cardId, _new_index: newIndex,
+                      });
+                      if (error) {
+                        toast({ title: "Não foi possível reordenar o card. Tente novamente.", description: error.message, variant: "destructive" });
+                        return;
+                      }
+                      qc.invalidateQueries({ queryKey: ["kanban-cards", companyId] });
+                    }}
                     onEditCard={(card) => setEditCardDialog({ open: true, card })}
                     onMoveCard={async (cardId, newColumnId) => {
                       const card = (cardsQ.data ?? []).find((c) => c.id === cardId);
@@ -1210,7 +1221,7 @@ function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, linkEnrichLoaded, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
-  onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onEditCard,
+  onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onReorderCardToPosition, onEditCard,
   tagsMap, onOpenTags,
 }: {
   lane: Lane;
@@ -1239,11 +1250,15 @@ function LaneRow({
   onMoveColumn?: (columnId: string, direction: "left" | "right") => void;
   onArchiveColumn?: (columnId: string) => void;
   onMoveCardOrder?: (cardId: string, direction: "up" | "down") => void;
+  onReorderCardToPosition?: (cardId: string, newIndex: number) => void | Promise<void>;
   onEditCard?: (card: CardRow) => void;
   tagsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
   onOpenTags?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [dragHandleCardId, setDragHandleCardId] = useState<string | null>(null);
+  const [reorderTarget, setReorderTarget] = useState<{ colId: string; index: number } | null>(null);
+  const CARD_REORDER_MIME = "application/x-dominus-kanban-card-reorder";
   // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
   const laneTotal = columns.reduce((acc, c) => acc + (cardsByColumn[c.id]?.length ?? 0), 0);
   const fmtBRL = (n: number) =>
@@ -1323,10 +1338,14 @@ function LaneRow({
                   dragOverCol === col.id ? "ring-2 ring-primary border-primary bg-primary/5" : ""
                 }`}
                 onDragOver={(e) => {
-                  if (!onDropItem) return;
-                  if (e.dataTransfer.types.includes(DRAG_MIME)) {
+                  const types = e.dataTransfer.types;
+                  if (onDropItem && types.includes(DRAG_MIME)) {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "copy";
+                    if (dragOverCol !== col.id) setDragOverCol(col.id);
+                  } else if (types.includes(CARD_REORDER_MIME)) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
                     if (dragOverCol !== col.id) setDragOverCol(col.id);
                   }
                 }}
@@ -1334,9 +1353,25 @@ function LaneRow({
                   if (dragOverCol === col.id) setDragOverCol(null);
                 }}
                 onDrop={(e) => {
+                  setDragOverCol(null);
+                  const reorderRaw = e.dataTransfer.getData(CARD_REORDER_MIME);
+                  if (reorderRaw && onReorderCardToPosition) {
+                    e.preventDefault();
+                    try {
+                      const parsed = JSON.parse(reorderRaw) as { card_id: string; column_id: string };
+                      if (parsed?.card_id && parsed.column_id === col.id) {
+                        const target = reorderTarget && reorderTarget.colId === col.id
+                          ? reorderTarget.index
+                          : (cardsByColumn[col.id] ?? []).length;
+                        onReorderCardToPosition(parsed.card_id, target);
+                      }
+                    } catch { /* ignore */ }
+                    setReorderTarget(null);
+                    setDragHandleCardId(null);
+                    return;
+                  }
                   if (!onDropItem) return;
                   const raw = e.dataTransfer.getData(DRAG_MIME);
-                  setDragOverCol(null);
                   if (!raw) return;
                   e.preventDefault();
                   try {
@@ -1412,13 +1447,74 @@ function LaneRow({
                       Sem cards
                     </p>
                   ) : (
-                    (cardsByColumn[col.id] ?? []).map((card) => (
+                    (cardsByColumn[col.id] ?? []).map((card, idx) => (
                       <div
                         key={card.id}
-                        className="rounded-md border bg-background p-2 shadow-sm"
+                        draggable={canManage && dragHandleCardId === card.id}
+                        onDragStart={(e) => {
+                          if (!canManage || dragHandleCardId !== card.id) {
+                            e.preventDefault();
+                            return;
+                          }
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData(
+                            CARD_REORDER_MIME,
+                            JSON.stringify({ card_id: card.id, column_id: col.id }),
+                          );
+                        }}
+                        onDragEnd={() => { setDragHandleCardId(null); setReorderTarget(null); }}
+                        onDragOver={(e) => {
+                          if (!e.dataTransfer.types.includes(CARD_REORDER_MIME)) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          const before = e.clientY < rect.top + rect.height / 2;
+                          const target = before ? idx : idx + 1;
+                          if (!reorderTarget || reorderTarget.colId !== col.id || reorderTarget.index !== target) {
+                            setReorderTarget({ colId: col.id, index: target });
+                          }
+                        }}
+                        onDrop={(e) => {
+                          if (!e.dataTransfer.types.includes(CARD_REORDER_MIME)) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const raw = e.dataTransfer.getData(CARD_REORDER_MIME);
+                          setDragOverCol(null);
+                          try {
+                            const parsed = JSON.parse(raw) as { card_id: string; column_id: string };
+                            if (parsed?.card_id && parsed.column_id === col.id && onReorderCardToPosition) {
+                              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                              const before = e.clientY < rect.top + rect.height / 2;
+                              const target = before ? idx : idx + 1;
+                              onReorderCardToPosition(parsed.card_id, target);
+                            }
+                          } catch { /* ignore */ }
+                          setReorderTarget(null);
+                          setDragHandleCardId(null);
+                        }}
+                        className={cn(
+                          "rounded-md border bg-background p-2 shadow-sm transition-all",
+                          dragHandleCardId === card.id && "opacity-60",
+                          reorderTarget?.colId === col.id && reorderTarget.index === idx && "border-t-2 border-t-primary",
+                          reorderTarget?.colId === col.id && reorderTarget.index === idx + 1 && "border-b-2 border-b-primary",
+                        )}
                       >
                         <div className="flex items-start justify-between gap-1">
-                          <div className="text-xs font-medium leading-tight line-clamp-2">
+                          {canManage && onReorderCardToPosition && (
+                            <button
+                              type="button"
+                              title="Arrastar para ordenar"
+                              aria-label="Arrastar para ordenar"
+                              className="touch-none -ml-1 mt-0.5 inline-flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                              onMouseDown={() => setDragHandleCardId(card.id)}
+                              onMouseUp={() => { /* keep until dragend */ }}
+                              onTouchStart={() => setDragHandleCardId(card.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <GripVertical className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <div className="text-xs font-medium leading-tight line-clamp-2 flex-1">
                             {card.title}
                           </div>
                           {canManage && (
@@ -1462,17 +1558,6 @@ function LaneRow({
                                         {c.name}
                                       </DropdownMenuItem>
                                     ))}
-                                    <DropdownMenuSeparator />
-                                  </>
-                                )}
-                                {onMoveCardOrder && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "up")}>
-                                      <ArrowUp className="h-3 w-3 mr-2" /> Mover card para cima
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "down")}>
-                                      <ArrowDown className="h-3 w-3 mr-2" /> Mover card para baixo
-                                    </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
