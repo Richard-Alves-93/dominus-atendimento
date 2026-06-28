@@ -208,49 +208,50 @@ function TagDialog({
   const [lanes, setLanes] = useState<Array<{ id: string; name: string }>>([]);
   const [columns, setColumns] = useState<Array<{ id: string; lane_id: string; name: string }>>([]);
 
-  // Load lanes/columns + existing automation
-  useState(() => { /* noop placeholder */ });
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useMemo(() => { /* keep top-level */ }, []);
+  // Load lanes/columns + existing automation on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!canManage) return;
+      const [lanesRes, colsRes] = await Promise.all([
+        supabase
+          .from("kanban_lanes")
+          .select("id,name,position")
+          .eq("company_id", companyId)
+          .is("deleted_at", null)
+          .order("position", { ascending: true }),
+        supabase
+          .from("kanban_columns")
+          .select("id,lane_id,name,position")
+          .eq("company_id", companyId)
+          .is("deleted_at", null)
+          .order("position", { ascending: true }),
+      ]);
+      if (cancelled) return;
+      setLanes((lanesRes.data ?? []) as any);
+      setColumns((colsRes.data ?? []) as any);
 
-  // Load on mount
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useStateLoader(async () => {
-    if (!canManage) return;
-    const [lanesRes, colsRes] = await Promise.all([
-      supabase
-        .from("kanban_lanes")
-        .select("id,name")
-        .eq("company_id", companyId)
-        .is("deleted_at", null)
-        .order("position", { ascending: true }),
-      supabase
-        .from("kanban_columns")
-        .select("id,lane_id,name,position")
-        .eq("company_id", companyId)
-        .is("deleted_at", null)
-        .order("position", { ascending: true }),
-    ]);
-    setLanes((lanesRes.data ?? []) as any);
-    setColumns((colsRes.data ?? []) as any);
-
-    if (tag) {
-      const { data: aut } = await (supabase as any)
-        .from("tag_automations")
-        .select("id,is_active,target_kanban_lane_id,target_kanban_column_id")
-        .eq("company_id", companyId)
-        .eq("tag_id", tag.id)
-        .eq("action_type", "move_kanban_card")
-        .is("deleted_at", null)
-        .maybeSingle();
-      if (aut) {
-        setAutomationId(aut.id);
-        setAutoActive(!!aut.is_active);
-        setAutoLaneId(aut.target_kanban_lane_id ?? "");
-        setAutoColumnId(aut.target_kanban_column_id ?? "");
+      if (tag) {
+        const { data: aut } = await (supabase as any)
+          .from("tag_automations")
+          .select("id,is_active,target_kanban_lane_id,target_kanban_column_id")
+          .eq("company_id", companyId)
+          .eq("tag_id", tag.id)
+          .eq("action_type", "move_kanban_card")
+          .is("deleted_at", null)
+          .maybeSingle();
+        if (cancelled) return;
+        if (aut) {
+          setAutomationId(aut.id);
+          setAutoActive(!!aut.is_active);
+          setAutoLaneId(aut.target_kanban_lane_id ?? "");
+          setAutoColumnId(aut.target_kanban_column_id ?? "");
+        }
       }
-    }
-  });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const colsForLane = columns.filter((c) => !autoLaneId || c.lane_id === autoLaneId);
 
