@@ -131,10 +131,9 @@ export default function TagPickerDialog({
       setCreating(false);
       qc.invalidateQueries({ queryKey: ["tags", companyId] });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
       toast({
         title: "Erro ao criar etiqueta",
-        description: /unique|duplicate/i.test(msg) ? "Já existe uma etiqueta com esse nome." : msg,
+        description: formatTagError(e),
         variant: "destructive",
       });
     } finally {
