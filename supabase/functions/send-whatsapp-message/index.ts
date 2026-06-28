@@ -289,6 +289,32 @@ Deno.serve(async (req) => {
     const phone = contact?.phone_number?.replace(/\D/g, "") ?? "";
     if (!phone) return fail("contact", "Contact has no phone");
 
+    // ── Bloqueio de LID: identificadores anônimos do WhatsApp (@lid) não são
+    // números reais. A Evolution aceita o envio e responde 201, mas a mensagem
+    // nunca chega no celular do destinatário. Recusar com mensagem amigável.
+    // Telefones E.164 válidos têm 8–13 dígitos (BR usa 12–13). LIDs têm 14–15+.
+    if (phone.length < 8 || phone.length > 13) {
+      console.warn("[SEND_WA] reject_invalid_phone", {
+        message_step: "phone_validation",
+        contact_id: contact!.id,
+        phone_len: phone.length,
+        phone_masked: maskPhone(phone),
+        looks_like_lid: phone.length >= 14,
+      });
+      const friendly = phone.length >= 14
+        ? "Este contato não tem número de telefone real associado (identificador anônimo do WhatsApp). Peça que o contato envie uma nova mensagem para que o número real seja revelado."
+        : "Número do contato inválido. Verifique o cadastro do contato.";
+      return json({
+        ok: false,
+        success: false,
+        status: "failed",
+        step: "invalid_phone",
+        error: friendly,
+        friendly_reason: friendly,
+        failure_reason: phone.length >= 14 ? "lid_contact_no_real_phone" : "invalid_phone_length",
+      });
+    }
+
     const channelId = ticket.channel_id ?? instance.channel_id;
     const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
 
