@@ -417,6 +417,12 @@ export default function Kanban() {
     return map;
   }, [cardsQ.data]);
 
+  // T.3 — IDs por entidade que possuem alguma das etiquetas selecionadas (OR).
+  const tagFilteredTicketIds = useEntityIdsByTags(companyId, "ticket", tagFilter);
+  const tagFilteredContactIds = useEntityIdsByTags(companyId, "contact", tagFilter);
+  const tagFilteredOppIds = useEntityIdsByTags(companyId, "opportunity", tagFilter);
+  const tagFilterActive = tagFilter.length > 0;
+
   // K.9: aplicação dos filtros visuais
   const cardsByColumn = useMemo(() => {
     const q = globalSearch.trim().toLowerCase();
@@ -430,11 +436,23 @@ export default function Kanban() {
           const hay = (card.title || "").toLowerCase();
           if (!hay.includes(q)) return false;
         }
+        if (tagFilterActive) {
+          if (card.card_type === "ticket") {
+            if (!card.ticket_id || !tagFilteredTicketIds?.has(card.ticket_id)) return false;
+          } else if (card.card_type === "contact") {
+            if (!card.contact_id || !tagFilteredContactIds?.has(card.contact_id)) return false;
+          } else if (card.card_type === "opportunity") {
+            if (!card.opportunity_id || !tagFilteredOppIds?.has(card.opportunity_id)) return false;
+          } else {
+            // manual: ocultar quando filtro por etiqueta ativo
+            return false;
+          }
+        }
         return true;
       });
     }
     return result;
-  }, [allCardsByColumn, cardTypeFilter, assigneeFilter, globalSearch, user?.id]);
+  }, [allCardsByColumn, cardTypeFilter, assigneeFilter, globalSearch, user?.id, tagFilterActive, tagFilteredTicketIds, tagFilteredContactIds, tagFilteredOppIds]);
 
   /* ---------------- Card link enrichment ---------------- */
   const linkIds = useMemo(() => {
