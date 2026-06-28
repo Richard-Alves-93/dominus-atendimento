@@ -108,6 +108,10 @@ export default function Configuracoes() {
     const { error } = await (supabase as any)
       .from("company_settings")
       .upsert(payload, { onConflict: "company_id" });
+    const { error: errCompany } = await (supabase as any)
+      .from("companies")
+      .update({ default_inbox_department_id: defaultInboxDeptId || null })
+      .eq("id", activeCompanyId);
     setSaving(false);
     if (error) {
       toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
