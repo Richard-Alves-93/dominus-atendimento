@@ -3023,6 +3023,9 @@ const TicketsDesktopLayout = () => {
                         Atendimento parado
                       </Badge>
                     )}
+                    {selectedTicketTags.length > 0 && (
+                      <CardTagsBadges tags={selectedTicketTags} max={3} />
+                    )}
                   </div>
                 </div>
               </div>
