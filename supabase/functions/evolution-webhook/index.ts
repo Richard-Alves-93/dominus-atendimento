@@ -725,6 +725,40 @@ async function applyMessageEdit(
   return true;
 }
 
+async function resolveDefaultInboxDepartment(admin: any, companyId: string): Promise<string | null> {
+  try {
+    const { data: comp } = await admin
+      .from("companies")
+      .select("default_inbox_department_id")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (comp?.default_inbox_department_id) {
+      const { data: dep } = await admin
+        .from("departments")
+        .select("id")
+        .eq("id", comp.default_inbox_department_id)
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (dep?.id) return dep.id;
+    }
+
+    const { data: depByName } = await admin
+      .from("departments")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .eq("status", "active")
+      .or("name.ilike.recep%,name.ilike.entrada geral%,name.ilike.triagem%")
+      .limit(1)
+      .maybeSingle();
+    return depByName?.id ?? null;
+  } catch (e) {
+    console.warn("[INBOX_DEPT] resolve_failed", (e as Error)?.message);
+    return null;
+  }
+}
+
 // Extract WhatsApp/Baileys quoted/reply contextInfo for inbound messages.
 function extractReplyContext(m: any): {
   provider_message_id: string | null;
@@ -1140,25 +1174,40 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
 
         let { data: ticket } = await admin
           .from("tickets")
-          .select("id, status")
+          .select("id, status, department_id")
           .eq("company_id", inst.company_id)
           .eq("contact_id", contactId)
           .order("last_message_at", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (!ticket) {
+          const defaultDeptId = await resolveDefaultInboxDepartment(admin, inst.company_id);
+          const insertPayload: Record<string, unknown> = {
+            company_id: inst.company_id,
+            contact_id: contactId,
+            channel_id: inst.channel_id,
+            status: "open",
+            last_message_at: new Date().toISOString(),
+          };
+          if (defaultDeptId) insertPayload.department_id = defaultDeptId;
           const { data: created } = await admin
             .from("tickets")
-            .insert({
-              company_id: inst.company_id,
-              contact_id: contactId,
-              channel_id: inst.channel_id,
-              status: "open",
-              last_message_at: new Date().toISOString(),
-            })
-            .select("id, status")
+            .insert(insertPayload)
+            .select("id, status, department_id")
             .single();
           ticket = created;
+        } else if (!ticket.department_id) {
+          const defaultDeptId = await resolveDefaultInboxDepartment(admin, inst.company_id);
+          if (defaultDeptId) {
+            await admin.from("tickets").update({ department_id: defaultDeptId }).eq("id", ticket.id);
+            ticket.department_id = defaultDeptId;
+            console.log("[INBOX_DEPT] legacy_fromMe_ticket_routed", {
+              company_id: inst.company_id,
+              channel_id: inst.channel_id,
+              ticket_id: ticket.id,
+              department_id: defaultDeptId,
+            });
+          }
         }
         if (!ticket) {
           auditStatus(source, inst.instance_name ?? null, externalId, statusRaw, mappedStatus, 0);
@@ -1304,38 +1353,7 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
       //  1) companies.default_inbox_department_id (config explícita)
       //  2) setor por nome: Recepção / Entrada Geral / Triagem
       // Errors must NEVER break inbound persistence.
-      let defaultDeptId: string | null = null;
-      try {
-        const { data: comp } = await admin
-          .from("companies")
-          .select("default_inbox_department_id")
-          .eq("id", inst.company_id)
-          .maybeSingle();
-        if (comp?.default_inbox_department_id) {
-          const { data: dep } = await admin
-            .from("departments")
-            .select("id")
-            .eq("id", comp.default_inbox_department_id)
-            .eq("company_id", inst.company_id)
-            .is("deleted_at", null)
-            .maybeSingle();
-          if (dep?.id) defaultDeptId = dep.id;
-        }
-        if (!defaultDeptId) {
-          const { data: depByName } = await admin
-            .from("departments")
-            .select("id, name")
-            .eq("company_id", inst.company_id)
-            .is("deleted_at", null)
-            .eq("status", "active")
-            .or("name.ilike.recep%,name.ilike.entrada geral%,name.ilike.triagem%")
-            .limit(1)
-            .maybeSingle();
-          if (depByName?.id) defaultDeptId = depByName.id;
-        }
-      } catch (e) {
-        console.warn("[INBOX_DEPT] resolve_failed", (e as Error)?.message);
-      }
+      const defaultDeptId = await resolveDefaultInboxDepartment(admin, inst.company_id);
       const insertPayload: Record<string, unknown> = {
         company_id: inst.company_id,
         contact_id: contactId,
@@ -1350,6 +1368,18 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         .select("id, unread_count, department_id, assigned_user_id")
         .single();
       ticket = created;
+    } else if (!ticket.department_id) {
+      const defaultDeptId = await resolveDefaultInboxDepartment(admin, inst.company_id);
+      if (defaultDeptId) {
+        await admin.from("tickets").update({ department_id: defaultDeptId }).eq("id", ticket.id);
+        ticket.department_id = defaultDeptId;
+        console.log("[INBOX_DEPT] legacy_inbound_ticket_routed", {
+          company_id: inst.company_id,
+          channel_id: inst.channel_id,
+          ticket_id: ticket.id,
+          department_id: defaultDeptId,
+        });
+      }
     }
     if (!ticket) continue;
 
