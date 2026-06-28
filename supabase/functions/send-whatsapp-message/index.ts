@@ -58,6 +58,35 @@ function mapInitialEvolutionStatus(raw: any): { deliveryStatus: string; failed: 
   return { deliveryStatus: "pending", failed: false };
 }
 
+async function waitForImmediateProviderError(params: {
+  admin: ReturnType<typeof createClient>;
+  companyId: string;
+  channelId?: string | null;
+  externalId?: string | null;
+}): Promise<boolean> {
+  const { admin, companyId, channelId, externalId } = params;
+  if (!externalId) return false;
+  for (let i = 0; i < 4; i += 1) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 450));
+    let query = admin
+      .from("channel_sync_logs")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("event_type", "messages.update")
+      .contains("metadata", { data: { keyId: externalId, status: "ERROR" } })
+      .gte("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString())
+      .limit(1);
+    if (channelId) query = query.eq("channel_id", channelId);
+    const { data, error } = await query;
+    if (error) {
+      console.warn("[SEND_WA] immediate_error_probe_failed", error.message);
+      return false;
+    }
+    if (data?.length) return true;
+  }
+  return false;
+}
+
 async function syncEvolutionWebhook(instanceName: string) {
   if (!EVO_WEBHOOK) return;
   const body = {
@@ -106,8 +135,10 @@ async function dispatchToEvolution(params: {
   quotedProviderId?: string | null;
   quotedFromMe?: boolean;
   quotedText?: string | null;
+  companyId: string;
+  channelId?: string | null;
 }): Promise<{ ok: boolean; status?: number; externalId?: string | null; remoteJid?: string | null; deliveryStatus?: string; failureReason?: string; friendlyReason?: string; connectionLost?: boolean; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
-  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText } = params;
+  const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText, companyId, channelId } = params;
   let quoteFallbackUsed = false;
   try {
     await syncEvolutionWebhook(instanceName);
@@ -246,6 +277,34 @@ async function dispatchToEvolution(params: {
     const { error: updErr } = await admin.from("messages").update(patch).eq("id", messageId);
     if (updErr) console.error("[SEND_WA] update_after_send_failed", updErr.message);
     await admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId);
+
+    if (initialStatus.deliveryStatus === "pending") {
+      const immediateError = await waitForImmediateProviderError({ admin, companyId, channelId, externalId });
+      if (immediateError) {
+        const failureReason = "Evolution reportou status ERROR imediatamente após aceitar o envio (messages.update).";
+        await admin.from("messages").update({
+          delivery_status: "failed",
+          status: "failed",
+          failed_at: new Date().toISOString(),
+          failure_reason: failureReason,
+          raw: { ...evoData, post_send_status: "ERROR", post_send_status_source: "messages.update" },
+        }).eq("id", messageId);
+        console.error("[EVOLUTION_SEND_RESPONSE] immediate_provider_error", {
+          message_id: messageId,
+          external_id: externalId,
+          remote_jid: responseRemoteJid,
+        });
+        return {
+          ok: false,
+          status: evoRes.status,
+          externalId,
+          remoteJid: responseRemoteJid,
+          deliveryStatus: "failed",
+          failureReason,
+          friendlyReason: "O WhatsApp recusou o envio logo após aceitar a requisição.",
+        };
+      }
+    }
 
     return { ok: true, status: evoRes.status, externalId, remoteJid: responseRemoteJid, deliveryStatus: initialStatus.deliveryStatus, quoteFallbackUsed };
   } catch (e) {
@@ -424,6 +483,8 @@ Deno.serve(async (req) => {
       quotedProviderId: reply?.provider_message_id ?? null,
       quotedFromMe: reply?.from_me === true,
       quotedText: reply?.preview ?? null,
+      companyId: company_id,
+      channelId,
     });
 
     if (reply) {
