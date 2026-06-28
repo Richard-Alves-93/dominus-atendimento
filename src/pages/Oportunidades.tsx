@@ -197,14 +197,17 @@ export default function Oportunidades() {
     },
   });
 
+  const tagFilteredOppIds = useEntityIdsByTags(activeCompanyId, "opportunity", tagFilter);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return opps;
     return opps.filter((o) => {
+      if (tagFilter.length > 0 && !tagFilteredOppIds?.has(o.id)) return false;
+      if (!term) return true;
       const contact = o.contact_id ? contactsQuery.data?.get(o.contact_id)?.label ?? "" : "";
       return o.title.toLowerCase().includes(term) || contact.toLowerCase().includes(term);
     });
-  }, [opps, search, contactsQuery.data]);
+  }, [opps, search, contactsQuery.data, tagFilter, tagFilteredOppIds]);
 
   const summary = useMemo(() => {
     let openCount = 0, openValue = 0, wonCount = 0, wonValue = 0, lostCount = 0;
