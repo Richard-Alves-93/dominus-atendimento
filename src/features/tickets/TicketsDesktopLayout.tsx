@@ -2529,6 +2529,17 @@ const TicketsDesktopLayout = () => {
             : null
         }
       />
+      {/* T.1 — Etiquetas do atendimento */}
+      {selected && activeCompanyId && (
+        <TagPickerDialog
+          open={tagPickerOpen}
+          onClose={() => setTagPickerOpen(false)}
+          companyId={activeCompanyId}
+          entityType="ticket"
+          entityId={selected.id}
+          entityLabel={selected.contact?.name || selected.contact?.phone_number || "atendimento"}
+        />
+      )}
       {/* Confirm: Assumir atendimento */}
       <AlertDialog open={takeOverOpen} onOpenChange={setTakeOverOpen}>
         <AlertDialogContent>
