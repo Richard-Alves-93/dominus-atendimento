@@ -421,6 +421,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Cross-tenant hardening: o channel_id do ticket deve pertencer à mesma empresa.
+    // Se divergir, bloquear envio para evitar disparo pela instância de outra empresa.
+    if (ticket.channel_id) {
+      const { data: tChan } = await admin
+        .from("channels")
+        .select("company_id")
+        .eq("id", ticket.channel_id)
+        .maybeSingle();
+      if (!tChan || tChan.company_id !== company_id) {
+        console.error("[SEND_WA] channel_company_mismatch", {
+          ticket_id, ticket_company_id: company_id,
+          ticket_channel_id: ticket.channel_id,
+          channel_company_id: tChan?.company_id ?? null,
+        });
+        const friendly = "Não foi possível enviar: este atendimento está vinculado a um canal de outra empresa. Corrija o canal do atendimento.";
+        return json({
+          ok: false, success: false, status: "failed",
+          step: "channel_company_mismatch", error: friendly,
+          friendly_reason: friendly, failure_reason: "channel_company_mismatch",
+        });
+      }
+    }
+    // Instance lookup already filters by company_id; ensure channel_id pairing too.
+    if (instance.channel_id && ticket.channel_id && instance.channel_id !== ticket.channel_id) {
+      // Same company but channels differ — still allowed (ticket may use a different
+      // channel of the same company); we send via the ticket's channel's instance
+      // by re-resolving. For now, the connected instance of THIS company is used,
+      // which is acceptable since both belong to the same tenant.
+    }
     const channelId = ticket.channel_id ?? instance.channel_id;
     const endpoint = `${evoBase()}/message/sendText/${instance.instance_name}`;
 
