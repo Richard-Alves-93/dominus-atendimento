@@ -153,6 +153,28 @@ export default function Configuracoes() {
             </div>
           ) : (
             <div className="space-y-5">
+              <div className="space-y-2 max-w-md">
+                <Label className="text-sm">Setor padrão de entrada</Label>
+                <Select
+                  value={defaultInboxDeptId || "__none__"}
+                  onValueChange={(v) => setDefaultInboxDeptId(v === "__none__" ? "" : v)}
+                  disabled={!canManage}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um setor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem setor padrão (fila geral)</SelectItem>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Novos atendimentos recebidos pelos canais entram automaticamente neste setor.
+                </p>
+              </div>
+
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-0.5">
                   <Label className="text-sm">Permitir que outro atendente assuma atendimento parado</Label>
