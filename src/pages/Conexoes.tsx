@@ -255,6 +255,45 @@ export default function Conexoes() {
     toast.success("Configurações da conexão reaplicadas com sucesso.");
   };
 
+  const cleanupOrphanInstances = async () => {
+    setCleanupLoading(true);
+    const { data, error } = await supabase.functions.invoke("whatsapp-connection", {
+      body: { action: "cleanup_orphan_instances", company_id: activeCompanyId },
+    });
+    setCleanupLoading(false);
+    setCleanupOpen(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const res = data as {
+      error?: string;
+      message?: string;
+      candidates_found?: number;
+      removed?: string[];
+      failed?: { name: string; error?: string }[];
+    } | null;
+    if (res?.error) {
+      toast.error(res.error);
+      return;
+    }
+    if (res?.failed && res.failed.length > 0) {
+      toast.warning(res.message ?? "Limpeza parcial. Algumas instâncias continuam travadas na Evolution.");
+    } else {
+      toast.success(res?.message ?? "Limpeza concluída.");
+    }
+    await loadChannels();
+    // Refresh status if dialog open
+    if (open) {
+      const s = await callFn("status");
+      if (s) {
+        setStatus(s.status);
+        setQr(s.qr_code ?? null);
+        setInstanceName(s.instance_name ?? null);
+      }
+    }
+  };
+
   const handleDialogChange = (v: boolean) => {
     setOpen(v);
     if (!v) stopPolling();
