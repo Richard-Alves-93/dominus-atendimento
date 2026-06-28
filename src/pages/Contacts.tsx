@@ -39,12 +39,14 @@ const Contacts = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contacts")
-        .select("id,name,phone_number,email,avatar_url,updated_at")
+        .select("id,name,phone_number,email,avatar_url,updated_at,metadata")
         .eq("company_id", activeCompanyId!)
         .order("updated_at", { ascending: false })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as Contact[];
+      const rows = (data ?? []) as (Contact & { metadata?: { invalid?: boolean } | null })[];
+      // Oculta contatos marcados como inválidos (ex.: LIDs do WhatsApp).
+      return rows.filter((c) => c.metadata?.invalid !== true) as Contact[];
     },
   });
 
