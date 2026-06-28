@@ -362,7 +362,7 @@ export default function Kanban() {
   });
 
   /* ---------------- UI state ---------------- */
-  const [sideTab, setSideTab] = useState<SideKind>("contact");
+  const [sideTab, setSideTab] = useState<SideKind>("ticket");
   const [sideSearch, setSideSearch] = useState("");
   const [laneFilter, setLaneFilter] = useState<"all" | LaneType>("all");
   // K.9: filtros globais
