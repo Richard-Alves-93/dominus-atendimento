@@ -2833,7 +2833,16 @@ const TicketsDesktopLayout = () => {
                 </SelectContent>
               </Select>
             )}
+
+            <TagFilter
+              companyId={activeCompanyId}
+              selected={ticketTagFilter}
+              onChange={setTicketTagFilter}
+              size="sm"
+            />
           </div>
+
+          {tickets.length === 0 && ticketTagFilter.length > 0 && !ticketsQuery.isLoading ? null : null}
 
           <div className="flex-1 overflow-y-auto scrollbar-thin">
             {ticketsQuery.isLoading ? (
