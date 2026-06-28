@@ -15,11 +15,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { MessageSquare, Instagram, Facebook, Mail, Loader2, QrCode, RefreshCw, Power, MoreVertical, Settings2, Info, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 
@@ -56,12 +67,20 @@ const statusLabel: Record<string, string> = {
 export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
+  const { profile, memberships } = useAuth();
+  const isAdmin = useMemo(() => {
+    if (profile?.is_master || profile?.global_role === "master") return true;
+    const m = memberships.find((x) => x.company_id === activeCompanyId);
+    return m?.role === "owner" || m?.role === "admin";
+  }, [profile, memberships, activeCompanyId]);
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("disconnected");
   const [instanceName, setInstanceName] = useState<string | null>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const loadChannels = async () => {
@@ -92,7 +111,7 @@ export default function Conexoes() {
   useEffect(() => stopPolling, []);
 
   const callFn = async (
-    action: "create_or_connect" | "status" | "disconnect" | "recreate",
+    action: "create_or_connect" | "status" | "disconnect" | "recreate" | "cleanup_orphan_instances",
     extra: Record<string, unknown> = {},
   ) => {
     if (!activeCompanyId) return null;
@@ -236,6 +255,45 @@ export default function Conexoes() {
     toast.success("Configurações da conexão reaplicadas com sucesso.");
   };
 
+  const cleanupOrphanInstances = async () => {
+    setCleanupLoading(true);
+    const { data, error } = await supabase.functions.invoke("whatsapp-connection", {
+      body: { action: "cleanup_orphan_instances", company_id: activeCompanyId },
+    });
+    setCleanupLoading(false);
+    setCleanupOpen(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const res = data as {
+      error?: string;
+      message?: string;
+      candidates_found?: number;
+      removed?: string[];
+      failed?: { name: string; error?: string }[];
+    } | null;
+    if (res?.error) {
+      toast.error(res.error);
+      return;
+    }
+    if (res?.failed && res.failed.length > 0) {
+      toast.warning(res.message ?? "Limpeza parcial. Algumas instâncias continuam travadas na Evolution.");
+    } else {
+      toast.success(res?.message ?? "Limpeza concluída.");
+    }
+    await loadChannels();
+    // Refresh status if dialog open
+    if (open) {
+      const s = await callFn("status");
+      if (s) {
+        setStatus(s.status);
+        setQr(s.qr_code ?? null);
+        setInstanceName(s.instance_name ?? null);
+      }
+    }
+  };
+
   const handleDialogChange = (v: boolean) => {
     setOpen(v);
     if (!v) stopPolling();
@@ -358,10 +416,56 @@ export default function Conexoes() {
               <p className="text-[11px] text-muted-foreground text-center">
                 Use "Recriar instância" se o WhatsApp estiver travado/inconsistente. Contatos, atendimentos e mensagens não são afetados.
               </p>
+
+              {isAdmin && (
+                <div className="mt-3 pt-3 border-t border-border w-full">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-2">
+                    Ações avançadas
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setCleanupOpen(true)}
+                    disabled={cleanupLoading || loading}
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    {cleanupLoading ? "Limpando…" : "Limpar instância órfã"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">
+                    Use somente em caso de conflito de instâncias com o mesmo número na Evolution.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar instância órfã da Evolution?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação tenta remover uma instância antiga/travada da Evolution que pode estar impedindo o recebimento de mensagens.
+              Use apenas quando houver conflito de instâncias com o mesmo número.
+              <br /><br />
+              A instância <strong>atualmente ativa</strong> não será removida. Contatos, atendimentos, mensagens, Kanban e oportunidades <strong>não são afetados</strong>.
+              <br /><br />
+              Após a limpeza, pode ser necessário reconectar o WhatsApp e escanear o QR Code novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cleanupLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cleanupOrphanInstances(); }}
+              disabled={cleanupLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cleanupLoading ? "Limpando…" : "Sim, limpar instância órfã"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

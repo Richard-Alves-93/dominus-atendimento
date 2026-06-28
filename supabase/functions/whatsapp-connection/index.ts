@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 interface Body {
-  action: "create_or_connect" | "status" | "disconnect" | "recreate";
+  action: "create_or_connect" | "status" | "disconnect" | "recreate" | "cleanup_orphan_instances";
   company_id: string;
   channel_id?: string;
   force?: boolean;
@@ -645,6 +645,118 @@ Deno.serve(async (req) => {
         channel_id: channel.id,
         recreated: true,
         old_instance_name: oldName,
+      });
+    }
+
+    if (body.action === "cleanup_orphan_instances") {
+      if (!EVO_ENABLED) return json({ error: "Evolution API não configurada." }, 500);
+
+      // Strict permission: master OR owner/admin of this company
+      let allowed = isMaster;
+      if (!allowed) {
+        const { data: cu } = await admin
+          .from("company_users")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("company_id", body.company_id)
+          .eq("status", "active")
+          .maybeSingle();
+        allowed = cu?.role === "owner" || cu?.role === "admin";
+      }
+      if (!allowed) return json({ error: "Apenas administradores podem limpar instâncias órfãs." }, 403);
+
+      // Active instance name (must NOT be removed)
+      const { data: activeInst } = channel
+        ? await admin
+            .from("whatsapp_instances")
+            .select("instance_name")
+            .eq("channel_id", channel.id)
+            .maybeSingle()
+        : { data: null as any };
+      const activeName = activeInst?.instance_name ?? null;
+
+      const companyPrefix = `dominus_${companyRow?.name ? companySlug(companyRow.name) + "_" : ""}${body.company_id.replace(/-/g, "").slice(0, 8)}`;
+      const legacyPrefix = legacyInstanceNameFor(body.company_id);
+
+      // List all instances on Evolution
+      const listRes = await fetch(`${evoBase()}/instance/fetchInstances`, { headers: evoHeaders() });
+      if (!listRes.ok) {
+        const t = await listRes.text().catch(() => "");
+        return json({ error: `Falha ao listar instâncias na Evolution (${listRes.status}): ${t.slice(0, 160)}` }, 502);
+      }
+      const listJson = await listRes.json().catch(() => []);
+      const arr: any[] = Array.isArray(listJson) ? listJson : [];
+
+      // Determine owner number from active instance if possible
+      let activeOwnerJid: string | null = null;
+      const activeEntry = arr.find((x) => (x?.name ?? x?.instance?.instanceName) === activeName);
+      if (activeEntry) {
+        activeOwnerJid = activeEntry?.ownerJid ?? activeEntry?.instance?.owner ?? null;
+      }
+
+      const candidates: { name: string; ownerJid: string | null }[] = [];
+      for (const item of arr) {
+        const name: string | undefined = item?.name ?? item?.instance?.instanceName;
+        if (!name) continue;
+        if (activeName && name === activeName) continue;
+        const ownerJid: string | null = item?.ownerJid ?? item?.instance?.owner ?? null;
+        const matchesPrefix = name.startsWith(companyPrefix) || name === legacyPrefix || name.startsWith(legacyPrefix + "_");
+        const matchesOwner = activeOwnerJid && ownerJid && ownerJid === activeOwnerJid;
+        if (matchesPrefix || matchesOwner) {
+          candidates.push({ name, ownerJid });
+        }
+      }
+
+      console.log("[EVOLUTION_CLEANUP_ORPHAN_START]", {
+        company_id: body.company_id,
+        active_instance: activeName,
+        active_owner_jid: activeOwnerJid,
+        candidates: candidates.map((c) => c.name),
+      });
+
+      const results: Array<{ name: string; logout_status: number; delete_status: number; ok: boolean; error?: string }> = [];
+      for (const c of candidates) {
+        let lo = { status: 0, ok: false, body: "" };
+        let del = { status: 0, ok: false, body: "" };
+        try { lo = await evoLogout(c.name); } catch (e) { lo = { status: 0, ok: false, body: (e as Error)?.message ?? "" }; }
+        try { del = await evoDeleteInstance(c.name); } catch (e) { del = { status: 0, ok: false, body: (e as Error)?.message ?? "" }; }
+        const ok = del.ok || lo.ok;
+        const error = ok ? undefined : `logout=${lo.status} delete=${del.status} ${del.body.slice(0, 120)}`;
+        results.push({ name: c.name, logout_status: lo.status, delete_status: del.status, ok, error });
+      }
+
+      try {
+        await admin.from("audit_logs").insert({
+          company_id: body.company_id,
+          actor_id: user.id,
+          action: "whatsapp_cleanup_orphan_instances",
+          entity_type: "channel",
+          entity_id: channel?.id ?? null,
+          metadata: {
+            active_instance: activeName,
+            active_owner_jid: activeOwnerJid,
+            candidates: candidates.map((c) => c.name),
+            results,
+          },
+        });
+      } catch (_) { /* ignore */ }
+
+      console.log("[EVOLUTION_CLEANUP_ORPHAN_END]", { company_id: body.company_id, results });
+
+      const removed = results.filter((r) => r.ok).map((r) => r.name);
+      const failed = results.filter((r) => !r.ok);
+
+      return json({
+        success: true,
+        active_instance: activeName,
+        candidates_found: candidates.length,
+        removed,
+        failed,
+        message: candidates.length === 0
+          ? "Nenhuma instância órfã encontrada."
+          : failed.length === 0
+            ? `Limpeza concluída. ${removed.length} instância(s) removida(s).`
+            : `Limpeza parcial. ${removed.length} removida(s), ${failed.length} ainda travada(s) na Evolution. Pode ser necessária intervenção manual no servidor.`,
       });
     }
 
