@@ -1250,11 +1250,15 @@ function LaneRow({
   onMoveColumn?: (columnId: string, direction: "left" | "right") => void;
   onArchiveColumn?: (columnId: string) => void;
   onMoveCardOrder?: (cardId: string, direction: "up" | "down") => void;
+  onReorderCardToPosition?: (cardId: string, newIndex: number) => void | Promise<void>;
   onEditCard?: (card: CardRow) => void;
   tagsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
   onOpenTags?: (card: CardRow) => void;
 }) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [dragHandleCardId, setDragHandleCardId] = useState<string | null>(null);
+  const [reorderTarget, setReorderTarget] = useState<{ colId: string; index: number } | null>(null);
+  const CARD_REORDER_MIME = "application/x-dominus-kanban-card-reorder";
   // K.9: totais por linha e coluna (apenas cards visíveis após filtros)
   const laneTotal = columns.reduce((acc, c) => acc + (cardsByColumn[c.id]?.length ?? 0), 0);
   const fmtBRL = (n: number) =>
