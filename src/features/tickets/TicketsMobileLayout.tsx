@@ -845,6 +845,10 @@ export default function TicketsMobileLayout(props: Props) {
                   <DropdownMenuItem onClick={() => setOpportunityOpen(true)}>
                     <Briefcase className="w-4 h-4 mr-2" /> Criar oportunidade
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setTagPickerOpen(true)}>
+                    <TagIcon className="w-4 h-4 mr-2" /> Etiquetas
+                  </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
