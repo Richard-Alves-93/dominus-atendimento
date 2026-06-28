@@ -35,18 +35,23 @@ Deno.serve(async (req) => {
   try {
     if (!EVO_URL || !EVO_KEY) return json({ error: "Evolution não configurada" }, 500);
 
-    const auth = req.headers.get("Authorization") ?? "";
-    if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
-    const { data: ures } = await userClient.auth.getUser();
-    const user = ures.user;
-    if (!user) return json({ error: "Unauthorized" }, 401);
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: prof } = await admin.from("profiles").select("is_master,global_role").eq("id", user.id).maybeSingle();
-    if (!(prof?.is_master === true || prof?.global_role === "master")) return json({ error: "Forbidden" }, 403);
+    const auth = req.headers.get("Authorization") ?? "";
+    let isMaster = false;
+    if (auth.startsWith("Bearer ")) {
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
+      const { data: ures } = await userClient.auth.getUser();
+      const user = ures.user;
+      if (user) {
+        const { data: prof } = await admin.from("profiles").select("is_master,global_role").eq("id", user.id).maybeSingle();
+        isMaster = prof?.is_master === true || prof?.global_role === "master";
+      }
+    }
 
     const body = await req.json().catch(() => ({}));
     const action: string = body?.action ?? "list";
+    // send_test exige master autenticado; list/state são read-only de diagnóstico.
+    if (action === "send_test" && !isMaster) return json({ error: "Forbidden (send_test requer master)" }, 403);
     const phoneFilter: string | undefined = body?.phone; // ex 555191840532
     const instanceName: string | undefined = body?.instance_name;
     const sendTo: string | undefined = body?.send_to;
