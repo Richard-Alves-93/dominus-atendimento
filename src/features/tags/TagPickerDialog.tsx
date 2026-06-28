@@ -113,8 +113,7 @@ export default function TagPickerDialog({
       if (error) throw error;
       invalidate();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro ao atualizar etiqueta", description: msg, variant: "destructive" });
+      toast({ title: "Erro ao atualizar etiqueta", description: formatTagLinkError(e), variant: "destructive" });
     } finally {
       setBusy(null);
     }
