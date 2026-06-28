@@ -185,10 +185,11 @@ export default function Tags() {
 }
 
 function TagDialog({
-  tag, companyId, open, onClose, onSaved,
+  tag, companyId, canManage, open, onClose, onSaved,
 }: {
   tag: TagRow | null;
   companyId: string;
+  canManage: boolean;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -199,13 +200,74 @@ function TagDialog({
   const [description, setDescription] = useState(tag?.description ?? "");
   const [saving, setSaving] = useState(false);
 
+  // Automation state
+  const [automationId, setAutomationId] = useState<string | null>(null);
+  const [autoActive, setAutoActive] = useState(false);
+  const [autoLaneId, setAutoLaneId] = useState<string>("");
+  const [autoColumnId, setAutoColumnId] = useState<string>("");
+  const [lanes, setLanes] = useState<Array<{ id: string; name: string }>>([]);
+  const [columns, setColumns] = useState<Array<{ id: string; lane_id: string; name: string }>>([]);
+
+  // Load lanes/columns + existing automation
+  useState(() => { /* noop placeholder */ });
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useMemo(() => { /* keep top-level */ }, []);
+
+  // Load on mount
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useStateLoader(async () => {
+    if (!canManage) return;
+    const [lanesRes, colsRes] = await Promise.all([
+      supabase
+        .from("kanban_lanes")
+        .select("id,name")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .order("position", { ascending: true }),
+      supabase
+        .from("kanban_columns")
+        .select("id,lane_id,name,position")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .order("position", { ascending: true }),
+    ]);
+    setLanes((lanesRes.data ?? []) as any);
+    setColumns((colsRes.data ?? []) as any);
+
+    if (tag) {
+      const { data: aut } = await (supabase as any)
+        .from("tag_automations")
+        .select("id,is_active,target_kanban_lane_id,target_kanban_column_id")
+        .eq("company_id", companyId)
+        .eq("tag_id", tag.id)
+        .eq("action_type", "move_kanban_card")
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (aut) {
+        setAutomationId(aut.id);
+        setAutoActive(!!aut.is_active);
+        setAutoLaneId(aut.target_kanban_lane_id ?? "");
+        setAutoColumnId(aut.target_kanban_column_id ?? "");
+      }
+    }
+  });
+
+  const colsForLane = columns.filter((c) => !autoLaneId || c.lane_id === autoLaneId);
+
   async function save() {
     if (!name.trim()) {
       toast({ title: "Informe o nome da etiqueta", variant: "destructive" });
       return;
     }
+    if (canManage && autoActive) {
+      if (!autoLaneId || !autoColumnId) {
+        toast({ title: "Selecione a linha e a coluna alvo da automação", variant: "destructive" });
+        return;
+      }
+    }
     setSaving(true);
     try {
+      let tagId = tag?.id ?? null;
       if (tag) {
         const { error } = await supabase
           .from("tags")
@@ -213,14 +275,58 @@ function TagDialog({
           .eq("id", tag.id)
           .eq("company_id", companyId);
         if (error) throw error;
-        toast({ title: "Etiqueta atualizada" });
       } else {
-        const { error } = await supabase
+        const { data: created, error } = await supabase
           .from("tags")
-          .insert({ company_id: companyId, name: name.trim(), color, description: description.trim() || null });
+          .insert({ company_id: companyId, name: name.trim(), color, description: description.trim() || null })
+          .select("id")
+          .single();
         if (error) throw error;
-        toast({ title: "Etiqueta criada" });
+        tagId = created!.id;
       }
+
+      // Save automation
+      if (canManage && tagId) {
+        if (automationId) {
+          if (autoActive) {
+            const { error } = await (supabase as any)
+              .from("tag_automations")
+              .update({
+                is_active: true,
+                target_kanban_lane_id: autoLaneId,
+                target_kanban_column_id: autoColumnId,
+              })
+              .eq("id", automationId)
+              .eq("company_id", companyId);
+            if (error) throw error;
+          } else {
+            // soft-delete / deactivate
+            const { error } = await (supabase as any)
+              .from("tag_automations")
+              .update({ is_active: false, deleted_at: new Date().toISOString() })
+              .eq("id", automationId)
+              .eq("company_id", companyId);
+            if (error) throw error;
+            setAutomationId(null);
+          }
+        } else if (autoActive) {
+          const { error } = await (supabase as any)
+            .from("tag_automations")
+            .insert({
+              company_id: companyId,
+              tag_id: tagId,
+              event_type: "tag_applied",
+              entity_type: "ticket",
+              action_type: "move_kanban_card",
+              target_kanban_lane_id: autoLaneId,
+              target_kanban_column_id: autoColumnId,
+              is_active: true,
+            });
+          if (error) throw error;
+        }
+      }
+
+      toast({ title: tag ? "Etiqueta atualizada" : "Etiqueta criada" });
       onSaved();
       onClose();
     } catch (e) {
@@ -236,7 +342,7 @@ function TagDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{tag ? "Editar etiqueta" : "Nova etiqueta"}</DialogTitle>
           <DialogDescription>Defina nome, cor e descrição.</DialogDescription>
@@ -273,6 +379,65 @@ function TagDialog({
               maxLength={240}
             />
           </div>
+
+          {canManage && (
+            <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium">Automação</div>
+                  <div className="text-xs text-muted-foreground">
+                    Ao aplicar esta etiqueta em um atendimento, mover o card no Kanban.
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={autoActive}
+                    onChange={(e) => setAutoActive(e.target.checked)}
+                  />
+                  Ativar
+                </label>
+              </div>
+              {autoActive && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Linha</Label>
+                    <select
+                      className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                      value={autoLaneId}
+                      onChange={(e) => {
+                        setAutoLaneId(e.target.value);
+                        setAutoColumnId("");
+                      }}
+                    >
+                      <option value="">Selecione...</option>
+                      {lanes.map((l) => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Coluna alvo</Label>
+                    <select
+                      className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                      value={autoColumnId}
+                      onChange={(e) => setAutoColumnId(e.target.value)}
+                      disabled={!autoLaneId}
+                    >
+                      <option value="">Selecione...</option>
+                      {colsForLane.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Esta automação move apenas o card do atendimento no Kanban. Ela não transfere o setor
+                e não envia mensagens.
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
@@ -284,4 +449,15 @@ function TagDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+// Small helper to run an async loader once on mount without an extra import.
+function useStateLoader(fn: () => Promise<void> | void) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [, set] = useState(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useMemo(() => {
+    Promise.resolve(fn()).finally(() => set(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
