@@ -111,7 +111,7 @@ export default function Conexoes() {
   useEffect(() => stopPolling, []);
 
   const callFn = async (
-    action: "create_or_connect" | "status" | "disconnect" | "recreate",
+    action: "create_or_connect" | "status" | "disconnect" | "recreate" | "cleanup_orphan_instances",
     extra: Record<string, unknown> = {},
   ) => {
     if (!activeCompanyId) return null;
