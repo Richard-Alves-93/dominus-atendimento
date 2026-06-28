@@ -415,6 +415,7 @@ const TicketsDesktopLayout = () => {
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
   const [opportunityOpen, setOpportunityOpen] = useState(false);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [takeOverOpen, setTakeOverOpen] = useState(false);
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
