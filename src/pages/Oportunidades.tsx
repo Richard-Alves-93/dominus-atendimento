@@ -375,6 +375,7 @@ export default function Oportunidades() {
                 ))}
               </SelectContent>
             </Select>
+            <TagFilter companyId={activeCompanyId} selected={tagFilter} onChange={setTagFilter} />
           </div>
         </Card>
 
