@@ -113,8 +113,8 @@ export default function Configuracoes() {
       .update({ default_inbox_department_id: defaultInboxDeptId || null })
       .eq("id", activeCompanyId);
     setSaving(false);
-    if (error) {
-      toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
+    if (error || errCompany) {
+      toast({ title: "Falha ao salvar", description: (error || errCompany)?.message, variant: "destructive" });
       return;
     }
     qc.setQueryData(["company-settings", activeCompanyId], payload);
