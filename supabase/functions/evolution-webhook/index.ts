@@ -837,17 +837,31 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
   }
   if (status === "failed") {
     patch.failed_at = ts;
-    patch.failure_reason = "status_webhook";
+    patch.failure_reason = "Falha reportada pelo WhatsApp após o envio.";
   }
 
-  const { data: updated, error } = await admin
+  // Não rebaixar uma mensagem já confirmada como enviada/entregue/lida
+  // para "failed" só porque chegou um evento ambíguo do webhook.
+  // Também não regredir status "read" -> "delivered" -> "sent".
+  let query = admin
     .from("messages")
     .update(patch)
     .eq("company_id", inst.company_id)
     .eq("channel_id", inst.channel_id)
     .eq("from_me", true)
-    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`)
-    .select("id");
+    .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`);
+
+  if (status === "failed") {
+    query = query.in("status", ["sending", "queued", "pending"]);
+  } else if (status === "sent") {
+    query = query.in("status", ["sending", "queued", "pending"]);
+  } else if (status === "delivered") {
+    query = query.in("status", ["sending", "queued", "pending", "sent"]);
+  } else if (status === "read") {
+    query = query.in("status", ["sending", "queued", "pending", "sent", "delivered"]);
+  }
+
+  const { data: updated, error } = await query.select("id");
   if (error) {
     console.error("[WEBHOOK] msg_update_err", error.message);
     auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, 0);
@@ -857,6 +871,7 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
   auditStatus(source, inst.instance_name ?? null, providerId, statusRaw, status, updated?.length ?? 0);
   return updated?.length ?? 0;
 }
+
 
 // ─── H.1 — Inbound reactions from WhatsApp ─────────────────────────────────────
 const REACTION_AUDIT = Deno.env.get("EVOLUTION_REACTION_AUDIT") === "true";
