@@ -1,0 +1,1 @@
+UPDATE public.messages SET status='sent', delivery_status='sent', failed_at=NULL, failure_reason=NULL WHERE failure_reason='status_webhook' AND sent_at IS NOT NULL;
