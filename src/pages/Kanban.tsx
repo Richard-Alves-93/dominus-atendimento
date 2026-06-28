@@ -1447,13 +1447,74 @@ function LaneRow({
                       Sem cards
                     </p>
                   ) : (
-                    (cardsByColumn[col.id] ?? []).map((card) => (
+                    (cardsByColumn[col.id] ?? []).map((card, idx) => (
                       <div
                         key={card.id}
-                        className="rounded-md border bg-background p-2 shadow-sm"
+                        draggable={canManage && dragHandleCardId === card.id}
+                        onDragStart={(e) => {
+                          if (!canManage || dragHandleCardId !== card.id) {
+                            e.preventDefault();
+                            return;
+                          }
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData(
+                            CARD_REORDER_MIME,
+                            JSON.stringify({ card_id: card.id, column_id: col.id }),
+                          );
+                        }}
+                        onDragEnd={() => { setDragHandleCardId(null); setReorderTarget(null); }}
+                        onDragOver={(e) => {
+                          if (!e.dataTransfer.types.includes(CARD_REORDER_MIME)) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          const before = e.clientY < rect.top + rect.height / 2;
+                          const target = before ? idx : idx + 1;
+                          if (!reorderTarget || reorderTarget.colId !== col.id || reorderTarget.index !== target) {
+                            setReorderTarget({ colId: col.id, index: target });
+                          }
+                        }}
+                        onDrop={(e) => {
+                          if (!e.dataTransfer.types.includes(CARD_REORDER_MIME)) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const raw = e.dataTransfer.getData(CARD_REORDER_MIME);
+                          setDragOverCol(null);
+                          try {
+                            const parsed = JSON.parse(raw) as { card_id: string; column_id: string };
+                            if (parsed?.card_id && parsed.column_id === col.id && onReorderCardToPosition) {
+                              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                              const before = e.clientY < rect.top + rect.height / 2;
+                              const target = before ? idx : idx + 1;
+                              onReorderCardToPosition(parsed.card_id, target);
+                            }
+                          } catch { /* ignore */ }
+                          setReorderTarget(null);
+                          setDragHandleCardId(null);
+                        }}
+                        className={cn(
+                          "rounded-md border bg-background p-2 shadow-sm transition-all",
+                          dragHandleCardId === card.id && "opacity-60",
+                          reorderTarget?.colId === col.id && reorderTarget.index === idx && "border-t-2 border-t-primary",
+                          reorderTarget?.colId === col.id && reorderTarget.index === idx + 1 && "border-b-2 border-b-primary",
+                        )}
                       >
                         <div className="flex items-start justify-between gap-1">
-                          <div className="text-xs font-medium leading-tight line-clamp-2">
+                          {canManage && onReorderCardToPosition && (
+                            <button
+                              type="button"
+                              title="Arrastar para ordenar"
+                              aria-label="Arrastar para ordenar"
+                              className="touch-none -ml-1 mt-0.5 inline-flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                              onMouseDown={() => setDragHandleCardId(card.id)}
+                              onMouseUp={() => { /* keep until dragend */ }}
+                              onTouchStart={() => setDragHandleCardId(card.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <GripVertical className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <div className="text-xs font-medium leading-tight line-clamp-2 flex-1">
                             {card.title}
                           </div>
                           {canManage && (
