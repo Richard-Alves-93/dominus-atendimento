@@ -1123,6 +1123,19 @@ async function handleMessageUpsert(admin: any, inst: any, payload: any, source =
         console.log("[WEBHOOK] upsert_fromMe_device keyId=", externalId);
         const { status: mappedStatus } = mapDeliveryStatus(statusRaw);
 
+        // ── Bloqueio de LID: remoteJid no formato "<lid>@lid" NÃO é número real.
+        // Não criar contato com phone_number=<lid> — isso causa envios pelo Dominus
+        // que a Evolution aceita mas nunca chegam ao destinatário.
+        const isLid = remoteJid.endsWith("@lid") || (phone?.length ?? 0) > 13;
+        if (isLid) {
+          console.warn("[WEBHOOK] skip_fromMe_device_lid", {
+            company_id: inst.company_id,
+            remote_jid_masked: remoteJid.slice(0, 4) + "***",
+            phone_len: phone?.length ?? 0,
+          });
+          continue;
+        }
+
         // IMPORTANTE: em payloads fromMe, `pushName` é o nome do DONO do dispositivo
         // conectado (ex.: o atendente/empresa), NÃO do contato do outro lado.
         // Nunca usar pushName como nome do contato aqui — isso causava vários
