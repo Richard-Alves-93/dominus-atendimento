@@ -45,6 +45,7 @@ import {
   SquareCheck,
   Smile,
   Briefcase,
+  Tag as TagIcon,
   X,
 } from "lucide-react";
 import OpportunityDialog, { type OpportunityTicketContext } from "./OpportunityDialog";
