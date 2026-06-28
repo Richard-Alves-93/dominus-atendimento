@@ -98,6 +98,7 @@ export default function Oportunidades() {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const oppsQuery = useQuery({
     queryKey: ["opportunities", activeCompanyId, statusFilter, assignedFilter, periodFilter],
