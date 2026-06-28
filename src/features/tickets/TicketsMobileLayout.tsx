@@ -1420,6 +1420,17 @@ export default function TicketsMobileLayout(props: Props) {
             : null
         }
       />
+      {/* T.1 — Etiquetas (mobile) */}
+      {selected && (selected as any).company_id && (
+        <TagPickerDialog
+          open={tagPickerOpen}
+          onClose={() => setTagPickerOpen(false)}
+          companyId={(selected as any).company_id}
+          entityType="ticket"
+          entityId={selected.id}
+          entityLabel={selected.contact?.name || selected.contact?.phone_number || "atendimento"}
+        />
+      )}
     </AppLayout>
   );
 }
