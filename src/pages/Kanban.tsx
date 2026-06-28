@@ -97,13 +97,16 @@ type CardRow = {
 };
 
 type SideKind = "contact" | "ticket" | "opportunity";
+type SidePresence = { laneName: string | null; columnName: string | null };
 type SideItem = {
   kind: SideKind;
   id: string;
   label: string;
   sub?: string;
   extra?: string;
+  present?: SidePresence | null;
 };
+
 
 const COLOR_PRESETS = [
   { v: "slate", l: "Cinza", hex: "#64748b" },
