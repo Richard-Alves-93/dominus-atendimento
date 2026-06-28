@@ -1221,7 +1221,7 @@ function LaneRow({
   lane, columns, cardsByColumn, canManage, linkEnrich, linkEnrichLoaded, onOpenLinked,
   onAddColumn, onAddCard, onEditLane, onDeleteLane, onMoveCard, onDeleteCard, onEditColumn,
   onDropItem, latestTransfers, onOpenTransferHistory, onCreateOpportunity,
-  onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onEditCard,
+  onMoveLane, onMoveColumn, onArchiveColumn, onMoveCardOrder, onReorderCardToPosition, onEditCard,
   tagsMap, onOpenTags,
 }: {
   lane: Lane;
