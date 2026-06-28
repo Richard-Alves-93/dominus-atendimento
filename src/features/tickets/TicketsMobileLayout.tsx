@@ -63,6 +63,8 @@ import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
 import OpportunityDialog, { type OpportunityTicketContext } from "@/features/tickets/OpportunityDialog";
+import TagPickerDialog from "@/features/tags/TagPickerDialog";
+import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
