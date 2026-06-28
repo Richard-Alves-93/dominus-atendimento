@@ -74,7 +74,7 @@ export default function Tags() {
       .eq("id", toDelete.id)
       .eq("company_id", activeCompanyId);
     if (error) {
-      toast({ title: "Erro ao excluir etiqueta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir etiqueta", description: formatTagError(error), variant: "destructive" });
     } else {
       toast({ title: "Etiqueta excluída" });
       qc.invalidateQueries({ queryKey: ["tags"] });
