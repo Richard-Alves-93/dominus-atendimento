@@ -497,6 +497,29 @@ export default function Kanban() {
   const linkEnrich = linkEnrichQ.data ?? { contacts: {}, tickets: {}, opportunities: {} };
   const latestTransfers = useLatestTransfers(companyId, linkIds.tickets);
 
+  /* ---------------- Sidebar presence map (K.13) ----------------
+   * Indica, sem nova query, quais itens da lista lateral já possuem
+   * card ativo no Kanban da empresa atual. Usa apenas dados já carregados
+   * (cardsQ + lanesQ + columnsQ) para evitar N+1.
+   */
+  const sidebarPresence = useMemo(() => {
+    const laneNameById: Record<string, string> = {};
+    for (const l of lanesQ.data ?? []) laneNameById[l.id] = l.name;
+    const colNameById: Record<string, string> = {};
+    for (const c of columnsQ.data ?? []) colNameById[c.id] = c.name;
+    const map: Record<string, SidePresence> = {};
+    for (const card of cardsQ.data ?? []) {
+      const loc: SidePresence = {
+        laneName: laneNameById[card.lane_id] ?? null,
+        columnName: colNameById[card.column_id] ?? null,
+      };
+      if (card.card_type === "ticket" && card.ticket_id) map[`ticket:${card.ticket_id}`] = loc;
+      else if (card.card_type === "contact" && card.contact_id) map[`contact:${card.contact_id}`] = loc;
+      else if (card.card_type === "opportunity" && card.opportunity_id) map[`opportunity:${card.opportunity_id}`] = loc;
+    }
+    return map;
+  }, [cardsQ.data, lanesQ.data, columnsQ.data]);
+
   /* ---------------- Sidebar items ---------------- */
   const sideItems: SideItem[] = useMemo(() => {
     const q = sideSearch.trim().toLowerCase();
@@ -527,13 +550,15 @@ export default function Kanban() {
           : undefined,
       }));
     }
+    items = items.map((i) => ({ ...i, present: sidebarPresence[`${i.kind}:${i.id}`] ?? null }));
     if (!q) return items;
     return items.filter((i) =>
       i.label.toLowerCase().includes(q) ||
       (i.sub ?? "").toLowerCase().includes(q) ||
       (i.extra ?? "").toLowerCase().includes(q),
     );
-  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data, opportunitiesQ.data]);
+  }, [sideTab, sideSearch, contactsQ.data, ticketsQ.data, opportunitiesQ.data, sidebarPresence]);
+
 
   /* ---------------- Loading ---------------- */
   if (!companyId) {
