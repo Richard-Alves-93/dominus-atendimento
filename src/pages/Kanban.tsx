@@ -654,6 +654,7 @@ export default function Kanban() {
                 className="pl-7 h-9 w-[180px] text-sm"
               />
             </div>
+            <TagFilter companyId={companyId} selected={tagFilter} onChange={setTagFilter} />
             <Button size="sm" onClick={() => setLaneDialog({ open: true, lane: null })}>
               <Plus className="h-4 w-4 mr-1" /> Nova linha
             </Button>
