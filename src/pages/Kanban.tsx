@@ -38,6 +38,7 @@ import {
 import CreateOpportunityFromCardDialog from "@/features/kanban/CreateOpportunityFromCardDialog";
 import TagPickerDialog, { type TagEntityType } from "@/features/tags/TagPickerDialog";
 import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
+import { TagFilter, useEntityIdsByTags } from "@/features/tags/TagFilter";
 
 type LaneType = "department" | "commercial" | "personal" | "custom";
 
