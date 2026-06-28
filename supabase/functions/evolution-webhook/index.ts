@@ -840,9 +840,8 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
     patch.failure_reason = "Falha reportada pelo WhatsApp após o envio.";
   }
 
-  // Não rebaixar uma mensagem já confirmada como enviada/entregue/lida
-  // para "failed" só porque chegou um evento ambíguo do webhook.
-  // Também não regredir status "read" -> "delivered" -> "sent".
+  // Não regredir status "read" -> "delivered" -> "sent".
+  // ERROR explícito da Evolution é confiável mesmo depois do aceite HTTP/send.message.
   let query = admin
     .from("messages")
     .update(patch)
@@ -852,7 +851,7 @@ async function patchOutboundStatus(admin: any, inst: any, providerId: string | n
     .or(`provider_message_id.eq.${providerId},external_id.eq.${providerId}`);
 
   if (status === "failed") {
-    query = query.in("status", ["sending", "queued", "pending"]);
+    query = query.in("status", ["sending", "queued", "pending", "sent"]);
   } else if (status === "sent") {
     query = query.in("status", ["sending", "queued", "pending"]);
   } else if (status === "delivered") {
