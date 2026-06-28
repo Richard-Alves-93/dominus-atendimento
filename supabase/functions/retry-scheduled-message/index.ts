@@ -102,9 +102,11 @@ Deno.serve(async (req) => {
     });
     if (qErr) return fail("queue_error", "Não foi possível reenviar esta mensagem. Tente novamente.", { detail: qErr.message });
 
-    // Mark previous failed row so the UI can hide the retry button.
-    await admin.from("messages").update({ failure_reason: (m as any).failure_reason ?? "retried" })
-      .eq("id", m.id).then(() => {}, () => {});
+    // Mark previous failed row so the UI can hide the retry button (always overwrite).
+    await admin.from("messages")
+      .update({ failure_reason: "Reenfileirado para reenvio" })
+      .eq("id", m.id)
+      .then(() => {}, () => {});
 
     // Best-effort audit log.
     try {
