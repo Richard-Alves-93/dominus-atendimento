@@ -223,10 +223,9 @@ function TagDialog({
       onSaved();
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
       toast({
         title: "Erro ao salvar etiqueta",
-        description: /unique|duplicate/i.test(msg) ? "Já existe uma etiqueta com esse nome." : msg,
+        description: formatTagError(e),
         variant: "destructive",
       });
     } finally {
