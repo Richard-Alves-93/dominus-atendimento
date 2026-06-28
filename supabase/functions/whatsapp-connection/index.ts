@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 interface Body {
-  action: "create_or_connect" | "status" | "disconnect" | "recreate";
+  action: "create_or_connect" | "status" | "disconnect" | "recreate" | "cleanup_orphan_instances";
   company_id: string;
   channel_id?: string;
   force?: boolean;
