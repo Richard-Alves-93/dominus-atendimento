@@ -75,6 +75,7 @@ const Contacts = () => {
               className="pl-9 h-10 bg-card border-border"
             />
           </div>
+          <TagFilter companyId={activeCompanyId} selected={tagFilter} onChange={setTagFilter} />
           <Button className="gradient-primary text-primary-foreground gap-2">
             <Plus className="w-4 h-4" />
             Novo Contato
