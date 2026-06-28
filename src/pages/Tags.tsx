@@ -19,6 +19,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TAG_COLOR_PRESETS, tagColorHex } from "@/features/tags/tagColors";
+import { formatTagError } from "@/features/tags/formatTagError";
 
 type TagRow = {
   id: string;
