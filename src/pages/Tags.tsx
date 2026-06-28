@@ -451,14 +451,3 @@ function TagDialog({
     </Dialog>
   );
 }
-
-// Small helper to run an async loader once on mount without an extra import.
-function useStateLoader(fn: () => Promise<void> | void) {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [, set] = useState(false);
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useMemo(() => {
-    Promise.resolve(fn()).finally(() => set(true));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-}
