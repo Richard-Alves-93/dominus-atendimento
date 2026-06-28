@@ -1561,17 +1561,6 @@ function LaneRow({
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
-                                {onMoveCardOrder && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "up")}>
-                                      <ArrowUp className="h-3 w-3 mr-2" /> Mover card para cima
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onMoveCardOrder(card.id, "down")}>
-                                      <ArrowDown className="h-3 w-3 mr-2" /> Mover card para baixo
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                  </>
-                                )}
                                 {card.card_type === "manual" && onEditCard && (
                                   <DropdownMenuItem onClick={() => onEditCard(card)}>
                                     <Pencil className="h-3 w-3 mr-2" /> Editar card
