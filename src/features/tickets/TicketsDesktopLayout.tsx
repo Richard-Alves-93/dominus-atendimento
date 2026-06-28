@@ -3397,13 +3397,33 @@ const TicketsDesktopLayout = () => {
                               className="text-[11px] underline text-destructive hover:opacity-80"
                               onClick={async () => {
                                 try {
-                                  const { error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                  const { data, error } = await supabase.functions.invoke("retry-scheduled-message", {
                                     body: { message_id: m.id },
                                   });
-                                  if (error) throw error;
+                                  const d: any = data ?? {};
+                                  if (error && !d?.ok && !d?.error) {
+                                    toast({
+                                      title: "Falha ao reenviar",
+                                      description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+                                  if (d?.ok === false) {
+                                    toast({
+                                      title: "Falha ao reenviar",
+                                      description: d.friendly_reason || d.error || "Não foi possível reenviar esta mensagem.",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
                                   toast({ title: "Reenfileirado para envio" });
                                 } catch (e: any) {
-                                  toast({ title: "Falha ao reenviar", description: e?.message ?? String(e), variant: "destructive" });
+                                  toast({
+                                    title: "Falha ao reenviar",
+                                    description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
+                                    variant: "destructive",
+                                  });
                                 }
                               }}
                             >
