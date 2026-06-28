@@ -3379,6 +3379,9 @@ const TicketsDesktopLayout = () => {
                             if (ds === "sending") {
                               return <Check className="w-3.5 h-3.5 opacity-60" aria-label="Enviando" />;
                             }
+                            if (ds === "pending" || ds === "queued") {
+                              return <Clock className="w-3.5 h-3.5 opacity-70" aria-label="Aguardando confirmação" />;
+                            }
                             if (ds === "delivered") {
                               return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Entregue" />;
                             }

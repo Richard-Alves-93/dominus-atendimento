@@ -38,6 +38,26 @@ function maskPhone(p: string) {
   return p.slice(0, 4) + "***" + p.slice(-2);
 }
 
+function extractEvolutionKey(data: any): Record<string, any> {
+  return data?.key ?? data?.message?.key ?? data?.data?.key ?? data?.response?.key ?? {};
+}
+
+function mapInitialEvolutionStatus(raw: any): { deliveryStatus: string; failed: boolean; failureReason?: string; friendlyReason?: string } {
+  const v = typeof raw === "string" ? raw.toUpperCase() : raw;
+  if (v === 0 || v === "ERROR" || v === "FAILED" || v === -1) {
+    return {
+      deliveryStatus: "failed",
+      failed: true,
+      failureReason: "evolution_status_error",
+      friendlyReason: "O WhatsApp recusou o envio após aceitar a requisição.",
+    };
+  }
+  if (v === 2 || v === "SERVER_ACK" || v === "SENT" || v === "ACK") return { deliveryStatus: "sent", failed: false };
+  if (v === 3 || v === "DELIVERY_ACK" || v === "DELIVERED") return { deliveryStatus: "delivered", failed: false };
+  if (v === 4 || v === 5 || v === "READ" || v === "PLAYED" || v === "READ_SELF") return { deliveryStatus: "read", failed: false };
+  return { deliveryStatus: "pending", failed: false };
+}
+
 async function syncEvolutionWebhook(instanceName: string) {
   if (!EVO_WEBHOOK) return;
   const body = {
@@ -86,7 +106,7 @@ async function dispatchToEvolution(params: {
   quotedProviderId?: string | null;
   quotedFromMe?: boolean;
   quotedText?: string | null;
-}): Promise<{ ok: boolean; status?: number; externalId?: string | null; failureReason?: string; friendlyReason?: string; connectionLost?: boolean; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
+}): Promise<{ ok: boolean; status?: number; externalId?: string | null; remoteJid?: string | null; deliveryStatus?: string; failureReason?: string; friendlyReason?: string; connectionLost?: boolean; bodyRaw?: string; quoteFallbackUsed?: boolean }> {
   const { admin, messageId, ticketId, endpoint, instanceName, phone, finalText, quotedProviderId, quotedFromMe, quotedText } = params;
   let quoteFallbackUsed = false;
   try {
@@ -167,30 +187,57 @@ async function dispatchToEvolution(params: {
       return { ok: false, status: evoRes.status, failureReason, friendlyReason, connectionLost, bodyRaw: evoText.slice(0, 300) };
     }
 
-    const externalId =
-      evoData?.key?.id ??
-      evoData?.message?.key?.id ??
-      evoData?.data?.key?.id ??
-      evoData?.response?.key?.id ??
-      evoData?.messageId ??
-      evoData?.id ??
-      evoData?.keyId ??
-      null;
+    const key = extractEvolutionKey(evoData);
+    const externalId = key?.id ?? evoData?.messageId ?? evoData?.id ?? evoData?.keyId ?? null;
+    const responseRemoteJid = key?.remoteJid ?? null;
+    const expectedRemoteJid = `${phone}@s.whatsapp.net`;
+    const responseStatus = evoData?.status ?? evoData?.data?.status ?? evoData?.response?.status ?? null;
+    const hasTrackableConfirmation = Boolean(externalId && responseRemoteJid && evoData?.messageTimestamp);
+    const initialStatus = mapInitialEvolutionStatus(responseStatus);
     console.log("[EVOLUTION_SEND_RESPONSE]", {
       message_id: messageId,
       status: evoRes.status,
       ok: true,
       external_id: externalId,
+      phone_normalized: maskPhone(phone),
+      remote_jid: expectedRemoteJid,
+      response_remote_jid: responseRemoteJid,
+      response_status: responseStatus,
+      message_timestamp_present: Boolean(evoData?.messageTimestamp),
       keys: Object.keys(evoData ?? {}),
     });
 
     const nowIso = new Date().toISOString();
+    const invalidProviderConfirmation = !hasTrackableConfirmation || responseRemoteJid !== expectedRemoteJid;
+    if (invalidProviderConfirmation || initialStatus.failed) {
+      const failureReason = initialStatus.failureReason ?? (
+        !hasTrackableConfirmation
+          ? "evolution_response_missing_trackable_confirmation"
+          : `evolution_remote_jid_mismatch: expected=${expectedRemoteJid} got=${responseRemoteJid ?? "null"}`
+      );
+      const friendlyReason = initialStatus.friendlyReason ?? "O WhatsApp não retornou uma confirmação rastreável do envio.";
+      await admin.from("messages").update({
+        delivery_status: "failed",
+        status: "failed",
+        failed_at: nowIso,
+        failure_reason: failureReason,
+        raw: evoData,
+        ...(externalId ? { external_id: externalId, provider_message_id: externalId } : {}),
+      }).eq("id", messageId);
+      return { ok: false, status: evoRes.status, externalId, remoteJid: responseRemoteJid, deliveryStatus: "failed", failureReason, friendlyReason };
+    }
+
     const patch: Record<string, unknown> = {
-      delivery_status: "sent",
-      status: "sent",
+      delivery_status: initialStatus.deliveryStatus,
+      status: initialStatus.deliveryStatus,
       sent_at: nowIso,
       raw: evoData,
     };
+    if (initialStatus.deliveryStatus === "delivered") patch.delivered_at = nowIso;
+    if (initialStatus.deliveryStatus === "read") {
+      patch.delivered_at = nowIso;
+      patch.read_at = nowIso;
+    }
     if (externalId) {
       patch.external_id = externalId;
       patch.provider_message_id = externalId;
@@ -200,7 +247,7 @@ async function dispatchToEvolution(params: {
     if (updErr) console.error("[SEND_WA] update_after_send_failed", updErr.message);
     await admin.from("tickets").update({ last_message_at: nowIso, status: "open" }).eq("id", ticketId);
 
-    return { ok: true, status: evoRes.status, externalId, quoteFallbackUsed };
+    return { ok: true, status: evoRes.status, externalId, remoteJid: responseRemoteJid, deliveryStatus: initialStatus.deliveryStatus, quoteFallbackUsed };
   } catch (e) {
     const failureReason = String((e as Error)?.message ?? e).slice(0, 300);
     console.error("[EVOLUTION_SEND_RESPONSE]", { message_id: messageId, ok: false, exception: failureReason });
@@ -393,6 +440,7 @@ Deno.serve(async (req) => {
       message_id: inserted.id,
       status_final: result.ok ? "sent" : "failed",
       provider_message_id: result.externalId ?? null,
+      remote_jid: result.remoteJid ?? null,
       failure_reason: result.failureReason ?? null,
       total_ms: tTotal,
     });
@@ -430,6 +478,7 @@ Deno.serve(async (req) => {
       message_id: inserted.id,
       delivery_status: "sent",
       provider_message_id: result.externalId ?? null,
+      delivery_status: result.deliveryStatus ?? "pending",
       timings: { auth: tAuth, ctx: tCtx, insert: tIns, total: tTotal },
     });
   } catch (e) {
