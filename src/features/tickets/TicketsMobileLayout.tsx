@@ -779,6 +779,11 @@ export default function TicketsMobileLayout(props: Props) {
               {selected?.department?.name ? ` · ${selected.department.name}` : ""}
               {selected?.assignee?.full_name ? ` · ${selected.assignee.full_name}` : ""}
             </div>
+            {selectedTicketTags.length > 0 && (
+              <div className="mt-1">
+                <CardTagsBadges tags={selectedTicketTags} max={3} />
+              </div>
+            )}
           </div>
           {selected?.status && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium shrink-0">
