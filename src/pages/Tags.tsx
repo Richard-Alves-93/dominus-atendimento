@@ -155,6 +155,7 @@ export default function Tags() {
         <TagDialog
           tag={editing}
           companyId={activeCompanyId!}
+          canManage={canManage}
           open
           onClose={() => {
             setCreating(false);
