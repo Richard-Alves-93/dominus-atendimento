@@ -67,12 +67,20 @@ const statusLabel: Record<string, string> = {
 export default function Conexoes() {
   const queryClient = useQueryClient();
   const { activeCompanyId } = useCompany();
+  const { profile, memberships } = useAuth();
+  const isAdmin = useMemo(() => {
+    if (profile?.is_master || profile?.global_role === "master") return true;
+    const m = memberships.find((x) => x.company_id === activeCompanyId);
+    return m?.role === "owner" || m?.role === "admin";
+  }, [profile, memberships, activeCompanyId]);
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("disconnected");
   const [instanceName, setInstanceName] = useState<string | null>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const loadChannels = async () => {
