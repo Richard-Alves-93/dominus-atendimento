@@ -349,6 +349,13 @@ export default function TicketsMobileLayout(props: Props) {
   const [forwardOpen, setForwardOpen] = useState(false);
   // C.1.1 — Criar oportunidade (mobile)
   const [opportunityOpen, setOpportunityOpen] = useState(false);
+  // T.1 — Etiquetas (mobile)
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const selectedTagsCards = selected
+    ? [{ id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }]
+    : [];
+  const selectedTagsQ = useEntityTags(selected?.company_id ?? null, selectedTagsCards);
+  const selectedTicketTags = selected ? tagsForCard(selectedTagsQ.data, { id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }) : [];
   const qcMobile = useQueryClient();
 
 
