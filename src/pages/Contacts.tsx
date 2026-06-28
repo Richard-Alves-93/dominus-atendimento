@@ -30,6 +30,7 @@ const initialsOf = (name: string | null, phone: string | null) => {
 
 const Contacts = () => {
   const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const { activeCompanyId } = useCompany();
 
   const { data: contacts = [], isLoading } = useQuery({
@@ -47,13 +48,19 @@ const Contacts = () => {
     },
   });
 
+  const tagFilteredIds = useEntityIdsByTags(activeCompanyId, "contact", tagFilter);
+
   const q = search.toLowerCase();
-  const filtered = contacts.filter(
-    (c) =>
-      (c.name ?? "").toLowerCase().includes(q) ||
-      (c.phone_number ?? "").includes(search) ||
-      (c.email ?? "").toLowerCase().includes(q)
-  );
+  const filtered = useMemo(() => contacts.filter(
+    (c) => {
+      if (tagFilter.length > 0 && !tagFilteredIds?.has(c.id)) return false;
+      return (
+        (c.name ?? "").toLowerCase().includes(q) ||
+        (c.phone_number ?? "").includes(search) ||
+        (c.email ?? "").toLowerCase().includes(q)
+      );
+    },
+  ), [contacts, q, search, tagFilter, tagFilteredIds]);
 
   return (
     <AppLayout title="Contatos">
