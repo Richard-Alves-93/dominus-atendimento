@@ -416,10 +416,56 @@ export default function Conexoes() {
               <p className="text-[11px] text-muted-foreground text-center">
                 Use "Recriar instância" se o WhatsApp estiver travado/inconsistente. Contatos, atendimentos e mensagens não são afetados.
               </p>
+
+              {isAdmin && (
+                <div className="mt-3 pt-3 border-t border-border w-full">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-2">
+                    Ações avançadas
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setCleanupOpen(true)}
+                    disabled={cleanupLoading || loading}
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    {cleanupLoading ? "Limpando…" : "Limpar instância órfã"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">
+                    Use somente em caso de conflito de instâncias com o mesmo número na Evolution.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar instância órfã da Evolution?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação tenta remover uma instância antiga/travada da Evolution que pode estar impedindo o recebimento de mensagens.
+              Use apenas quando houver conflito de instâncias com o mesmo número.
+              <br /><br />
+              A instância <strong>atualmente ativa</strong> não será removida. Contatos, atendimentos, mensagens, Kanban e oportunidades <strong>não são afetados</strong>.
+              <br /><br />
+              Após a limpeza, pode ser necessário reconectar o WhatsApp e escanear o QR Code novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cleanupLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cleanupOrphanInstances(); }}
+              disabled={cleanupLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cleanupLoading ? "Limpando…" : "Sim, limpar instância órfã"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
