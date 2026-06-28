@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -41,6 +42,29 @@ export default function Configuracoes() {
   const [protocolEnabled, setProtocolEnabled] = useState(false);
   const [protocolPrefix, setProtocolPrefix] = useState("");
   const [protocolFormat, setProtocolFormat] = useState("{PREFIX}-{YYYY}-{SEQUENCE_6}");
+  const [defaultInboxDeptId, setDefaultInboxDeptId] = useState<string>("");
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    (supabase as any)
+      .from("departments")
+      .select("id, name")
+      .eq("company_id", activeCompanyId)
+      .eq("status", "active")
+      .order("name")
+      .then(({ data }: any) => setDepartments(data ?? []));
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    (supabase as any)
+      .from("companies")
+      .select("default_inbox_department_id")
+      .eq("id", activeCompanyId)
+      .maybeSingle()
+      .then(({ data }: any) => setDefaultInboxDeptId(data?.default_inbox_department_id ?? ""));
+  }, [activeCompanyId]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -84,9 +108,13 @@ export default function Configuracoes() {
     const { error } = await (supabase as any)
       .from("company_settings")
       .upsert(payload, { onConflict: "company_id" });
+    const { error: errCompany } = await (supabase as any)
+      .from("companies")
+      .update({ default_inbox_department_id: defaultInboxDeptId || null })
+      .eq("id", activeCompanyId);
     setSaving(false);
-    if (error) {
-      toast({ title: "Falha ao salvar", description: error.message, variant: "destructive" });
+    if (error || errCompany) {
+      toast({ title: "Falha ao salvar", description: (error || errCompany)?.message, variant: "destructive" });
       return;
     }
     qc.setQueryData(["company-settings", activeCompanyId], payload);
@@ -125,6 +153,28 @@ export default function Configuracoes() {
             </div>
           ) : (
             <div className="space-y-5">
+              <div className="space-y-2 max-w-md">
+                <Label className="text-sm">Setor padrão de entrada</Label>
+                <Select
+                  value={defaultInboxDeptId || "__none__"}
+                  onValueChange={(v) => setDefaultInboxDeptId(v === "__none__" ? "" : v)}
+                  disabled={!canManage}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um setor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem setor padrão (fila geral)</SelectItem>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Novos atendimentos recebidos pelos canais entram automaticamente neste setor.
+                </p>
+              </div>
+
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-0.5">
                   <Label className="text-sm">Permitir que outro atendente assuma atendimento parado</Label>
