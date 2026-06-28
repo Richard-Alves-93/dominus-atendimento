@@ -19,6 +19,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TAG_COLOR_PRESETS, tagColorHex } from "@/features/tags/tagColors";
+import { formatTagError } from "@/features/tags/formatTagError";
 
 type TagRow = {
   id: string;
@@ -73,7 +74,7 @@ export default function Tags() {
       .eq("id", toDelete.id)
       .eq("company_id", activeCompanyId);
     if (error) {
-      toast({ title: "Erro ao excluir etiqueta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir etiqueta", description: formatTagError(error), variant: "destructive" });
     } else {
       toast({ title: "Etiqueta excluída" });
       qc.invalidateQueries({ queryKey: ["tags"] });
@@ -222,10 +223,9 @@ function TagDialog({
       onSaved();
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
       toast({
         title: "Erro ao salvar etiqueta",
-        description: /unique|duplicate/i.test(msg) ? "Já existe uma etiqueta com esse nome." : msg,
+        description: formatTagError(e),
         variant: "destructive",
       });
     } finally {

@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { TAG_COLOR_PRESETS, tagColorHex } from "@/features/tags/tagColors";
+import { formatTagError, formatTagLinkError } from "@/features/tags/formatTagError";
 
 export type TagEntityType = "contact" | "ticket" | "opportunity";
 
@@ -112,8 +113,7 @@ export default function TagPickerDialog({
       if (error) throw error;
       invalidate();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Erro ao atualizar etiqueta", description: msg, variant: "destructive" });
+      toast({ title: "Erro ao atualizar etiqueta", description: formatTagLinkError(e), variant: "destructive" });
     } finally {
       setBusy(null);
     }
@@ -131,10 +131,9 @@ export default function TagPickerDialog({
       setCreating(false);
       qc.invalidateQueries({ queryKey: ["tags", companyId] });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
       toast({
         title: "Erro ao criar etiqueta",
-        description: /unique|duplicate/i.test(msg) ? "Já existe uma etiqueta com esse nome." : msg,
+        description: formatTagError(e),
         variant: "destructive",
       });
     } finally {

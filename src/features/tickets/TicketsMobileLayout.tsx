@@ -34,6 +34,7 @@ import {
   ChevronDown,
   Download,
   Briefcase,
+  Tag as TagIcon,
 } from "lucide-react";
 import {
   Sheet,
@@ -62,6 +63,8 @@ import { MobileCompactSidebar } from "@/components/mobile/MobileCompactSidebar";
 import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
 import OpportunityDialog, { type OpportunityTicketContext } from "@/features/tickets/OpportunityDialog";
+import TagPickerDialog from "@/features/tags/TagPickerDialog";
+import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
 import { QuickRepliesPopover } from "@/components/QuickRepliesPopover";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -346,6 +349,13 @@ export default function TicketsMobileLayout(props: Props) {
   const [forwardOpen, setForwardOpen] = useState(false);
   // C.1.1 — Criar oportunidade (mobile)
   const [opportunityOpen, setOpportunityOpen] = useState(false);
+  // T.1 — Etiquetas (mobile)
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const selectedTagsCards = selected
+    ? [{ id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }]
+    : [];
+  const selectedTagsQ = useEntityTags(selected?.company_id ?? null, selectedTagsCards);
+  const selectedTicketTags = selected ? tagsForCard(selectedTagsQ.data, { id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }) : [];
   const qcMobile = useQueryClient();
 
 
@@ -769,6 +779,11 @@ export default function TicketsMobileLayout(props: Props) {
               {selected?.department?.name ? ` · ${selected.department.name}` : ""}
               {selected?.assignee?.full_name ? ` · ${selected.assignee.full_name}` : ""}
             </div>
+            {selectedTicketTags.length > 0 && (
+              <div className="mt-1">
+                <CardTagsBadges tags={selectedTicketTags} max={3} />
+              </div>
+            )}
           </div>
           {selected?.status && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium shrink-0">
@@ -834,6 +849,10 @@ export default function TicketsMobileLayout(props: Props) {
                   <DropdownMenuLabel>Comercial</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => setOpportunityOpen(true)}>
                     <Briefcase className="w-4 h-4 mr-2" /> Criar oportunidade
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setTagPickerOpen(true)}>
+                    <TagIcon className="w-4 h-4 mr-2" /> Etiquetas
                   </DropdownMenuItem>
                 </>
               )}
@@ -1406,6 +1425,17 @@ export default function TicketsMobileLayout(props: Props) {
             : null
         }
       />
+      {/* T.1 — Etiquetas (mobile) */}
+      {selected && (selected as any).company_id && (
+        <TagPickerDialog
+          open={tagPickerOpen}
+          onClose={() => setTagPickerOpen(false)}
+          companyId={(selected as any).company_id}
+          entityType="ticket"
+          entityId={selected.id}
+          entityLabel={selected.contact?.name || selected.contact?.phone_number || "atendimento"}
+        />
+      )}
     </AppLayout>
   );
 }

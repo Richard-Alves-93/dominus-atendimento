@@ -45,6 +45,7 @@ import {
   SquareCheck,
   Smile,
   Briefcase,
+  Tag as TagIcon,
   X,
 } from "lucide-react";
 import OpportunityDialog, { type OpportunityTicketContext } from "./OpportunityDialog";
@@ -85,6 +86,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import TicketsMobileLayout from "@/features/tickets/TicketsMobileLayout";
 import { MediaContent } from "@/features/tickets/MediaContent";
 import ForwardDialog from "@/features/tickets/ForwardDialog";
+import TagPickerDialog from "@/features/tags/TagPickerDialog";
+import { useEntityTags, tagsForCard, CardTagsBadges } from "@/features/tags/useEntityTags";
 
 const MENU_GLASS_CLASS =
   "bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-border/60 shadow-lg";
@@ -412,6 +415,7 @@ const TicketsDesktopLayout = () => {
   const [assignDeptOpen, setAssignDeptOpen] = useState(false);
   const [assignUserOpen, setAssignUserOpen] = useState(false);
   const [opportunityOpen, setOpportunityOpen] = useState(false);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [takeOverOpen, setTakeOverOpen] = useState(false);
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
   const [pendingDeptId, setPendingDeptId] = useState<string>("");
@@ -724,6 +728,17 @@ const TicketsDesktopLayout = () => {
     () => tickets.find((t) => t.id === selectedId) ?? null,
     [tickets, selectedId],
   );
+
+  // T.1 — Etiquetas do atendimento selecionado (badges no cabeçalho)
+  const selectedTagsCards = useMemo(
+    () =>
+      selected
+        ? [{ id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }]
+        : [],
+    [selected],
+  );
+  const selectedTagsQ = useEntityTags(activeCompanyId ?? null, selectedTagsCards);
+  const selectedTicketTags = selected ? tagsForCard(selectedTagsQ.data, { id: selected.id, card_type: "ticket", contact_id: null, ticket_id: selected.id, opportunity_id: null }) : [];
 
   // Restaura o ticket selecionado quando a lista carrega. Só restaura se o
   // ticket existir na lista visível ao usuário (RLS + filtro do setor já
@@ -2514,6 +2529,17 @@ const TicketsDesktopLayout = () => {
             : null
         }
       />
+      {/* T.1 — Etiquetas do atendimento */}
+      {selected && activeCompanyId && (
+        <TagPickerDialog
+          open={tagPickerOpen}
+          onClose={() => setTagPickerOpen(false)}
+          companyId={activeCompanyId}
+          entityType="ticket"
+          entityId={selected.id}
+          entityLabel={selected.contact?.name || selected.contact?.phone_number || "atendimento"}
+        />
+      )}
       {/* Confirm: Assumir atendimento */}
       <AlertDialog open={takeOverOpen} onOpenChange={setTakeOverOpen}>
         <AlertDialogContent>
@@ -3008,6 +3034,9 @@ const TicketsDesktopLayout = () => {
                         Atendimento parado
                       </Badge>
                     )}
+                    {selectedTicketTags.length > 0 && (
+                      <CardTagsBadges tags={selectedTicketTags} max={3} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -3064,6 +3093,10 @@ const TicketsDesktopLayout = () => {
                     <DropdownMenuLabel>Comercial</DropdownMenuLabel>
                     <DropdownMenuItem onClick={() => setOpportunityOpen(true)}>
                       <Briefcase className="w-4 h-4 mr-2" /> Criar oportunidade
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setTagPickerOpen(true)}>
+                      <TagIcon className="w-4 h-4 mr-2" /> Etiquetas
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
