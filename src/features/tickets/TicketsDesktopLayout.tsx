@@ -145,6 +145,7 @@ interface MessageRow {
   reply_to_message_type?: string | null;
   is_edited?: boolean | null;
   edited_at?: string | null;
+  is_historical_failure?: boolean | null;
   _optimistic?: boolean;
 }
 
@@ -152,7 +153,8 @@ interface MessageRow {
 // Era o gargalo ao abrir conversas (até 500 mensagens com payloads grandes).
 // Projetamos apenas o campo realmente usado pela UI: raw.forwarded.
 const MESSAGE_SELECT_FIELDS =
-  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at, is_forwarded:raw->forwarded";
+  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at, is_forwarded:raw->forwarded, is_historical_failure:raw->historical_failure";
+
 
 const MIN_BODY_MATCH_CHARS = 8;
 const BODY_MATCH_WINDOW_MS = 10 * 60 * 1000;
@@ -3371,7 +3373,9 @@ const TicketsDesktopLayout = () => {
                               ? (m.status === "error" ? "failed" : "sending")
                               : (m.delivery_status || m.status || "sent");
                             if (ds === "failed") {
-                              return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
+                              const cls = m.is_historical_failure ? "w-3.5 h-3.5 text-muted-foreground/70" : "w-3.5 h-3.5 text-destructive";
+                              const label = m.is_historical_failure ? "Falha antiga" : "Falhou";
+                              return <AlertCircle className={cls} aria-label={label} />;
                             }
                             if (ds === "read") {
                               return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
@@ -3388,52 +3392,65 @@ const TicketsDesktopLayout = () => {
                             return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
                           })()}
                         </div>
-                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && !(typeof m.failure_reason === "string" && m.failure_reason.startsWith("Reenfileirado")) && (
-                          <div className="mt-1 flex items-center justify-end gap-2">
-                            {m.failure_reason ? (
-                              <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
-                                {m.failure_reason}
-                              </span>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="text-[11px] underline text-destructive hover:opacity-80"
-                              onClick={async () => {
-                                try {
-                                  const { data, error } = await supabase.functions.invoke("retry-scheduled-message", {
-                                    body: { message_id: m.id },
-                                  });
-                                  const d: any = data ?? {};
-                                  if (error && !d?.ok && !d?.error) {
+                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && !(typeof m.failure_reason === "string" && m.failure_reason.startsWith("Reenfileirado")) && (() => {
+                          const historical = m.is_historical_failure === true;
+                          const labelClass = historical
+                            ? "text-[10px] text-muted-foreground truncate max-w-[220px]"
+                            : "text-[10px] text-destructive/90 truncate max-w-[180px]";
+                          const buttonClass = historical
+                            ? "text-[11px] underline text-muted-foreground hover:opacity-80"
+                            : "text-[11px] underline text-destructive hover:opacity-80";
+                          const labelText = historical
+                            ? "Falha antiga — reconexão já realizada"
+                            : (m.failure_reason || null);
+                          return (
+                            <div className="mt-1 flex items-center justify-end gap-2">
+                              {labelText ? (
+                                <span className={labelClass} title={m.failure_reason ?? undefined}>
+                                  {labelText}
+                                </span>
+                              ) : null}
+                              <button
+                                type="button"
+                                className={buttonClass}
+                                onClick={async () => {
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                      body: { message_id: m.id },
+                                    });
+                                    const d: any = data ?? {};
+                                    if (error && !d?.ok && !d?.error) {
+                                      toast({
+                                        title: "Falha ao reenviar",
+                                        description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    if (d?.ok === false) {
+                                      toast({
+                                        title: "Falha ao reenviar",
+                                        description: d.friendly_reason || d.error || "Não foi possível reenviar esta mensagem.",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    toast({ title: "Reenfileirado para envio" });
+                                  } catch (e: any) {
                                     toast({
                                       title: "Falha ao reenviar",
                                       description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
                                       variant: "destructive",
                                     });
-                                    return;
                                   }
-                                  if (d?.ok === false) {
-                                    toast({
-                                      title: "Falha ao reenviar",
-                                      description: d.friendly_reason || d.error || "Não foi possível reenviar esta mensagem.",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-                                  toast({ title: "Reenfileirado para envio" });
-                                } catch (e: any) {
-                                  toast({
-                                    title: "Falha ao reenviar",
-                                    description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
-                            >
-                              Tentar novamente
-                            </button>
-                          </div>
-                        )}
+                                }}
+                              >
+                                Tentar novamente
+                              </button>
+                            </div>
+                          );
+                        })()}
+
                       </div>
 
                       {/* Reactions chip (visible when any) */}
