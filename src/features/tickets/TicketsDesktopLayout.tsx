@@ -3390,52 +3390,65 @@ const TicketsDesktopLayout = () => {
                             return <CheckCheck className="w-3.5 h-3.5 opacity-90" aria-label="Enviada" />;
                           })()}
                         </div>
-                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && !(typeof m.failure_reason === "string" && m.failure_reason.startsWith("Reenfileirado")) && (
-                          <div className="mt-1 flex items-center justify-end gap-2">
-                            {m.failure_reason ? (
-                              <span className="text-[10px] text-destructive/90 truncate max-w-[180px]" title={m.failure_reason}>
-                                {m.failure_reason}
-                              </span>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="text-[11px] underline text-destructive hover:opacity-80"
-                              onClick={async () => {
-                                try {
-                                  const { data, error } = await supabase.functions.invoke("retry-scheduled-message", {
-                                    body: { message_id: m.id },
-                                  });
-                                  const d: any = data ?? {};
-                                  if (error && !d?.ok && !d?.error) {
+                        {m.from_me && !m._optimistic && (m.delivery_status === "failed" || m.status === "failed") && !(typeof m.failure_reason === "string" && m.failure_reason.startsWith("Reenfileirado")) && (() => {
+                          const historical = m.is_historical_failure === true;
+                          const labelClass = historical
+                            ? "text-[10px] text-muted-foreground truncate max-w-[220px]"
+                            : "text-[10px] text-destructive/90 truncate max-w-[180px]";
+                          const buttonClass = historical
+                            ? "text-[11px] underline text-muted-foreground hover:opacity-80"
+                            : "text-[11px] underline text-destructive hover:opacity-80";
+                          const labelText = historical
+                            ? "Falha antiga — reconexão já realizada"
+                            : (m.failure_reason || null);
+                          return (
+                            <div className="mt-1 flex items-center justify-end gap-2">
+                              {labelText ? (
+                                <span className={labelClass} title={m.failure_reason ?? undefined}>
+                                  {labelText}
+                                </span>
+                              ) : null}
+                              <button
+                                type="button"
+                                className={buttonClass}
+                                onClick={async () => {
+                                  try {
+                                    const { data, error } = await supabase.functions.invoke("retry-scheduled-message", {
+                                      body: { message_id: m.id },
+                                    });
+                                    const d: any = data ?? {};
+                                    if (error && !d?.ok && !d?.error) {
+                                      toast({
+                                        title: "Falha ao reenviar",
+                                        description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    if (d?.ok === false) {
+                                      toast({
+                                        title: "Falha ao reenviar",
+                                        description: d.friendly_reason || d.error || "Não foi possível reenviar esta mensagem.",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    toast({ title: "Reenfileirado para envio" });
+                                  } catch (e: any) {
                                     toast({
                                       title: "Falha ao reenviar",
                                       description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
                                       variant: "destructive",
                                     });
-                                    return;
                                   }
-                                  if (d?.ok === false) {
-                                    toast({
-                                      title: "Falha ao reenviar",
-                                      description: d.friendly_reason || d.error || "Não foi possível reenviar esta mensagem.",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-                                  toast({ title: "Reenfileirado para envio" });
-                                } catch (e: any) {
-                                  toast({
-                                    title: "Falha ao reenviar",
-                                    description: "Não foi possível reenviar esta mensagem. Verifique se o WhatsApp está conectado.",
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
-                            >
-                              Tentar novamente
-                            </button>
-                          </div>
-                        )}
+                                }}
+                              >
+                                Tentar novamente
+                              </button>
+                            </div>
+                          );
+                        })()}
+
                       </div>
 
                       {/* Reactions chip (visible when any) */}
