@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
         const name = c.instanceName as string;
         const logoutRes = await fetchJson(`${base()}/instance/logout/${name}`, { method: "DELETE" });
         await admin.from("audit_logs").insert({
-          action: "evolution.orphan_logout",
+          event_type: "evolution.orphan_logout",
           company_id: currentDb.company_id,
           metadata: {
             source: "master-evolution-diagnostic.cleanup_orphan",
@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
         if (mode === "delete") {
           deleteRes = await fetchJson(`${base()}/instance/delete/${name}`, { method: "DELETE" });
           await admin.from("audit_logs").insert({
-            action: "evolution.orphan_delete",
+            event_type: "evolution.orphan_delete",
             company_id: currentDb.company_id,
             metadata: {
               source: "master-evolution-diagnostic.cleanup_orphan",
