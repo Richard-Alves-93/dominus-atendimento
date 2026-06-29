@@ -145,6 +145,7 @@ interface MessageRow {
   reply_to_message_type?: string | null;
   is_edited?: boolean | null;
   edited_at?: string | null;
+  is_historical_failure?: boolean | null;
   _optimistic?: boolean;
 }
 
