@@ -152,7 +152,8 @@ interface MessageRow {
 // Era o gargalo ao abrir conversas (até 500 mensagens com payloads grandes).
 // Projetamos apenas o campo realmente usado pela UI: raw.forwarded.
 const MESSAGE_SELECT_FIELDS =
-  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at, is_forwarded:raw->forwarded";
+  "id, ticket_id, direction, from_me, body, raw_body, msg_type, status, delivery_status, failure_reason, sent_at, created_at, source, sent_by_name, provider_message_id, external_id, media_mime_type, media_file_name, media_size, media_duration, media_caption, media_storage_path, media_url, reply_to_message_id, reply_to_provider_message_id, reply_to_preview, reply_to_sender_name, reply_to_message_type, is_edited, edited_at, is_forwarded:raw->forwarded, is_historical_failure:raw->historical_failure";
+
 
 const MIN_BODY_MATCH_CHARS = 8;
 const BODY_MATCH_WINDOW_MS = 10 * 60 * 1000;
