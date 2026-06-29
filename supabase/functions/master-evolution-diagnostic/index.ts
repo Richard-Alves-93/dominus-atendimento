@@ -269,13 +269,28 @@ Deno.serve(async (req) => {
           qrcode: true,
         }),
       });
-      // 4. set webhook (idempotente, garante config)
-      const webhookRes = await fetchJson(`${base()}/webhook/set/${instanceName}`, {
+      // 4. set webhook (Evolution v2.3.7: tenta variantes de chave e wrapper)
+      const webhookBody = {
+        url: webhookUrl,
+        enabled: true,
+        webhook_by_events: false,
+        webhookByEvents: false,
+        byEvents: false,
+        webhook_base64: true,
+        webhookBase64: true,
+        base64: true,
+        events: webhookEvents,
+      };
+      let webhookRes = await fetchJson(`${base()}/webhook/set/${instanceName}`, {
         method: "POST",
-        body: JSON.stringify({
-          url: webhookUrl, enabled: true, webhookByEvents: false, webhookBase64: true, events: webhookEvents,
-        }),
+        body: JSON.stringify(webhookBody),
       });
+      if (!webhookRes.ok) {
+        webhookRes = await fetchJson(`${base()}/webhook/set/${instanceName}`, {
+          method: "POST",
+          body: JSON.stringify({ webhook: webhookBody }),
+        });
+      }
       // 5. connect → QR
       const connectRes = await fetchJson(`${base()}/instance/connect/${instanceName}`);
       const qr = (connectRes.body as any)?.base64 ?? (connectRes.body as any)?.qrcode?.base64 ?? (connectRes.body as any)?.code ?? null;
