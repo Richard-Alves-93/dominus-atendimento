@@ -232,7 +232,91 @@ Deno.serve(async (req) => {
       return json({ ok: true, dry_run: false, executed: true, mode, current_instance_name: currentName, results });
     }
 
-    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan" }, 400);
+    // hard_reset: logout → delete → create (mesmo nome) → set webhook → connect (QR)
+    // Master only. Exige confirm=true. Atua apenas em uma instância existente em whatsapp_instances.
+    if (action === "hard_reset") {
+      if (!isMaster) return json({ error: "Forbidden (hard_reset requer master)" }, 403);
+      if (body?.confirm !== true) return json({ error: "confirm=true obrigatório" }, 400);
+      if (!instanceName) return json({ error: "instance_name obrigatório" }, 400);
+
+      const { data: dbInst } = await admin
+        .from("whatsapp_instances")
+        .select("id, instance_name, company_id, channel_id")
+        .eq("instance_name", instanceName)
+        .maybeSingle();
+      if (!dbInst) return json({ error: "instance_name não pertence ao Dominus" }, 400);
+
+      const webhookUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/evolution-webhook`;
+      const webhookEvents = [
+        "QRCODE_UPDATED","CONNECTION_UPDATE","MESSAGES_UPSERT",
+        "MESSAGES_UPDATE","MESSAGES_SET","SEND_MESSAGE",
+      ];
+
+      // 1. logout (best-effort)
+      const logoutRes = await fetchJson(`${base()}/instance/logout/${instanceName}`, { method: "DELETE" });
+      // 2. delete (best-effort)
+      const deleteRes = await fetchJson(`${base()}/instance/delete/${instanceName}`, { method: "DELETE" });
+      // 3. create same name
+      const createRes = await fetchJson(`${base()}/instance/create`, {
+        method: "POST",
+        body: JSON.stringify({
+          instanceName,
+          integration: "WHATSAPP-BAILEYS",
+          qrcode: true,
+          webhook: { url: webhookUrl, byEvents: false, base64: true, events: webhookEvents },
+        }),
+      });
+      // 4. set webhook (idempotente, garante config)
+      const webhookRes = await fetchJson(`${base()}/webhook/set/${instanceName}`, {
+        method: "POST",
+        body: JSON.stringify({
+          url: webhookUrl, enabled: true, webhookByEvents: false, webhookBase64: true, events: webhookEvents,
+        }),
+      });
+      // 5. connect → QR
+      const connectRes = await fetchJson(`${base()}/instance/connect/${instanceName}`);
+      const qr = (connectRes.body as any)?.base64 ?? (connectRes.body as any)?.qrcode?.base64 ?? (connectRes.body as any)?.code ?? null;
+
+      // 6. atualizar DB do Dominus (status pending, novo QR)
+      await admin.from("whatsapp_instances").update({
+        status: "pending",
+        qr_code: qr,
+        webhook_configured: webhookRes.ok,
+        events_configured: webhookRes.ok,
+        last_settings_sync_at: new Date().toISOString(),
+        settings_sync_error: webhookRes.ok ? null : `webhook_set_status=${webhookRes.status}`,
+      }).eq("id", dbInst.id);
+      await admin.from("channels").update({ status: "pending", qr_code: qr }).eq("id", dbInst.channel_id);
+
+      await admin.from("audit_logs").insert({
+        event_type: "evolution.hard_reset",
+        company_id: dbInst.company_id,
+        metadata: {
+          source: "master-evolution-diagnostic.hard_reset",
+          instance_name: instanceName,
+          logout: { status: logoutRes.status, ok: logoutRes.ok },
+          delete: { status: deleteRes.status, ok: deleteRes.ok },
+          create: { status: createRes.status, ok: createRes.ok },
+          webhook: { status: webhookRes.status, ok: webhookRes.ok },
+          connect: { status: connectRes.status, ok: connectRes.ok, has_qr: Boolean(qr) },
+        },
+      });
+
+      return json({
+        ok: true,
+        instance_name: instanceName,
+        steps: {
+          logout: { status: logoutRes.status, ok: logoutRes.ok },
+          delete: { status: deleteRes.status, ok: deleteRes.ok },
+          create: { status: createRes.status, ok: createRes.ok, body_keys: Object.keys((createRes.body as any) ?? {}) },
+          webhook: { status: webhookRes.status, ok: webhookRes.ok },
+          connect: { status: connectRes.status, ok: connectRes.ok, has_qr: Boolean(qr) },
+        },
+        next: "Abra /app/conexoes e escaneie o QR Code.",
+      });
+    }
+
+    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan | hard_reset" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
