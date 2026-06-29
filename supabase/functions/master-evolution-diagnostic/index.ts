@@ -37,8 +37,12 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const auth = req.headers.get("Authorization") ?? "";
+    const opsSecret = req.headers.get("x-master-ops-secret") ?? "";
     let isMaster = false;
-    if (auth.startsWith("Bearer ")) {
+    const MASTER_OPS_SECRET = Deno.env.get("MASTER_OPS_SECRET") ?? "";
+    if (MASTER_OPS_SECRET && opsSecret && opsSecret === MASTER_OPS_SECRET) {
+      isMaster = true;
+    } else if (auth.startsWith("Bearer ")) {
       const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
       const { data: ures } = await userClient.auth.getUser();
       const user = ures.user;
