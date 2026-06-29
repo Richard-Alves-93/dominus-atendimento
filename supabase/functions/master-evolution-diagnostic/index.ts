@@ -92,7 +92,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "send_test" && instanceName && sendTo) {
-      // ONLY send if explicitly called with both params. Read-only by default.
       const payload = { number: sendTo, text: sendText };
       const res = await fetchJson(`${base()}/message/sendText/${instanceName}`, {
         method: "POST",
@@ -110,7 +109,130 @@ Deno.serve(async (req) => {
       return json({ ok: true, instance: instanceName, sent_to: sendTo, response: safe });
     }
 
-    return json({ error: "ação inválida. use: list | state | send_test" }, 400);
+    // cleanup_orphan: identifica e (opcionalmente) executa logout/delete em instâncias órfãs
+    // SEGURANÇA:
+    //  - master only
+    //  - só atua em instâncias que NÃO existem em whatsapp_instances do Dominus
+    //  - precisa do mesmo ownerJid da current_instance_name
+    //  - precisa compartilhar prefixo `dominus_<slug>_<8>` da current
+    //  - instanceName != current
+    //  - dry_run=true por padrão; precisa confirm=true E dry_run=false para executar
+    //  - mode: "logout" (default) | "delete" (delete só se mode="delete")
+    if (action === "cleanup_orphan") {
+      if (!isMaster) return json({ error: "Forbidden (cleanup_orphan requer master)" }, 403);
+      const currentName: string | undefined = body?.current_instance_name;
+      const dryRun: boolean = body?.dry_run !== false; // default true
+      const confirm: boolean = body?.confirm === true;
+      const mode: "logout" | "delete" = body?.mode === "delete" ? "delete" : "logout";
+      if (!currentName) return json({ error: "current_instance_name obrigatório" }, 400);
+
+      // valida current está no banco Dominus
+      const { data: currentDb } = await admin
+        .from("whatsapp_instances")
+        .select("instance_name, company_id, channel_id")
+        .eq("instance_name", currentName)
+        .maybeSingle();
+      if (!currentDb) return json({ error: "current_instance_name não pertence ao banco Dominus" }, 400);
+
+      // descobre ownerJid e prefixo da current via Evolution
+      const list = await fetchJson(`${base()}/instance/fetchInstances`);
+      const items: any[] = Array.isArray(list.body) ? list.body : (Array.isArray((list.body as any)?.instances) ? (list.body as any).instances : []);
+      const norm = items.map((it: any) => {
+        const inst = it?.instance ?? it;
+        return {
+          instanceName: inst?.instanceName ?? inst?.name ?? null,
+          ownerJid: inst?.owner ?? inst?.ownerJid ?? inst?.wuid ?? null,
+          profileName: inst?.profileName ?? null,
+          status: inst?.status ?? inst?.connectionStatus ?? inst?.state ?? null,
+        };
+      });
+      const current = norm.find((i) => i.instanceName === currentName);
+      if (!current) return json({ error: "current_instance_name não encontrada na Evolution" }, 404);
+      const ownerJid: string | null = current.ownerJid;
+      if (!ownerJid) return json({ error: "current não possui ownerJid; abortar" }, 400);
+
+      // prefixo compartilhado: tudo antes do último "_v\d+" (se houver), senão o próprio nome
+      const prefixMatch = currentName.match(/^(.*?)(?:_v\d+)?$/);
+      const prefix = prefixMatch?.[1] ?? currentName;
+
+      const { data: dbInstances } = await admin.from("whatsapp_instances").select("instance_name");
+      const dbSet = new Set((dbInstances ?? []).map((d) => d.instance_name));
+
+      const candidates = norm.filter((i) =>
+        i.instanceName &&
+        i.instanceName !== currentName &&
+        i.ownerJid === ownerJid &&
+        i.instanceName.startsWith(prefix) &&
+        !dbSet.has(i.instanceName)
+      );
+
+      const maskJid = (j: string | null) => (j ? j.replace(/(\d{4})\d+(\d{4})/, "$1***$2") : null);
+
+      // dry_run: apenas devolve plano
+      if (dryRun || !confirm) {
+        return json({
+          ok: true,
+          dry_run: true,
+          executed: false,
+          mode,
+          current_instance_name: currentName,
+          ownerJid_masked: maskJid(ownerJid),
+          prefix,
+          candidates: candidates.map((c) => ({
+            instanceName: c.instanceName,
+            profileName: c.profileName,
+            status: c.status,
+            ownerJid_masked: maskJid(c.ownerJid),
+          })),
+          note: "Nenhuma ação destrutiva executada. Para executar: confirm=true e dry_run=false.",
+        });
+      }
+
+      // EXECUÇÃO (não chamada nesta rodada — código pronto)
+      const results: any[] = [];
+      for (const c of candidates) {
+        const name = c.instanceName as string;
+        const logoutRes = await fetchJson(`${base()}/instance/logout/${name}`, { method: "DELETE" });
+        await admin.from("audit_logs").insert({
+          action: "evolution.orphan_logout",
+          company_id: currentDb.company_id,
+          metadata: {
+            source: "master-evolution-diagnostic.cleanup_orphan",
+            company_id: currentDb.company_id,
+            current_instance_name: currentName,
+            orphan_instance_name: name,
+            ownerJid_masked: maskJid(c.ownerJid),
+            action: "logout",
+            result: { status: logoutRes.status, ok: logoutRes.ok },
+          },
+        });
+        let deleteRes: any = null;
+        if (mode === "delete") {
+          deleteRes = await fetchJson(`${base()}/instance/delete/${name}`, { method: "DELETE" });
+          await admin.from("audit_logs").insert({
+            action: "evolution.orphan_delete",
+            company_id: currentDb.company_id,
+            metadata: {
+              source: "master-evolution-diagnostic.cleanup_orphan",
+              company_id: currentDb.company_id,
+              current_instance_name: currentName,
+              orphan_instance_name: name,
+              ownerJid_masked: maskJid(c.ownerJid),
+              action: "delete",
+              result: { status: deleteRes.status, ok: deleteRes.ok },
+            },
+          });
+        }
+        results.push({
+          instanceName: name,
+          logout: { status: logoutRes.status, ok: logoutRes.ok },
+          delete: deleteRes ? { status: deleteRes.status, ok: deleteRes.ok } : null,
+        });
+      }
+      return json({ ok: true, dry_run: false, executed: true, mode, current_instance_name: currentName, results });
+    }
+
+    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
