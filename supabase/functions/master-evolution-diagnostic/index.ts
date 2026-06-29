@@ -260,14 +260,13 @@ Deno.serve(async (req) => {
       const logoutRes = await fetchJson(`${base()}/instance/logout/${instanceName}`, { method: "DELETE" });
       // 2. delete (best-effort)
       const deleteRes = await fetchJson(`${base()}/instance/delete/${instanceName}`, { method: "DELETE" });
-      // 3. create same name
+      // 3. create same name (Evolution v2.3.7: NÃO embute webhook no create)
       const createRes = await fetchJson(`${base()}/instance/create`, {
         method: "POST",
         body: JSON.stringify({
           instanceName,
           integration: "WHATSAPP-BAILEYS",
           qrcode: true,
-          webhook: { url: webhookUrl, byEvents: false, base64: true, events: webhookEvents },
         }),
       });
       // 4. set webhook (idempotente, garante config)
