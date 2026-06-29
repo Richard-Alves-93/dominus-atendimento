@@ -3373,7 +3373,9 @@ const TicketsDesktopLayout = () => {
                               ? (m.status === "error" ? "failed" : "sending")
                               : (m.delivery_status || m.status || "sent");
                             if (ds === "failed") {
-                              return <AlertCircle className="w-3.5 h-3.5 text-destructive" aria-label="Falhou" />;
+                              const cls = m.is_historical_failure ? "w-3.5 h-3.5 text-muted-foreground/70" : "w-3.5 h-3.5 text-destructive";
+                              const label = m.is_historical_failure ? "Falha antiga" : "Falhou";
+                              return <AlertCircle className={cls} aria-label={label} />;
                             }
                             if (ds === "read") {
                               return <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Lida" />;
