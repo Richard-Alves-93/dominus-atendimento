@@ -334,7 +334,123 @@ Deno.serve(async (req) => {
       });
     }
 
-    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan | hard_reset" }, 400);
+    // create_clean: cria uma instância nova (nome diferente) na Evolution para o mesmo número,
+    // sem tocar no whatsapp_instances/channels. Usar antes de swap_instance.
+    if (action === "create_clean") {
+      if (!isMaster) return json({ error: "Forbidden (create_clean requer master)" }, 403);
+      const sourceName: string | undefined = body?.source_instance_name;
+      const newName: string | undefined = body?.new_instance_name;
+      if (!sourceName || !newName) return json({ error: "source_instance_name e new_instance_name obrigatórios" }, 400);
+      if (sourceName === newName) return json({ error: "new_instance_name deve diferir de source_instance_name" }, 400);
+
+      const { data: dbInst } = await admin
+        .from("whatsapp_instances")
+        .select("id, instance_name, company_id, channel_id")
+        .eq("instance_name", sourceName)
+        .maybeSingle();
+      if (!dbInst) return json({ error: "source_instance_name não pertence ao Dominus" }, 400);
+
+      const webhookUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/evolution-webhook`;
+      const webhookEvents = ["QRCODE_UPDATED","CONNECTION_UPDATE","MESSAGES_UPSERT","MESSAGES_UPDATE","MESSAGES_SET","SEND_MESSAGE"];
+
+      // best-effort: se já existir limpa antes
+      await fetchJson(`${base()}/instance/logout/${newName}`, { method: "DELETE" });
+      await fetchJson(`${base()}/instance/delete/${newName}`, { method: "DELETE" });
+
+      const createRes = await fetchJson(`${base()}/instance/create`, {
+        method: "POST",
+        body: JSON.stringify({ instanceName: newName, integration: "WHATSAPP-BAILEYS", qrcode: true }),
+      });
+      const webhookBody = {
+        url: webhookUrl, enabled: true,
+        webhook_by_events: false, webhookByEvents: false, byEvents: false,
+        webhook_base64: true, webhookBase64: true, base64: true,
+        events: webhookEvents,
+      };
+      let webhookRes = await fetchJson(`${base()}/webhook/set/${newName}`, { method: "POST", body: JSON.stringify(webhookBody) });
+      if (!webhookRes.ok) {
+        webhookRes = await fetchJson(`${base()}/webhook/set/${newName}`, { method: "POST", body: JSON.stringify({ webhook: webhookBody }) });
+      }
+      const connectRes = await fetchJson(`${base()}/instance/connect/${newName}`);
+      const qr = (connectRes.body as any)?.base64 ?? (connectRes.body as any)?.qrcode?.base64 ?? (connectRes.body as any)?.code ?? null;
+
+      await admin.from("audit_logs").insert({
+        event_type: "evolution.clean_instance_created",
+        company_id: dbInst.company_id,
+        metadata: {
+          source: "master-evolution-diagnostic.create_clean",
+          source_instance_name: sourceName,
+          new_instance_name: newName,
+          create: { status: createRes.status, ok: createRes.ok },
+          webhook: { status: webhookRes.status, ok: webhookRes.ok },
+          connect: { status: connectRes.status, ok: connectRes.ok, has_qr: Boolean(qr) },
+        },
+      });
+
+      return json({
+        ok: true, new_instance_name: newName, db_touched: false,
+        steps: {
+          create: { status: createRes.status, ok: createRes.ok },
+          webhook: { status: webhookRes.status, ok: webhookRes.ok },
+          connect: { status: connectRes.status, ok: connectRes.ok, has_qr: Boolean(qr) },
+        },
+        qr_base64: qr,
+        next: "Parear lendo o QR; depois rodar action=send_test apontando instance_name=new_instance_name antes de swap_instance.",
+      });
+    }
+
+    // swap_instance: após validar que a nova instância envia, troca o instance_name no whatsapp_instances
+    // mantendo company_id, channel_id, id da row, tickets, contatos, mensagens.
+    if (action === "swap_instance") {
+      if (!isMaster) return json({ error: "Forbidden (swap_instance requer master)" }, 403);
+      if (body?.confirm !== true) return json({ error: "confirm=true obrigatório" }, 400);
+      const sourceName: string | undefined = body?.source_instance_name;
+      const newName: string | undefined = body?.new_instance_name;
+      if (!sourceName || !newName) return json({ error: "source_instance_name e new_instance_name obrigatórios" }, 400);
+
+      const { data: dbInst } = await admin
+        .from("whatsapp_instances")
+        .select("id, instance_name, company_id, channel_id, phone_number")
+        .eq("instance_name", sourceName)
+        .maybeSingle();
+      if (!dbInst) return json({ error: "source_instance_name não pertence ao Dominus" }, 400);
+
+      // valida nova instância existe e está conectada na Evolution
+      const st = await fetchJson(`${base()}/instance/connectionState/${newName}`);
+      const state = (st.body as any)?.instance?.state ?? (st.body as any)?.state ?? null;
+      if (state !== "open") {
+        return json({ error: `nova instância não está conectada (state=${state}); pareie antes do swap`, connectionState: st }, 400);
+      }
+
+      const { error: updErr } = await admin.from("whatsapp_instances").update({
+        instance_name: newName,
+        status: "connected",
+        qr_code: null,
+        webhook_configured: true,
+        events_configured: true,
+        settings_sync_error: null,
+        last_settings_sync_at: new Date().toISOString(),
+      }).eq("id", dbInst.id);
+      if (updErr) return json({ error: `falha ao atualizar whatsapp_instances: ${updErr.message}` }, 500);
+      await admin.from("channels").update({ status: "connected", qr_code: null }).eq("id", dbInst.channel_id);
+
+      await admin.from("audit_logs").insert({
+        event_type: "evolution.instance_replaced",
+        company_id: dbInst.company_id,
+        metadata: {
+          source: "evolution_clean_instance_replacement",
+          company_id: dbInst.company_id,
+          channel_id: dbInst.channel_id,
+          old_instance_name: sourceName,
+          new_instance_name: newName,
+          reason: "old_instance_outbound_corrupted",
+        },
+      });
+
+      return json({ ok: true, swapped: true, old_instance_name: sourceName, new_instance_name: newName, channel_id: dbInst.channel_id, company_id: dbInst.company_id });
+    }
+
+    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan | hard_reset | create_clean | swap_instance" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
