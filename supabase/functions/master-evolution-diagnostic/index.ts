@@ -467,9 +467,10 @@ Deno.serve(async (req) => {
         { label: "delete_force", url: `${base()}/instance/delete/${instanceName}?force=true`, method: "DELETE" },
       ];
       for (const t of tries) {
+        if (t.label === "wait") { await new Promise((res) => setTimeout(res, 3000)); attempts.push({ label: "wait", waited_ms: 3000 }); continue; }
         const r = await fetchJson(t.url, { method: t.method });
         attempts.push({ label: t.label, status: r.status, ok: r.ok, body: r.body });
-        await new Promise((res) => setTimeout(res, 800));
+        await new Promise((res) => setTimeout(res, 1200));
       }
       const list = await fetchJson(`${base()}/instance/fetchInstances`);
       const items: any[] = Array.isArray(list.body) ? list.body : (Array.isArray((list.body as any)?.instances) ? (list.body as any).instances : []);
