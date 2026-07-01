@@ -460,10 +460,10 @@ Deno.serve(async (req) => {
       if (dbHit) return json({ error: "instância pertence ao banco Dominus; abortar" }, 400);
       const attempts: any[] = [];
       const tries = [
+        { label: "restart", url: `${base()}/instance/restart/${instanceName}`, method: "POST" },
         { label: "logout_delete", url: `${base()}/instance/logout/${instanceName}`, method: "DELETE" },
-        { label: "logout_post", url: `${base()}/instance/logout/${instanceName}`, method: "POST" },
-        { label: "delete_delete", url: `${base()}/instance/delete/${instanceName}`, method: "DELETE" },
-        { label: "delete_post", url: `${base()}/instance/delete/${instanceName}`, method: "POST" },
+        { label: "delete_delete_1", url: `${base()}/instance/delete/${instanceName}`, method: "DELETE" },
+        { label: "delete_delete_2", url: `${base()}/instance/delete/${instanceName}`, method: "DELETE" },
       ];
       for (const t of tries) {
         const r = await fetchJson(t.url, { method: t.method });
