@@ -450,7 +450,35 @@ Deno.serve(async (req) => {
       return json({ ok: true, swapped: true, old_instance_name: sourceName, new_instance_name: newName, channel_id: dbInst.channel_id, company_id: dbInst.company_id });
     }
 
-    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan | hard_reset | create_clean | swap_instance" }, 400);
+    // force_delete_orphan: delete direto de uma instância que NÃO está no banco Dominus.
+    // Tenta múltiplos métodos (logout DELETE/POST, delete DELETE/POST) até obter 200/204.
+    if (action === "force_delete_orphan") {
+      if (!isMaster) return json({ error: "Forbidden" }, 403);
+      if (body?.confirm !== true) return json({ error: "confirm=true obrigatório" }, 400);
+      if (!instanceName) return json({ error: "instance_name obrigatório" }, 400);
+      const { data: dbHit } = await admin.from("whatsapp_instances").select("id").eq("instance_name", instanceName).maybeSingle();
+      if (dbHit) return json({ error: "instância pertence ao banco Dominus; abortar" }, 400);
+      const attempts: any[] = [];
+      const tries = [
+        { label: "logout_delete", url: `${base()}/instance/logout/${instanceName}`, method: "DELETE" },
+        { label: "wait", url: "", method: "" },
+        { label: "state_check", url: `${base()}/instance/connectionState/${instanceName}`, method: "GET" },
+        { label: "delete_delete", url: `${base()}/instance/delete/${instanceName}`, method: "DELETE" },
+        { label: "delete_force", url: `${base()}/instance/delete/${instanceName}?force=true`, method: "DELETE" },
+      ];
+      for (const t of tries) {
+        if (t.label === "wait") { await new Promise((res) => setTimeout(res, 3000)); attempts.push({ label: "wait", waited_ms: 3000 }); continue; }
+        const r = await fetchJson(t.url, { method: t.method });
+        attempts.push({ label: t.label, status: r.status, ok: r.ok, body: r.body });
+        await new Promise((res) => setTimeout(res, 1200));
+      }
+      const list = await fetchJson(`${base()}/instance/fetchInstances`);
+      const items: any[] = Array.isArray(list.body) ? list.body : (Array.isArray((list.body as any)?.instances) ? (list.body as any).instances : []);
+      const still = items.some((it: any) => (it?.instance ?? it)?.instanceName === instanceName || (it?.instance ?? it)?.name === instanceName);
+      return json({ ok: true, instance_name: instanceName, still_present: still, attempts });
+    }
+
+    return json({ error: "ação inválida. use: list | state | send_test | cleanup_orphan | hard_reset | create_clean | swap_instance | force_delete_orphan" }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
