@@ -468,6 +468,7 @@ Deno.serve(async (req) => {
       for (const t of tries) {
         const r = await fetchJson(t.url, { method: t.method });
         attempts.push({ label: t.label, status: r.status, ok: r.ok, body: r.body });
+        await new Promise((res) => setTimeout(res, 800));
       }
       const list = await fetchJson(`${base()}/instance/fetchInstances`);
       const items: any[] = Array.isArray(list.body) ? list.body : (Array.isArray((list.body as any)?.instances) ? (list.body as any).instances : []);
